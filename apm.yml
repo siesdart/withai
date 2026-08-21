@@ -1,0 +1,26 @@
+name: withai
+version: 1.0.0
+description: APM project for withai
+author: 박현우
+target:
+  - agent-skills
+
+dependencies:
+  apm:
+    - git: anthropics/skills
+      skills:
+        - frontend-design
+    - git: vercel-labs/agent-skills
+      skills:
+        - react-best-practices
+        - web-design-guidelines
+    - git: siesdart/skills
+      skills:
+        - typescript-functional-patterns
+    - shadcn/ui
+    - vercel/turborepo
+    - Leonxlnx/taste-skill
+    - addyosmani/web-quality-skills
+  mcp: []
+includes: auto
+scripts: {}

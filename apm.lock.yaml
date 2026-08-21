@@ -1,0 +1,2066 @@
+lockfile_version: '1'
+generated_at: '2026-08-21T18:09:49.073694+00:00'
+apm_version: 0.28.0
+dependencies:
+- repo_url: addyosmani/web-quality-skills
+  name: web-quality-skills
+  host: github.com
+  resolved_commit: 95d6e255afe1596b557d7a8498517884438f5b3a
+  version: 1.0.0
+  package_type: marketplace_plugin
+  deployed_files:
+  - .agents/skills/accessibility
+  - .agents/skills/accessibility/SKILL.md
+  - .agents/skills/accessibility/references/A11Y-PATTERNS.md
+  - .agents/skills/accessibility/references/WCAG.md
+  - .agents/skills/best-practices
+  - .agents/skills/best-practices/SKILL.md
+  - .agents/skills/core-web-vitals
+  - .agents/skills/core-web-vitals/SKILL.md
+  - .agents/skills/core-web-vitals/references/LCP.md
+  - .agents/skills/performance
+  - .agents/skills/performance/SKILL.md
+  - .agents/skills/seo
+  - .agents/skills/seo/SKILL.md
+  - .agents/skills/web-quality-audit
+  - .agents/skills/web-quality-audit/SKILL.md
+  - .agents/skills/web-quality-audit/scripts/analyze.sh
+  deployed_file_hashes:
+    .agents/skills/accessibility/SKILL.md: sha256:ea58830345e10809e17df5cf79124c2f9e1d48d8b0028062eef4cafa5110fea8
+    .agents/skills/accessibility/references/A11Y-PATTERNS.md: sha256:f10e238dd4dd3c4f51134c2056bc02d3dd4f8fb6ccc9145c2c1ba7aab4d58140
+    .agents/skills/accessibility/references/WCAG.md: sha256:16683e025e3833d931c9d880645d98a448827f97e10189b6c8f12c832e7a2361
+    .agents/skills/best-practices/SKILL.md: sha256:5ed963ab6d8a1b69e1a785f06f16b6a0dbe0ab0ea421c70cf26fdf1ab0f1f4b5
+    .agents/skills/core-web-vitals/SKILL.md: sha256:0653e154f3130f72098073bf86588b2dd3872c23e70c231786016758a851c4be
+    .agents/skills/core-web-vitals/references/LCP.md: sha256:4c5043ef7e1ae4058191a51fbfe5121668bd3677842a2ef563a45a9ca6685d92
+    .agents/skills/performance/SKILL.md: sha256:f35e43c3ef9e9730af385c56451660956f88e78f553050985b31bf0959f3c619
+    .agents/skills/seo/SKILL.md: sha256:79064ce0edc9a21e0b8cae2cc44b9751fb397ef80584e72b4289a6a67b40f19c
+    .agents/skills/web-quality-audit/SKILL.md: sha256:243889d1fa8282b948ae5356435670d95f6b89d9f83274ea9eef54aeab0521e3
+    .agents/skills/web-quality-audit/scripts/analyze.sh: sha256:b1b28663af412f746baf5008618e3ae798e322b10ff5ab7ae1830826a6d8e4e2
+  content_hash: sha256:ecaee03372fd57da4c544423f3483c54232195338cf058be9b60254c4c2e59dc
+  declared_license: MIT
+- repo_url: anthropics/skills
+  name: skills
+  host: github.com
+  resolved_commit: 0a64e398ec6bb34a494f0c347e8ccae53a862f8e
+  version: 0a64e39
+  package_type: marketplace_plugin
+  deployed_files:
+  - .agents/skills/frontend-design
+  - .agents/skills/frontend-design/LICENSE.txt
+  - .agents/skills/frontend-design/SKILL.md
+  deployed_file_hashes:
+    .agents/skills/frontend-design/LICENSE.txt: sha256:0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594
+    .agents/skills/frontend-design/SKILL.md: sha256:1608ea77fbb6fc30d13a97d12cfa8ebf31358d40f0dd97beed24829d6b3f45dd
+  content_hash: sha256:25cd5f2e10f408b7d879598fe4843c2725bf3a3cbec908acf0291b5274d385e3
+  skill_subset:
+  - frontend-design
+- repo_url: leonxlnx/taste-skill
+  materialization_repo_url: Leonxlnx/taste-skill
+  name: taste-skill
+  host: github.com
+  resolved_commit: 843c8dd4d18ccff0d5a9cd4b0b71d7dbf7278293
+  version: 1.0.0
+  package_type: marketplace_plugin
+  deployed_files:
+  - .agents/skills/brandkit
+  - .agents/skills/brandkit/SKILL.md
+  - .agents/skills/brutalist-skill
+  - .agents/skills/brutalist-skill/SKILL.md
+  - .agents/skills/gpt-tasteskill
+  - .agents/skills/gpt-tasteskill/SKILL.md
+  - .agents/skills/image-to-code-skill
+  - .agents/skills/image-to-code-skill/SKILL.md
+  - .agents/skills/imagegen-frontend-mobile
+  - .agents/skills/imagegen-frontend-mobile/SKILL.md
+  - .agents/skills/imagegen-frontend-web
+  - .agents/skills/imagegen-frontend-web/SKILL.md
+  - .agents/skills/minimalist-skill
+  - .agents/skills/minimalist-skill/SKILL.md
+  - .agents/skills/output-skill
+  - .agents/skills/output-skill/SKILL.md
+  - .agents/skills/redesign-skill
+  - .agents/skills/redesign-skill/SKILL.md
+  - .agents/skills/soft-skill
+  - .agents/skills/soft-skill/SKILL.md
+  - .agents/skills/stitch-skill
+  - .agents/skills/stitch-skill/DESIGN.md
+  - .agents/skills/stitch-skill/SKILL.md
+  - .agents/skills/taste-skill
+  - .agents/skills/taste-skill-v1
+  - .agents/skills/taste-skill-v1/SKILL.md
+  - .agents/skills/taste-skill/SKILL.md
+  deployed_file_hashes:
+    .agents/skills/brandkit/SKILL.md: sha256:b0c4837e1bd140ca816ae54948754ddd2ac1e2a4d3619363777a80caf00b2ede
+    .agents/skills/brutalist-skill/SKILL.md: sha256:fffbaac8597f07679e9d87145533567658aedba3b5eca6f16a7075a333048caa
+    .agents/skills/gpt-tasteskill/SKILL.md: sha256:2e64c269953f2656c21bf5a0fa6b4568e82fe0c72b36e8f84758e090349966a5
+    .agents/skills/image-to-code-skill/SKILL.md: sha256:4c060a8064a8b13380bc2ef3d6e6a1d0b1e316aa093cd9807d0ce9e4eeb037fa
+    .agents/skills/imagegen-frontend-mobile/SKILL.md: sha256:8a33389979f3074fa0926678e266ad2eb9234624472254469fc1ad916b9caa24
+    .agents/skills/imagegen-frontend-web/SKILL.md: sha256:6b5c2256522fdba1e3313eafa3d743b960a7b13ec029d3e6586e04b23327c1f8
+    .agents/skills/minimalist-skill/SKILL.md: sha256:36bc7328f085405f43b476938e62460fa573bf7e984e949e072bcf014831a44c
+    .agents/skills/output-skill/SKILL.md: sha256:e5bf48b1ae561511439cf71672209a10a88cee0968cc925909ff861dfa0a96a7
+    .agents/skills/redesign-skill/SKILL.md: sha256:98ad3e5b051bfb71b2795f7e8a6aa0d32b51ee095606c098a4b2822ac07926c9
+    .agents/skills/soft-skill/SKILL.md: sha256:e1e32f5e2d420872c6c7332b53d5ff7721946766b78c4822b424c2d512c8fdbc
+    .agents/skills/stitch-skill/DESIGN.md: sha256:0ab6740c4ebb1966dbceddb823a66d4bf027e960efbd73faca56cbf8370ae2ad
+    .agents/skills/stitch-skill/SKILL.md: sha256:46bdb08fee2dded38b6ba0a051230a502d6ac6e4044afd47592cb40c256028b5
+    .agents/skills/taste-skill-v1/SKILL.md: sha256:033d45af1ed23832730642f95f40ab49db7fb5222848489a6c5656144bfc6dae
+    .agents/skills/taste-skill/SKILL.md: sha256:aa194351b246b8b4799099d4ed7b033d29eab6e6e3d58d8d2172978be7b3ec89
+  content_hash: sha256:35426daafdad066e2416d81dc0d083cd0adb7459820ff1bdcfbde7e9c54fcb01
+  declared_license: MIT
+- repo_url: shadcn/ui
+  name: shadcn
+  host: github.com
+  resolved_commit: 1773ecfeeb4a04366978d353e69b5c7ded78dcb2
+  version: 1.0.0
+  package_type: marketplace_plugin
+  deployed_files:
+  - .agents/skills/migrate-radix-to-base
+  - .agents/skills/migrate-radix-to-base/SKILL.md
+  - .agents/skills/migrate-radix-to-base/class-mapping.md
+  - .agents/skills/migrate-radix-to-base/consumer-props.md
+  - .agents/skills/migrate-radix-to-base/disclosure.md
+  - .agents/skills/migrate-radix-to-base/display-misc.md
+  - .agents/skills/migrate-radix-to-base/form-controls.md
+  - .agents/skills/migrate-radix-to-base/menus.md
+  - .agents/skills/migrate-radix-to-base/overlays.md
+  - .agents/skills/migrate-radix-to-base/universal-patterns.md
+  - .agents/skills/migrate-radix-to-base/wrapper-shapes.md
+  - .agents/skills/shadcn
+  - .agents/skills/shadcn/SKILL.md
+  - .agents/skills/shadcn/agents/openai.yml
+  - .agents/skills/shadcn/assets/shadcn-small.png
+  - .agents/skills/shadcn/assets/shadcn.png
+  - .agents/skills/shadcn/cli.md
+  - .agents/skills/shadcn/customization.md
+  - .agents/skills/shadcn/evals/evals.json
+  - .agents/skills/shadcn/mcp.md
+  - .agents/skills/shadcn/registry.md
+  - .agents/skills/shadcn/rules/base-vs-radix.md
+  - .agents/skills/shadcn/rules/chat.md
+  - .agents/skills/shadcn/rules/composition.md
+  - .agents/skills/shadcn/rules/forms.md
+  - .agents/skills/shadcn/rules/icons.md
+  - .agents/skills/shadcn/rules/styling.md
+  deployed_file_hashes:
+    .agents/skills/migrate-radix-to-base/SKILL.md: sha256:64c879f6f1eab0decc306ca52ad32d41327c05c4d2fb7e708335e956c61dadf8
+    .agents/skills/migrate-radix-to-base/class-mapping.md: sha256:c288738167c663c6188caf958cdac6d72061b0ce44d6bce14d9dc6d40b4e79f9
+    .agents/skills/migrate-radix-to-base/consumer-props.md: sha256:f6f62f7173b95350339e930eb6ff2c9496b4d5df3571deed78d5b0159f91b1d0
+    .agents/skills/migrate-radix-to-base/disclosure.md: sha256:f0962f90416ead3290f532b53a66b08a905d4a8fd6ea220b7df63521c9d993ce
+    .agents/skills/migrate-radix-to-base/display-misc.md: sha256:76dd486105df7f0412e8d526fbeec6fa485c866ff1bf781ddccdc4d87eace0c3
+    .agents/skills/migrate-radix-to-base/form-controls.md: sha256:66c69dd4077e3e8852a33348f7797bdb5e934192a0cc97ce8f1264ebd137b846
+    .agents/skills/migrate-radix-to-base/menus.md: sha256:44188b70c3221a7d18f782641dc7f1a954bc1fa6eb42b788a1935a6613f376d9
+    .agents/skills/migrate-radix-to-base/overlays.md: sha256:8d9fe2b05eb22a1664637b22e6112190de88a4368420d9cb36002adc108e8a03
+    .agents/skills/migrate-radix-to-base/universal-patterns.md: sha256:c520a81a21c9abd1135b52ad1ecc3d4a127904bbf33199f8d26ae389679346ce
+    .agents/skills/migrate-radix-to-base/wrapper-shapes.md: sha256:0bf31ea3e864a12bfa911f058ae135dc3f6f098cb0cc2aa5648b4a3d0bdd51cc
+    .agents/skills/shadcn/SKILL.md: sha256:deba6c5152d9835892fa7dffeb1fedbb689ddac7e59e14e57ec5eaf9463309e4
+    .agents/skills/shadcn/agents/openai.yml: sha256:35db91b1eef58b2abe01da9b88577de5a44e233b740cd93d692ddeeadd2afe4d
+    .agents/skills/shadcn/assets/shadcn-small.png: sha256:0ecc62d682727f68fc4937eed19960c706714fa084d44f63028d611ae02bf3d7
+    .agents/skills/shadcn/assets/shadcn.png: sha256:7d60ad6fec4d89a0d44ba5a3c9283d2fea0047af5467f9227040e20d927d39b7
+    .agents/skills/shadcn/cli.md: sha256:a381e35bf36fe7bb851952c13707e01e82434fd7a4a4e53f6df26c6370838904
+    .agents/skills/shadcn/customization.md: sha256:84c1d47168c4b8adb5840e4af30a4e373ae3377c1110478c8974f398dd63f5ba
+    .agents/skills/shadcn/evals/evals.json: sha256:58aca2760b0cc5265bb575f76cd8eed344b88544314b8cb2cd53e0b8007dc936
+    .agents/skills/shadcn/mcp.md: sha256:8d696b4e45b7d0e337367248513bd9acebe8f3bcfd7b748c775e5a337c8f38c8
+    .agents/skills/shadcn/registry.md: sha256:4f239be36bd2b58e17047db1ca80ab7da00e15a8b73242e5e4d50d113c4caa05
+    .agents/skills/shadcn/rules/base-vs-radix.md: sha256:2b2deb47d004285220c1fc6b38bb2edc2d0ccbcdafd031b0b189d5d8ed0d1ba8
+    .agents/skills/shadcn/rules/chat.md: sha256:fcbc4eb29a3998fa3e24e9f7f1cbb2b9f33e98cb5b66a153eeccdb74e78f9612
+    .agents/skills/shadcn/rules/composition.md: sha256:f282df828d83a91132a846ddb62eea149a7c7c94822e9ca88cfddf85af01aa41
+    .agents/skills/shadcn/rules/forms.md: sha256:29593e14381e34626f8e0e9c15c59f3394b92a0623af6a6ec94585400123853c
+    .agents/skills/shadcn/rules/icons.md: sha256:d4a58266648872d9ee07d0c2368843a1cb88b8253b7f528dd7bda9d68b6c2535
+    .agents/skills/shadcn/rules/styling.md: sha256:47bd2c3b6216b96af0ab169063a83dfef7f80c58536cf69445a6f4d22753326c
+  content_hash: sha256:0fe08d6a107042154de33d74b1d5d06ce82a258429698ce75471ea53e25a0c58
+  declared_license: MIT
+- repo_url: siesdart/skills
+  name: skills
+  host: github.com
+  resolved_commit: 0f6f1acf7ac4e818e462ba0fef384409c2a0c4b7
+  version: unknown
+  package_type: skill_bundle
+  deployed_files:
+  - .agents/skills/typescript-functional-patterns
+  - .agents/skills/typescript-functional-patterns/SKILL.md
+  - .agents/skills/typescript-functional-patterns/agents/openai.yaml
+  - .agents/skills/typescript-functional-patterns/references/PATTERNS.md
+  deployed_file_hashes:
+    .agents/skills/typescript-functional-patterns/SKILL.md: sha256:4b072c6974d538373a0328d795e6fea5bbc1e42d965c6d80997378c482283ddd
+    .agents/skills/typescript-functional-patterns/agents/openai.yaml: sha256:effac4408d317b380033fe079e4cb76c17686c64dfef419ae5a5e1b400485e35
+    .agents/skills/typescript-functional-patterns/references/PATTERNS.md: sha256:aefc97d0b0a6e4c0e1b0fcec98a221ff84c1aedb27b70e9c6680a4d3a9f6c20a
+  content_hash: sha256:7ce6a8a196c037e2b3ff0bc79337237808704d2d361f10b669a85f9e3b3e3269
+  skill_subset:
+  - typescript-functional-patterns
+- repo_url: vercel-labs/agent-skills
+  name: agent-skills
+  host: github.com
+  resolved_commit: b8caa260a420a73042e35521de4b5c8baf6446cc
+  version: unknown
+  package_type: skill_bundle
+  deployed_files:
+  - .agents/skills/react-best-practices
+  - .agents/skills/react-best-practices/AGENTS.md
+  - .agents/skills/react-best-practices/README.md
+  - .agents/skills/react-best-practices/SKILL.md
+  - .agents/skills/react-best-practices/metadata.json
+  - .agents/skills/react-best-practices/rules/_sections.md
+  - .agents/skills/react-best-practices/rules/_template.md
+  - .agents/skills/react-best-practices/rules/advanced-effect-event-deps.md
+  - .agents/skills/react-best-practices/rules/advanced-event-handler-refs.md
+  - .agents/skills/react-best-practices/rules/advanced-init-once.md
+  - .agents/skills/react-best-practices/rules/advanced-use-latest.md
+  - .agents/skills/react-best-practices/rules/async-api-routes.md
+  - .agents/skills/react-best-practices/rules/async-cheap-condition-before-await.md
+  - .agents/skills/react-best-practices/rules/async-defer-await.md
+  - .agents/skills/react-best-practices/rules/async-dependencies.md
+  - .agents/skills/react-best-practices/rules/async-parallel.md
+  - .agents/skills/react-best-practices/rules/async-suspense-boundaries.md
+  - .agents/skills/react-best-practices/rules/bundle-analyzable-paths.md
+  - .agents/skills/react-best-practices/rules/bundle-barrel-imports.md
+  - .agents/skills/react-best-practices/rules/bundle-conditional.md
+  - .agents/skills/react-best-practices/rules/bundle-defer-third-party.md
+  - .agents/skills/react-best-practices/rules/bundle-dynamic-imports.md
+  - .agents/skills/react-best-practices/rules/bundle-preload.md
+  - .agents/skills/react-best-practices/rules/client-event-listeners.md
+  - .agents/skills/react-best-practices/rules/client-localstorage-schema.md
+  - .agents/skills/react-best-practices/rules/client-passive-event-listeners.md
+  - .agents/skills/react-best-practices/rules/client-swr-dedup.md
+  - .agents/skills/react-best-practices/rules/js-batch-dom-css.md
+  - .agents/skills/react-best-practices/rules/js-cache-function-results.md
+  - .agents/skills/react-best-practices/rules/js-cache-property-access.md
+  - .agents/skills/react-best-practices/rules/js-cache-storage.md
+  - .agents/skills/react-best-practices/rules/js-combine-iterations.md
+  - .agents/skills/react-best-practices/rules/js-early-exit.md
+  - .agents/skills/react-best-practices/rules/js-flatmap-filter.md
+  - .agents/skills/react-best-practices/rules/js-hoist-regexp.md
+  - .agents/skills/react-best-practices/rules/js-index-maps.md
+  - .agents/skills/react-best-practices/rules/js-length-check-first.md
+  - .agents/skills/react-best-practices/rules/js-min-max-loop.md
+  - .agents/skills/react-best-practices/rules/js-request-idle-callback.md
+  - .agents/skills/react-best-practices/rules/js-set-map-lookups.md
+  - .agents/skills/react-best-practices/rules/js-tosorted-immutable.md
+  - .agents/skills/react-best-practices/rules/rendering-activity.md
+  - .agents/skills/react-best-practices/rules/rendering-animate-svg-wrapper.md
+  - .agents/skills/react-best-practices/rules/rendering-conditional-render.md
+  - .agents/skills/react-best-practices/rules/rendering-content-visibility.md
+  - .agents/skills/react-best-practices/rules/rendering-hoist-jsx.md
+  - .agents/skills/react-best-practices/rules/rendering-hydration-no-flicker.md
+  - .agents/skills/react-best-practices/rules/rendering-hydration-suppress-warning.md
+  - .agents/skills/react-best-practices/rules/rendering-resource-hints.md
+  - .agents/skills/react-best-practices/rules/rendering-script-defer-async.md
+  - .agents/skills/react-best-practices/rules/rendering-svg-precision.md
+  - .agents/skills/react-best-practices/rules/rendering-usetransition-loading.md
+  - .agents/skills/react-best-practices/rules/rerender-defer-reads.md
+  - .agents/skills/react-best-practices/rules/rerender-dependencies.md
+  - .agents/skills/react-best-practices/rules/rerender-derived-state-no-effect.md
+  - .agents/skills/react-best-practices/rules/rerender-derived-state.md
+  - .agents/skills/react-best-practices/rules/rerender-functional-setstate.md
+  - .agents/skills/react-best-practices/rules/rerender-lazy-state-init.md
+  - .agents/skills/react-best-practices/rules/rerender-memo-with-default-value.md
+  - .agents/skills/react-best-practices/rules/rerender-memo.md
+  - .agents/skills/react-best-practices/rules/rerender-move-effect-to-event.md
+  - .agents/skills/react-best-practices/rules/rerender-no-inline-components.md
+  - .agents/skills/react-best-practices/rules/rerender-simple-expression-in-memo.md
+  - .agents/skills/react-best-practices/rules/rerender-split-combined-hooks.md
+  - .agents/skills/react-best-practices/rules/rerender-transitions.md
+  - .agents/skills/react-best-practices/rules/rerender-use-deferred-value.md
+  - .agents/skills/react-best-practices/rules/rerender-use-ref-transient-values.md
+  - .agents/skills/react-best-practices/rules/server-after-nonblocking.md
+  - .agents/skills/react-best-practices/rules/server-auth-actions.md
+  - .agents/skills/react-best-practices/rules/server-cache-lru.md
+  - .agents/skills/react-best-practices/rules/server-cache-react.md
+  - .agents/skills/react-best-practices/rules/server-dedup-props.md
+  - .agents/skills/react-best-practices/rules/server-hoist-static-io.md
+  - .agents/skills/react-best-practices/rules/server-no-shared-module-state.md
+  - .agents/skills/react-best-practices/rules/server-parallel-fetching.md
+  - .agents/skills/react-best-practices/rules/server-parallel-nested-fetching.md
+  - .agents/skills/react-best-practices/rules/server-serialization.md
+  - .agents/skills/web-design-guidelines
+  - .agents/skills/web-design-guidelines/SKILL.md
+  deployed_file_hashes:
+    .agents/skills/react-best-practices/AGENTS.md: sha256:fc93e7421177bbf869cce892bc60a6c83a4517d974bc3bf65c4e2c1e58a6ccf6
+    .agents/skills/react-best-practices/README.md: sha256:9eafb2123d3b8b2aef41fba0db2648a3f4f49996f8c7c8bb2c86263befd8b48a
+    .agents/skills/react-best-practices/SKILL.md: sha256:71ed7794962fa6e803ee83030517b5b93a9f70fbfeb431ec4535c5480a8d8355
+    .agents/skills/react-best-practices/metadata.json: sha256:c4e18bac3290fbe1b471a605867d4df68b03144ea26b8befdbe8f9d8fd124354
+    .agents/skills/react-best-practices/rules/_sections.md: sha256:01c59969e4e867f0708c8f8ef9c6d87fab9a07d0586244f429ff84013db8a115
+    .agents/skills/react-best-practices/rules/_template.md: sha256:99df2a3ea088c6c22de2484ddc7e964d0e9923846f44c63380343ecc64455442
+    .agents/skills/react-best-practices/rules/advanced-effect-event-deps.md: sha256:55ed8f9f27a1bff803d6fa55828176207714b02123cbb97ddb8a90d88024a723
+    .agents/skills/react-best-practices/rules/advanced-event-handler-refs.md: sha256:a3097edeecfb2ff6851cd66ed8cdf0617c3c88180504bee824aa6e75a215bbbc
+    .agents/skills/react-best-practices/rules/advanced-init-once.md: sha256:3e4dc22173eb0e2b6dcf583e3babd862b8696328f8f59aee7c4d746c5bc05f6c
+    .agents/skills/react-best-practices/rules/advanced-use-latest.md: sha256:8a3f64dfe5a77d1564248faf17fe662ae75b55d497a243cb30b38eb07ccbbf9a
+    .agents/skills/react-best-practices/rules/async-api-routes.md: sha256:523338540d73427dc14c0cbb19f2741ebccdf8b105a7b2c1b33d2905cf237a42
+    .agents/skills/react-best-practices/rules/async-cheap-condition-before-await.md: sha256:03107c1f70a293cd58a8abc5474c5548e20ea4efdf01b6d45aae7ad0ac1cb32c
+    .agents/skills/react-best-practices/rules/async-defer-await.md: sha256:f3c142d090615abdcc99d31c123be37b31f0f1ed8d9ec9f7789a3bc6883ae0fb
+    .agents/skills/react-best-practices/rules/async-dependencies.md: sha256:16ef469f877e30c6b8e1e1b4bc3e527312fa3c6318cb785a4eca186ea236131a
+    .agents/skills/react-best-practices/rules/async-parallel.md: sha256:6d2f841896279e976dfcdc1ac89e70771ac188baadfd43c096b5706cb838b961
+    .agents/skills/react-best-practices/rules/async-suspense-boundaries.md: sha256:de05fedac2eb7ae563b887b5a424464ec3dfaf84e5b7797467ebe2a796ac8afc
+    .agents/skills/react-best-practices/rules/bundle-analyzable-paths.md: sha256:62090b5c815fd71bf1133dce754f51abc16a9456d0ccd025fd627de27726e92a
+    .agents/skills/react-best-practices/rules/bundle-barrel-imports.md: sha256:e648f6d54525f07a691357040ca5bff6ea3424788a91ff63812adb29622a671b
+    .agents/skills/react-best-practices/rules/bundle-conditional.md: sha256:09c8259c3efb04fc0abb8e412ccbda217c222ae8118516283e571c995fe3a7d4
+    .agents/skills/react-best-practices/rules/bundle-defer-third-party.md: sha256:3719fb47b191e8db4fe22686ec88448ad5af9e6838585425abbe103d0b642e37
+    .agents/skills/react-best-practices/rules/bundle-dynamic-imports.md: sha256:401817a7369f315fc5a68a1095742ff7d53d0461906880dc9d64a41495ee1986
+    .agents/skills/react-best-practices/rules/bundle-preload.md: sha256:d1f7cc28da7cd5ab249acd287edc5b761afcfb194e9cb62cd44c5f3543db2de2
+    .agents/skills/react-best-practices/rules/client-event-listeners.md: sha256:242a873349febc1ce685e85617994784dbab92c2eaa68aed7fed5a83e7680e93
+    .agents/skills/react-best-practices/rules/client-localstorage-schema.md: sha256:0fb7cdf9dc93fdf22f87e3669f953fb9d4ac9b0be42eec4a29fe9a2560610b88
+    .agents/skills/react-best-practices/rules/client-passive-event-listeners.md: sha256:1f35016f9053de69e884ee9be00654e37979c2ca85f5e57764dc2626ff7acb4b
+    .agents/skills/react-best-practices/rules/client-swr-dedup.md: sha256:644652c39c6cc00de8d1c77a7273612e868dc3f7edda30764164c12ec0f764a3
+    .agents/skills/react-best-practices/rules/js-batch-dom-css.md: sha256:480b891b9eaf96e929dc1e964274a4828e3a78009b7d00ccd965a0d425215959
+    .agents/skills/react-best-practices/rules/js-cache-function-results.md: sha256:3daaa11d24f4295cb6be8bc6f407f2ce83cc7b5bd1f0e68891ea8ab835721dc7
+    .agents/skills/react-best-practices/rules/js-cache-property-access.md: sha256:73e47431e74878a927061bf0ddc7cd91a7556cb35d2573f3421e82300d9ae311
+    .agents/skills/react-best-practices/rules/js-cache-storage.md: sha256:11b826b0433898c1ece2d3547010d8e77db9fb240185748c45db91493de9b6cc
+    .agents/skills/react-best-practices/rules/js-combine-iterations.md: sha256:71add08aeeb43091d4ff4c0b2842cce8b4bdef8ad3e732cc034bb5a84827e746
+    .agents/skills/react-best-practices/rules/js-early-exit.md: sha256:925ce5ce87f3347186ca62212f29cc6baa2b8c85a96d2720ad07c3d0abf781c0
+    .agents/skills/react-best-practices/rules/js-flatmap-filter.md: sha256:9e5b166a41914d975bef7635467f8fb32cd98b5c3126c0bc6f163490812fb5f0
+    .agents/skills/react-best-practices/rules/js-hoist-regexp.md: sha256:f9e9aef2f7c2307dd7310f283df85dcada45fc43e9bb941b0c3aa414dec21ec4
+    .agents/skills/react-best-practices/rules/js-index-maps.md: sha256:5df1bdc2cfabb2c98abd55d26762e5c18189535c2e686184f426082e62920391
+    .agents/skills/react-best-practices/rules/js-length-check-first.md: sha256:8b54a311c826b299272f29187fc58bc55772a04c4a72eeb29456ee96dc9fc624
+    .agents/skills/react-best-practices/rules/js-min-max-loop.md: sha256:87dfb67e2f39df6ad8bcfb5b78c5fb364d3c07554ad188a202408d99f3763421
+    .agents/skills/react-best-practices/rules/js-request-idle-callback.md: sha256:ee08f83905b4011abbc33d594033157d77561b5bbd9b36b04f0f409581ffec32
+    .agents/skills/react-best-practices/rules/js-set-map-lookups.md: sha256:a7fd781a6ba9ad49065961b6f9a90ef486bf6b648390e1a08704025f98e1642b
+    .agents/skills/react-best-practices/rules/js-tosorted-immutable.md: sha256:d0a5e1b0fec48a0a81397957e2f068e224329f7c42cb5feeed8aae6fa64025e8
+    .agents/skills/react-best-practices/rules/rendering-activity.md: sha256:1e5e7eaf3555e61d6a2e900089c676527d26259501db5594f59544b6c664f85a
+    .agents/skills/react-best-practices/rules/rendering-animate-svg-wrapper.md: sha256:9c6ae0ca7a51434e803887c64cded760956579a1452ccb80a461a03f9c937c77
+    .agents/skills/react-best-practices/rules/rendering-conditional-render.md: sha256:2ec2fa23c4148285144687050c52369adba3da2fbe3d486f8d3e0aad8f06f2bc
+    .agents/skills/react-best-practices/rules/rendering-content-visibility.md: sha256:64eee6d5b916fe74df33363994b27fc7f71bea3bcedc7ee04bda23107ca3e6e4
+    .agents/skills/react-best-practices/rules/rendering-hoist-jsx.md: sha256:93b229560fae92005ed9a2a829064607b39b2e984e92d221d05b2d41df2b7c0e
+    .agents/skills/react-best-practices/rules/rendering-hydration-no-flicker.md: sha256:dc7ab358c67c177bca6e6f360fbc935ebe4efa928c0ba3ebd3f9f3d9e2000ca3
+    .agents/skills/react-best-practices/rules/rendering-hydration-suppress-warning.md: sha256:915bacb934e2927d84b37a3f3d225a47b309ac8f9e494ed2bcb66ce07c5676a2
+    .agents/skills/react-best-practices/rules/rendering-resource-hints.md: sha256:351b1095d641717b930f1b2253282b7120af3023bc74e06c17675168d4286864
+    .agents/skills/react-best-practices/rules/rendering-script-defer-async.md: sha256:4cea07b7875ba7fc2c7465ff23b63a2bb334f90aaf2d9293d38d67b05fdb32ab
+    .agents/skills/react-best-practices/rules/rendering-svg-precision.md: sha256:ed468533f6e95f622859c884b122cf21f9f593ed6bb3d500a54de4b9f9bcb9fb
+    .agents/skills/react-best-practices/rules/rendering-usetransition-loading.md: sha256:3a1249c3f13026b6f54ab5712c388df219d6af01b12aa542749acd99a46f4bc1
+    .agents/skills/react-best-practices/rules/rerender-defer-reads.md: sha256:234050a77faf50cb306be10a9e15bd4421134ab5907e75f13e6d78e2bd262dc9
+    .agents/skills/react-best-practices/rules/rerender-dependencies.md: sha256:17eb5830956fb56486fd3cfc7431f5849d39751730c05ad9e77dd4f0c27169c5
+    .agents/skills/react-best-practices/rules/rerender-derived-state-no-effect.md: sha256:cb11ec76f50aa7b6847269f02d79b120c889a30d9ecd2c1d578f75144419c77a
+    .agents/skills/react-best-practices/rules/rerender-derived-state.md: sha256:1c326bb67b01fb084eb00c8911b0a7cff54681c2315b629f88e49b64eaa6481d
+    .agents/skills/react-best-practices/rules/rerender-functional-setstate.md: sha256:5e68df6b2ae8058e67f476ff1ac67bde159f5a9d18df439e46eabcdeb7b52e58
+    .agents/skills/react-best-practices/rules/rerender-lazy-state-init.md: sha256:4ae844740f266fc8cbf050701230286624a2440ec5be67b9a63d9edc3c580573
+    .agents/skills/react-best-practices/rules/rerender-memo-with-default-value.md: sha256:81c47476564ad8a79fc68fc442734255ca7d6829424359464503fda0a9f9a0dd
+    .agents/skills/react-best-practices/rules/rerender-memo.md: sha256:1f258990c2f27ff6256b3cc5c43300631bb3f0d81f749aed08d07fcdcc131dd1
+    .agents/skills/react-best-practices/rules/rerender-move-effect-to-event.md: sha256:abc2cbf167bee056743023351e96806a411d3398da8802093620aecf0721f029
+    .agents/skills/react-best-practices/rules/rerender-no-inline-components.md: sha256:1cc32907a770272524ba682eef9e7efdd8ad4533b6f89b718a1fcd7d1d0eb6a3
+    .agents/skills/react-best-practices/rules/rerender-simple-expression-in-memo.md: sha256:5bdcf2d1558ba5204e643c887b7b4060f89630969425651eb68e96427d97f800
+    .agents/skills/react-best-practices/rules/rerender-split-combined-hooks.md: sha256:6f45d703343484ef9acef9388397f3642966ae6a5a258899a0cf1f9977cfbf6c
+    .agents/skills/react-best-practices/rules/rerender-transitions.md: sha256:60f4033909a62df5e5b8c601494f9e50a562e2f8c1c2d81eac24f38142265f1c
+    .agents/skills/react-best-practices/rules/rerender-use-deferred-value.md: sha256:8c3579576a61a949884167745dcfaf1d5426ba305cc61fd0a79602d70fda4909
+    .agents/skills/react-best-practices/rules/rerender-use-ref-transient-values.md: sha256:f1a649af9d1d0b5c762f6c9c4c1c70c90d7df82aa10296ee87aadb78c1b76c54
+    .agents/skills/react-best-practices/rules/server-after-nonblocking.md: sha256:d0b8d24a3db9f0f65f9e2bddbf230b0e03a5f60e1229d93a4a18f5e7a991c7c2
+    .agents/skills/react-best-practices/rules/server-auth-actions.md: sha256:a2ca8aa102839251c7971ec784560fab943c20b36fe6f80365d4110c13260c23
+    .agents/skills/react-best-practices/rules/server-cache-lru.md: sha256:1924b64561841923b88a657085097a0aeba3e0ba2d5470b9f5c15cc10d6ae70f
+    .agents/skills/react-best-practices/rules/server-cache-react.md: sha256:fddeea6c870bb3da4134b61d54b7d09b83d2603f929b7547cd3dc1dc269edd5c
+    .agents/skills/react-best-practices/rules/server-dedup-props.md: sha256:c2747424cdac46be62f835f245a0aa887b0090b416d28e2ac8676702645eeb37
+    .agents/skills/react-best-practices/rules/server-hoist-static-io.md: sha256:5abea4dd882b13661bd5f7dfb93f9e547d5f08176c61c448ade91b210ed5d49f
+    .agents/skills/react-best-practices/rules/server-no-shared-module-state.md: sha256:4d869bf1cd2f1632e5ca4c0e64b1cf0e71c5f5a0f940bc8a22174d205e735ed7
+    .agents/skills/react-best-practices/rules/server-parallel-fetching.md: sha256:569a2e9fc04f9606686cd75c5894ef8781b502786a7fffe241396846c7733472
+    .agents/skills/react-best-practices/rules/server-parallel-nested-fetching.md: sha256:ad5d9656984d4a959997a2367bf59cc6632297b4634a1dd13a087939d83f30b3
+    .agents/skills/react-best-practices/rules/server-serialization.md: sha256:f4c7d68b29c82381baad059c4a7f09e868e71ec9c3115a26ad3ae7d24c0dfe1f
+    .agents/skills/web-design-guidelines/SKILL.md: sha256:f4647ca866a3accf763777f83e7682954f0187cd6bea7eea0399796652414e8f
+  content_hash: sha256:10277ad6c6ce69262ba7dfeb32181868825da533ec20abf50839bd85a91f79ad
+  skill_subset:
+  - react-best-practices
+  - web-design-guidelines
+- repo_url: vercel/turborepo
+  name: turborepo
+  host: github.com
+  resolved_commit: 0cfccdd8cb83e350739efa0cc272b4ede38548a4
+  version: unknown
+  package_type: skill_bundle
+  deployed_files:
+  - .agents/skills/turborepo
+  - .agents/skills/turborepo/SKILL.md
+  - .agents/skills/turborepo/command/turborepo.md
+  - .agents/skills/turborepo/references/best-practices/RULE.md
+  - .agents/skills/turborepo/references/best-practices/dependencies.md
+  - .agents/skills/turborepo/references/best-practices/packages.md
+  - .agents/skills/turborepo/references/best-practices/structure.md
+  - .agents/skills/turborepo/references/boundaries/RULE.md
+  - .agents/skills/turborepo/references/caching/RULE.md
+  - .agents/skills/turborepo/references/caching/gotchas.md
+  - .agents/skills/turborepo/references/caching/remote-cache.md
+  - .agents/skills/turborepo/references/ci/RULE.md
+  - .agents/skills/turborepo/references/ci/github-actions.md
+  - .agents/skills/turborepo/references/ci/patterns.md
+  - .agents/skills/turborepo/references/ci/vercel.md
+  - .agents/skills/turborepo/references/cli/RULE.md
+  - .agents/skills/turborepo/references/cli/commands.md
+  - .agents/skills/turborepo/references/configuration/RULE.md
+  - .agents/skills/turborepo/references/configuration/global-options.md
+  - .agents/skills/turborepo/references/configuration/gotchas.md
+  - .agents/skills/turborepo/references/configuration/tasks.md
+  - .agents/skills/turborepo/references/environment/RULE.md
+  - .agents/skills/turborepo/references/environment/gotchas.md
+  - .agents/skills/turborepo/references/environment/modes.md
+  - .agents/skills/turborepo/references/filtering/RULE.md
+  - .agents/skills/turborepo/references/filtering/patterns.md
+  - .agents/skills/turborepo/references/watch/RULE.md
+  deployed_file_hashes:
+    .agents/skills/turborepo/SKILL.md: sha256:150b2d2dfbc7f1e6c1990827a8debd9bd2756320c8a0c439f69f7b54cdd57ced
+    .agents/skills/turborepo/command/turborepo.md: sha256:ad4437d5dd02aa30835c556504ef836f43c29e660d9ed7dd5865b7daf3b8b4fd
+    .agents/skills/turborepo/references/best-practices/RULE.md: sha256:ab7d339168386107d0a6b9259f2e6586b1526d53975682a08442babfa1b7bb58
+    .agents/skills/turborepo/references/best-practices/dependencies.md: sha256:422cbba88be554e857fd2bce4bd60983198bfd48e253f8b57ac833741077f3d3
+    .agents/skills/turborepo/references/best-practices/packages.md: sha256:eb393cfc4e2824612e862db5d30868948952e22c48b9885b20ef43f5d982732e
+    .agents/skills/turborepo/references/best-practices/structure.md: sha256:4ff5b82b785d83852f337e5994befe6534d99b9db862dbff8b7d950cf00d3369
+    .agents/skills/turborepo/references/boundaries/RULE.md: sha256:70d66f5ba31c0caa788b68b99b8f010eb71d1ab1a55d1d6faec024d4a86afb56
+    .agents/skills/turborepo/references/caching/RULE.md: sha256:cb68d066937eb4a91999236d2afb685b623ae641e44c8e839cb993b4c8f66527
+    .agents/skills/turborepo/references/caching/gotchas.md: sha256:4a301996476b0b140a7ff434767c6f9b1ac91559222706cf56987d520fdcf2ab
+    .agents/skills/turborepo/references/caching/remote-cache.md: sha256:aadde0562fd51fb6593c890af25851419730b714d84e9477d8c190479d31e530
+    .agents/skills/turborepo/references/ci/RULE.md: sha256:f78461824b21955f702c24a4fbf287c71a4f9eec79d79e9fc0fd11b014a2eaf1
+    .agents/skills/turborepo/references/ci/github-actions.md: sha256:3574ff2979a8fe859d3d30068c7a9d0d5fed392dc1733230e994c3e78051434d
+    .agents/skills/turborepo/references/ci/patterns.md: sha256:fdaa9fa17dae3f4849efa9a9312dfb2929181609b0ed428224db03bb4fcbe6d7
+    .agents/skills/turborepo/references/ci/vercel.md: sha256:cf47de0da926980841aebd9cbfc649f49e0d18a108afc622386825705538b946
+    .agents/skills/turborepo/references/cli/RULE.md: sha256:7f323ad405086b17fbafa516a9feec597ad94323492954329e9aafb5b51f8e18
+    .agents/skills/turborepo/references/cli/commands.md: sha256:2fcaae0230e350340655787b5c9116f535bc7f1abaa317111d492226cdb139c4
+    .agents/skills/turborepo/references/configuration/RULE.md: sha256:0d977a8eb3f247c9d5dc134acbf5997ce2acf1779108e9a76b8315e85235ea0e
+    .agents/skills/turborepo/references/configuration/global-options.md: sha256:a9cda5ba17756d82944b8f085f41790fcfcae26554ab5637476394c868c141a7
+    .agents/skills/turborepo/references/configuration/gotchas.md: sha256:5623c00a9b0ff15fe4e769a7cd5a447d3c4af356fbe053799523353976812d38
+    .agents/skills/turborepo/references/configuration/tasks.md: sha256:d41b3a6efc6852206aa2bf39778727fdc2f9dd84521b13702a403cb18f84fd55
+    .agents/skills/turborepo/references/environment/RULE.md: sha256:6c950440c2a7ab69cf006ad85f62e360352d705eb4593ab975c73055782217e5
+    .agents/skills/turborepo/references/environment/gotchas.md: sha256:91196dc9169b1f4bc297a9473bd500ddc66f2e0f8438acbc98af6399dbc5b299
+    .agents/skills/turborepo/references/environment/modes.md: sha256:e62247076f8b84d6897ab3ec835642736074fc36da10980ede69c23c1c923fd8
+    .agents/skills/turborepo/references/filtering/RULE.md: sha256:2d73e0190586e233cce7dd4599eb368d7d8f846fdc68f0d19ce06a7e3ec6166c
+    .agents/skills/turborepo/references/filtering/patterns.md: sha256:c03f856b8c76f137a1ef31efdbc9796b18c0a2b096e48aff6ce2ee5ff4cac4f0
+    .agents/skills/turborepo/references/watch/RULE.md: sha256:9f0706f10dc7cf3a9115214f31195d6dadf237966cba13fe7ff8b264ba993c2b
+  content_hash: sha256:d299cc81bc281195efb0b630324fbbb58b2001ea5e07ab4fbba6cff1285180d5
+deployments:
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/accessibility
+  runtime: null
+  scope: project
+  owners:
+  - addyosmani/web-quality-skills
+  active_owner: addyosmani/web-quality-skills
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/accessibility/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - addyosmani/web-quality-skills
+  active_owner: addyosmani/web-quality-skills
+  content_hash: sha256:ea58830345e10809e17df5cf79124c2f9e1d48d8b0028062eef4cafa5110fea8
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/accessibility/references/A11Y-PATTERNS.md
+  runtime: null
+  scope: project
+  owners:
+  - addyosmani/web-quality-skills
+  active_owner: addyosmani/web-quality-skills
+  content_hash: sha256:f10e238dd4dd3c4f51134c2056bc02d3dd4f8fb6ccc9145c2c1ba7aab4d58140
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/accessibility/references/WCAG.md
+  runtime: null
+  scope: project
+  owners:
+  - addyosmani/web-quality-skills
+  active_owner: addyosmani/web-quality-skills
+  content_hash: sha256:16683e025e3833d931c9d880645d98a448827f97e10189b6c8f12c832e7a2361
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/best-practices
+  runtime: null
+  scope: project
+  owners:
+  - addyosmani/web-quality-skills
+  active_owner: addyosmani/web-quality-skills
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/best-practices/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - addyosmani/web-quality-skills
+  active_owner: addyosmani/web-quality-skills
+  content_hash: sha256:5ed963ab6d8a1b69e1a785f06f16b6a0dbe0ab0ea421c70cf26fdf1ab0f1f4b5
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/brandkit
+  runtime: null
+  scope: project
+  owners:
+  - leonxlnx/taste-skill
+  active_owner: leonxlnx/taste-skill
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/brandkit/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - leonxlnx/taste-skill
+  active_owner: leonxlnx/taste-skill
+  content_hash: sha256:b0c4837e1bd140ca816ae54948754ddd2ac1e2a4d3619363777a80caf00b2ede
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/brutalist-skill
+  runtime: null
+  scope: project
+  owners:
+  - leonxlnx/taste-skill
+  active_owner: leonxlnx/taste-skill
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/brutalist-skill/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - leonxlnx/taste-skill
+  active_owner: leonxlnx/taste-skill
+  content_hash: sha256:fffbaac8597f07679e9d87145533567658aedba3b5eca6f16a7075a333048caa
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/core-web-vitals
+  runtime: null
+  scope: project
+  owners:
+  - addyosmani/web-quality-skills
+  active_owner: addyosmani/web-quality-skills
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/core-web-vitals/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - addyosmani/web-quality-skills
+  active_owner: addyosmani/web-quality-skills
+  content_hash: sha256:0653e154f3130f72098073bf86588b2dd3872c23e70c231786016758a851c4be
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/core-web-vitals/references/LCP.md
+  runtime: null
+  scope: project
+  owners:
+  - addyosmani/web-quality-skills
+  active_owner: addyosmani/web-quality-skills
+  content_hash: sha256:4c5043ef7e1ae4058191a51fbfe5121668bd3677842a2ef563a45a9ca6685d92
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/frontend-design
+  runtime: null
+  scope: project
+  owners:
+  - anthropics/skills
+  active_owner: anthropics/skills
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/frontend-design/LICENSE.txt
+  runtime: null
+  scope: project
+  owners:
+  - anthropics/skills
+  active_owner: anthropics/skills
+  content_hash: sha256:0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/frontend-design/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - anthropics/skills
+  active_owner: anthropics/skills
+  content_hash: sha256:1608ea77fbb6fc30d13a97d12cfa8ebf31358d40f0dd97beed24829d6b3f45dd
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/gpt-tasteskill
+  runtime: null
+  scope: project
+  owners:
+  - leonxlnx/taste-skill
+  active_owner: leonxlnx/taste-skill
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/gpt-tasteskill/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - leonxlnx/taste-skill
+  active_owner: leonxlnx/taste-skill
+  content_hash: sha256:2e64c269953f2656c21bf5a0fa6b4568e82fe0c72b36e8f84758e090349966a5
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/image-to-code-skill
+  runtime: null
+  scope: project
+  owners:
+  - leonxlnx/taste-skill
+  active_owner: leonxlnx/taste-skill
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/image-to-code-skill/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - leonxlnx/taste-skill
+  active_owner: leonxlnx/taste-skill
+  content_hash: sha256:4c060a8064a8b13380bc2ef3d6e6a1d0b1e316aa093cd9807d0ce9e4eeb037fa
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/imagegen-frontend-mobile
+  runtime: null
+  scope: project
+  owners:
+  - leonxlnx/taste-skill
+  active_owner: leonxlnx/taste-skill
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/imagegen-frontend-mobile/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - leonxlnx/taste-skill
+  active_owner: leonxlnx/taste-skill
+  content_hash: sha256:8a33389979f3074fa0926678e266ad2eb9234624472254469fc1ad916b9caa24
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/imagegen-frontend-web
+  runtime: null
+  scope: project
+  owners:
+  - leonxlnx/taste-skill
+  active_owner: leonxlnx/taste-skill
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/imagegen-frontend-web/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - leonxlnx/taste-skill
+  active_owner: leonxlnx/taste-skill
+  content_hash: sha256:6b5c2256522fdba1e3313eafa3d743b960a7b13ec029d3e6586e04b23327c1f8
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/migrate-radix-to-base
+  runtime: null
+  scope: project
+  owners:
+  - shadcn/ui
+  active_owner: shadcn/ui
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/migrate-radix-to-base/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - shadcn/ui
+  active_owner: shadcn/ui
+  content_hash: sha256:64c879f6f1eab0decc306ca52ad32d41327c05c4d2fb7e708335e956c61dadf8
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/migrate-radix-to-base/class-mapping.md
+  runtime: null
+  scope: project
+  owners:
+  - shadcn/ui
+  active_owner: shadcn/ui
+  content_hash: sha256:c288738167c663c6188caf958cdac6d72061b0ce44d6bce14d9dc6d40b4e79f9
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/migrate-radix-to-base/consumer-props.md
+  runtime: null
+  scope: project
+  owners:
+  - shadcn/ui
+  active_owner: shadcn/ui
+  content_hash: sha256:f6f62f7173b95350339e930eb6ff2c9496b4d5df3571deed78d5b0159f91b1d0
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/migrate-radix-to-base/disclosure.md
+  runtime: null
+  scope: project
+  owners:
+  - shadcn/ui
+  active_owner: shadcn/ui
+  content_hash: sha256:f0962f90416ead3290f532b53a66b08a905d4a8fd6ea220b7df63521c9d993ce
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/migrate-radix-to-base/display-misc.md
+  runtime: null
+  scope: project
+  owners:
+  - shadcn/ui
+  active_owner: shadcn/ui
+  content_hash: sha256:76dd486105df7f0412e8d526fbeec6fa485c866ff1bf781ddccdc4d87eace0c3
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/migrate-radix-to-base/form-controls.md
+  runtime: null
+  scope: project
+  owners:
+  - shadcn/ui
+  active_owner: shadcn/ui
+  content_hash: sha256:66c69dd4077e3e8852a33348f7797bdb5e934192a0cc97ce8f1264ebd137b846
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/migrate-radix-to-base/menus.md
+  runtime: null
+  scope: project
+  owners:
+  - shadcn/ui
+  active_owner: shadcn/ui
+  content_hash: sha256:44188b70c3221a7d18f782641dc7f1a954bc1fa6eb42b788a1935a6613f376d9
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/migrate-radix-to-base/overlays.md
+  runtime: null
+  scope: project
+  owners:
+  - shadcn/ui
+  active_owner: shadcn/ui
+  content_hash: sha256:8d9fe2b05eb22a1664637b22e6112190de88a4368420d9cb36002adc108e8a03
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/migrate-radix-to-base/universal-patterns.md
+  runtime: null
+  scope: project
+  owners:
+  - shadcn/ui
+  active_owner: shadcn/ui
+  content_hash: sha256:c520a81a21c9abd1135b52ad1ecc3d4a127904bbf33199f8d26ae389679346ce
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/migrate-radix-to-base/wrapper-shapes.md
+  runtime: null
+  scope: project
+  owners:
+  - shadcn/ui
+  active_owner: shadcn/ui
+  content_hash: sha256:0bf31ea3e864a12bfa911f058ae135dc3f6f098cb0cc2aa5648b4a3d0bdd51cc
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/minimalist-skill
+  runtime: null
+  scope: project
+  owners:
+  - leonxlnx/taste-skill
+  active_owner: leonxlnx/taste-skill
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/minimalist-skill/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - leonxlnx/taste-skill
+  active_owner: leonxlnx/taste-skill
+  content_hash: sha256:36bc7328f085405f43b476938e62460fa573bf7e984e949e072bcf014831a44c
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/output-skill
+  runtime: null
+  scope: project
+  owners:
+  - leonxlnx/taste-skill
+  active_owner: leonxlnx/taste-skill
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/output-skill/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - leonxlnx/taste-skill
+  active_owner: leonxlnx/taste-skill
+  content_hash: sha256:e5bf48b1ae561511439cf71672209a10a88cee0968cc925909ff861dfa0a96a7
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/performance
+  runtime: null
+  scope: project
+  owners:
+  - addyosmani/web-quality-skills
+  active_owner: addyosmani/web-quality-skills
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/performance/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - addyosmani/web-quality-skills
+  active_owner: addyosmani/web-quality-skills
+  content_hash: sha256:f35e43c3ef9e9730af385c56451660956f88e78f553050985b31bf0959f3c619
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/AGENTS.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:fc93e7421177bbf869cce892bc60a6c83a4517d974bc3bf65c4e2c1e58a6ccf6
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/README.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:9eafb2123d3b8b2aef41fba0db2648a3f4f49996f8c7c8bb2c86263befd8b48a
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:71ed7794962fa6e803ee83030517b5b93a9f70fbfeb431ec4535c5480a8d8355
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/metadata.json
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:c4e18bac3290fbe1b471a605867d4df68b03144ea26b8befdbe8f9d8fd124354
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/_sections.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:01c59969e4e867f0708c8f8ef9c6d87fab9a07d0586244f429ff84013db8a115
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/_template.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:99df2a3ea088c6c22de2484ddc7e964d0e9923846f44c63380343ecc64455442
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/advanced-effect-event-deps.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:55ed8f9f27a1bff803d6fa55828176207714b02123cbb97ddb8a90d88024a723
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/advanced-event-handler-refs.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:a3097edeecfb2ff6851cd66ed8cdf0617c3c88180504bee824aa6e75a215bbbc
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/advanced-init-once.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:3e4dc22173eb0e2b6dcf583e3babd862b8696328f8f59aee7c4d746c5bc05f6c
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/advanced-use-latest.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:8a3f64dfe5a77d1564248faf17fe662ae75b55d497a243cb30b38eb07ccbbf9a
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/async-api-routes.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:523338540d73427dc14c0cbb19f2741ebccdf8b105a7b2c1b33d2905cf237a42
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/async-cheap-condition-before-await.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:03107c1f70a293cd58a8abc5474c5548e20ea4efdf01b6d45aae7ad0ac1cb32c
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/async-defer-await.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:f3c142d090615abdcc99d31c123be37b31f0f1ed8d9ec9f7789a3bc6883ae0fb
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/async-dependencies.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:16ef469f877e30c6b8e1e1b4bc3e527312fa3c6318cb785a4eca186ea236131a
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/async-parallel.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:6d2f841896279e976dfcdc1ac89e70771ac188baadfd43c096b5706cb838b961
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/async-suspense-boundaries.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:de05fedac2eb7ae563b887b5a424464ec3dfaf84e5b7797467ebe2a796ac8afc
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/bundle-analyzable-paths.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:62090b5c815fd71bf1133dce754f51abc16a9456d0ccd025fd627de27726e92a
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/bundle-barrel-imports.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:e648f6d54525f07a691357040ca5bff6ea3424788a91ff63812adb29622a671b
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/bundle-conditional.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:09c8259c3efb04fc0abb8e412ccbda217c222ae8118516283e571c995fe3a7d4
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/bundle-defer-third-party.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:3719fb47b191e8db4fe22686ec88448ad5af9e6838585425abbe103d0b642e37
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/bundle-dynamic-imports.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:401817a7369f315fc5a68a1095742ff7d53d0461906880dc9d64a41495ee1986
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/bundle-preload.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:d1f7cc28da7cd5ab249acd287edc5b761afcfb194e9cb62cd44c5f3543db2de2
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/client-event-listeners.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:242a873349febc1ce685e85617994784dbab92c2eaa68aed7fed5a83e7680e93
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/client-localstorage-schema.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:0fb7cdf9dc93fdf22f87e3669f953fb9d4ac9b0be42eec4a29fe9a2560610b88
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/client-passive-event-listeners.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:1f35016f9053de69e884ee9be00654e37979c2ca85f5e57764dc2626ff7acb4b
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/client-swr-dedup.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:644652c39c6cc00de8d1c77a7273612e868dc3f7edda30764164c12ec0f764a3
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/js-batch-dom-css.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:480b891b9eaf96e929dc1e964274a4828e3a78009b7d00ccd965a0d425215959
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/js-cache-function-results.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:3daaa11d24f4295cb6be8bc6f407f2ce83cc7b5bd1f0e68891ea8ab835721dc7
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/js-cache-property-access.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:73e47431e74878a927061bf0ddc7cd91a7556cb35d2573f3421e82300d9ae311
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/js-cache-storage.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:11b826b0433898c1ece2d3547010d8e77db9fb240185748c45db91493de9b6cc
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/js-combine-iterations.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:71add08aeeb43091d4ff4c0b2842cce8b4bdef8ad3e732cc034bb5a84827e746
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/js-early-exit.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:925ce5ce87f3347186ca62212f29cc6baa2b8c85a96d2720ad07c3d0abf781c0
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/js-flatmap-filter.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:9e5b166a41914d975bef7635467f8fb32cd98b5c3126c0bc6f163490812fb5f0
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/js-hoist-regexp.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:f9e9aef2f7c2307dd7310f283df85dcada45fc43e9bb941b0c3aa414dec21ec4
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/js-index-maps.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:5df1bdc2cfabb2c98abd55d26762e5c18189535c2e686184f426082e62920391
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/js-length-check-first.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:8b54a311c826b299272f29187fc58bc55772a04c4a72eeb29456ee96dc9fc624
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/js-min-max-loop.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:87dfb67e2f39df6ad8bcfb5b78c5fb364d3c07554ad188a202408d99f3763421
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/js-request-idle-callback.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:ee08f83905b4011abbc33d594033157d77561b5bbd9b36b04f0f409581ffec32
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/js-set-map-lookups.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:a7fd781a6ba9ad49065961b6f9a90ef486bf6b648390e1a08704025f98e1642b
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/js-tosorted-immutable.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:d0a5e1b0fec48a0a81397957e2f068e224329f7c42cb5feeed8aae6fa64025e8
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/rendering-activity.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:1e5e7eaf3555e61d6a2e900089c676527d26259501db5594f59544b6c664f85a
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/rendering-animate-svg-wrapper.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:9c6ae0ca7a51434e803887c64cded760956579a1452ccb80a461a03f9c937c77
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/rendering-conditional-render.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:2ec2fa23c4148285144687050c52369adba3da2fbe3d486f8d3e0aad8f06f2bc
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/rendering-content-visibility.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:64eee6d5b916fe74df33363994b27fc7f71bea3bcedc7ee04bda23107ca3e6e4
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/rendering-hoist-jsx.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:93b229560fae92005ed9a2a829064607b39b2e984e92d221d05b2d41df2b7c0e
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/rendering-hydration-no-flicker.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:dc7ab358c67c177bca6e6f360fbc935ebe4efa928c0ba3ebd3f9f3d9e2000ca3
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/rendering-hydration-suppress-warning.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:915bacb934e2927d84b37a3f3d225a47b309ac8f9e494ed2bcb66ce07c5676a2
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/rendering-resource-hints.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:351b1095d641717b930f1b2253282b7120af3023bc74e06c17675168d4286864
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/rendering-script-defer-async.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:4cea07b7875ba7fc2c7465ff23b63a2bb334f90aaf2d9293d38d67b05fdb32ab
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/rendering-svg-precision.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:ed468533f6e95f622859c884b122cf21f9f593ed6bb3d500a54de4b9f9bcb9fb
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/rendering-usetransition-loading.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:3a1249c3f13026b6f54ab5712c388df219d6af01b12aa542749acd99a46f4bc1
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/rerender-defer-reads.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:234050a77faf50cb306be10a9e15bd4421134ab5907e75f13e6d78e2bd262dc9
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/rerender-dependencies.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:17eb5830956fb56486fd3cfc7431f5849d39751730c05ad9e77dd4f0c27169c5
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/rerender-derived-state-no-effect.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:cb11ec76f50aa7b6847269f02d79b120c889a30d9ecd2c1d578f75144419c77a
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/rerender-derived-state.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:1c326bb67b01fb084eb00c8911b0a7cff54681c2315b629f88e49b64eaa6481d
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/rerender-functional-setstate.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:5e68df6b2ae8058e67f476ff1ac67bde159f5a9d18df439e46eabcdeb7b52e58
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/rerender-lazy-state-init.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:4ae844740f266fc8cbf050701230286624a2440ec5be67b9a63d9edc3c580573
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/rerender-memo-with-default-value.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:81c47476564ad8a79fc68fc442734255ca7d6829424359464503fda0a9f9a0dd
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/rerender-memo.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:1f258990c2f27ff6256b3cc5c43300631bb3f0d81f749aed08d07fcdcc131dd1
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/rerender-move-effect-to-event.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:abc2cbf167bee056743023351e96806a411d3398da8802093620aecf0721f029
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/rerender-no-inline-components.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:1cc32907a770272524ba682eef9e7efdd8ad4533b6f89b718a1fcd7d1d0eb6a3
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/rerender-simple-expression-in-memo.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:5bdcf2d1558ba5204e643c887b7b4060f89630969425651eb68e96427d97f800
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/rerender-split-combined-hooks.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:6f45d703343484ef9acef9388397f3642966ae6a5a258899a0cf1f9977cfbf6c
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/rerender-transitions.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:60f4033909a62df5e5b8c601494f9e50a562e2f8c1c2d81eac24f38142265f1c
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/rerender-use-deferred-value.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:8c3579576a61a949884167745dcfaf1d5426ba305cc61fd0a79602d70fda4909
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/rerender-use-ref-transient-values.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:f1a649af9d1d0b5c762f6c9c4c1c70c90d7df82aa10296ee87aadb78c1b76c54
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/server-after-nonblocking.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:d0b8d24a3db9f0f65f9e2bddbf230b0e03a5f60e1229d93a4a18f5e7a991c7c2
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/server-auth-actions.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:a2ca8aa102839251c7971ec784560fab943c20b36fe6f80365d4110c13260c23
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/server-cache-lru.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:1924b64561841923b88a657085097a0aeba3e0ba2d5470b9f5c15cc10d6ae70f
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/server-cache-react.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:fddeea6c870bb3da4134b61d54b7d09b83d2603f929b7547cd3dc1dc269edd5c
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/server-dedup-props.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:c2747424cdac46be62f835f245a0aa887b0090b416d28e2ac8676702645eeb37
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/server-hoist-static-io.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:5abea4dd882b13661bd5f7dfb93f9e547d5f08176c61c448ade91b210ed5d49f
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/server-no-shared-module-state.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:4d869bf1cd2f1632e5ca4c0e64b1cf0e71c5f5a0f940bc8a22174d205e735ed7
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/server-parallel-fetching.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:569a2e9fc04f9606686cd75c5894ef8781b502786a7fffe241396846c7733472
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/server-parallel-nested-fetching.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:ad5d9656984d4a959997a2367bf59cc6632297b4634a1dd13a087939d83f30b3
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-best-practices/rules/server-serialization.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:f4c7d68b29c82381baad059c4a7f09e868e71ec9c3115a26ad3ae7d24c0dfe1f
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/redesign-skill
+  runtime: null
+  scope: project
+  owners:
+  - leonxlnx/taste-skill
+  active_owner: leonxlnx/taste-skill
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/redesign-skill/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - leonxlnx/taste-skill
+  active_owner: leonxlnx/taste-skill
+  content_hash: sha256:98ad3e5b051bfb71b2795f7e8a6aa0d32b51ee095606c098a4b2822ac07926c9
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/seo
+  runtime: null
+  scope: project
+  owners:
+  - addyosmani/web-quality-skills
+  active_owner: addyosmani/web-quality-skills
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/seo/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - addyosmani/web-quality-skills
+  active_owner: addyosmani/web-quality-skills
+  content_hash: sha256:79064ce0edc9a21e0b8cae2cc44b9751fb397ef80584e72b4289a6a67b40f19c
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn
+  runtime: null
+  scope: project
+  owners:
+  - shadcn/ui
+  active_owner: shadcn/ui
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - shadcn/ui
+  active_owner: shadcn/ui
+  content_hash: sha256:deba6c5152d9835892fa7dffeb1fedbb689ddac7e59e14e57ec5eaf9463309e4
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn/agents/openai.yml
+  runtime: null
+  scope: project
+  owners:
+  - shadcn/ui
+  active_owner: shadcn/ui
+  content_hash: sha256:35db91b1eef58b2abe01da9b88577de5a44e233b740cd93d692ddeeadd2afe4d
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn/assets/shadcn-small.png
+  runtime: null
+  scope: project
+  owners:
+  - shadcn/ui
+  active_owner: shadcn/ui
+  content_hash: sha256:0ecc62d682727f68fc4937eed19960c706714fa084d44f63028d611ae02bf3d7
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn/assets/shadcn.png
+  runtime: null
+  scope: project
+  owners:
+  - shadcn/ui
+  active_owner: shadcn/ui
+  content_hash: sha256:7d60ad6fec4d89a0d44ba5a3c9283d2fea0047af5467f9227040e20d927d39b7
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn/cli.md
+  runtime: null
+  scope: project
+  owners:
+  - shadcn/ui
+  active_owner: shadcn/ui
+  content_hash: sha256:a381e35bf36fe7bb851952c13707e01e82434fd7a4a4e53f6df26c6370838904
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn/customization.md
+  runtime: null
+  scope: project
+  owners:
+  - shadcn/ui
+  active_owner: shadcn/ui
+  content_hash: sha256:84c1d47168c4b8adb5840e4af30a4e373ae3377c1110478c8974f398dd63f5ba
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn/evals/evals.json
+  runtime: null
+  scope: project
+  owners:
+  - shadcn/ui
+  active_owner: shadcn/ui
+  content_hash: sha256:58aca2760b0cc5265bb575f76cd8eed344b88544314b8cb2cd53e0b8007dc936
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn/mcp.md
+  runtime: null
+  scope: project
+  owners:
+  - shadcn/ui
+  active_owner: shadcn/ui
+  content_hash: sha256:8d696b4e45b7d0e337367248513bd9acebe8f3bcfd7b748c775e5a337c8f38c8
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn/registry.md
+  runtime: null
+  scope: project
+  owners:
+  - shadcn/ui
+  active_owner: shadcn/ui
+  content_hash: sha256:4f239be36bd2b58e17047db1ca80ab7da00e15a8b73242e5e4d50d113c4caa05
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn/rules/base-vs-radix.md
+  runtime: null
+  scope: project
+  owners:
+  - shadcn/ui
+  active_owner: shadcn/ui
+  content_hash: sha256:2b2deb47d004285220c1fc6b38bb2edc2d0ccbcdafd031b0b189d5d8ed0d1ba8
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn/rules/chat.md
+  runtime: null
+  scope: project
+  owners:
+  - shadcn/ui
+  active_owner: shadcn/ui
+  content_hash: sha256:fcbc4eb29a3998fa3e24e9f7f1cbb2b9f33e98cb5b66a153eeccdb74e78f9612
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn/rules/composition.md
+  runtime: null
+  scope: project
+  owners:
+  - shadcn/ui
+  active_owner: shadcn/ui
+  content_hash: sha256:f282df828d83a91132a846ddb62eea149a7c7c94822e9ca88cfddf85af01aa41
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn/rules/forms.md
+  runtime: null
+  scope: project
+  owners:
+  - shadcn/ui
+  active_owner: shadcn/ui
+  content_hash: sha256:29593e14381e34626f8e0e9c15c59f3394b92a0623af6a6ec94585400123853c
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn/rules/icons.md
+  runtime: null
+  scope: project
+  owners:
+  - shadcn/ui
+  active_owner: shadcn/ui
+  content_hash: sha256:d4a58266648872d9ee07d0c2368843a1cb88b8253b7f528dd7bda9d68b6c2535
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn/rules/styling.md
+  runtime: null
+  scope: project
+  owners:
+  - shadcn/ui
+  active_owner: shadcn/ui
+  content_hash: sha256:47bd2c3b6216b96af0ab169063a83dfef7f80c58536cf69445a6f4d22753326c
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/soft-skill
+  runtime: null
+  scope: project
+  owners:
+  - leonxlnx/taste-skill
+  active_owner: leonxlnx/taste-skill
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/soft-skill/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - leonxlnx/taste-skill
+  active_owner: leonxlnx/taste-skill
+  content_hash: sha256:e1e32f5e2d420872c6c7332b53d5ff7721946766b78c4822b424c2d512c8fdbc
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/stitch-skill
+  runtime: null
+  scope: project
+  owners:
+  - leonxlnx/taste-skill
+  active_owner: leonxlnx/taste-skill
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/stitch-skill/DESIGN.md
+  runtime: null
+  scope: project
+  owners:
+  - leonxlnx/taste-skill
+  active_owner: leonxlnx/taste-skill
+  content_hash: sha256:0ab6740c4ebb1966dbceddb823a66d4bf027e960efbd73faca56cbf8370ae2ad
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/stitch-skill/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - leonxlnx/taste-skill
+  active_owner: leonxlnx/taste-skill
+  content_hash: sha256:46bdb08fee2dded38b6ba0a051230a502d6ac6e4044afd47592cb40c256028b5
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/taste-skill
+  runtime: null
+  scope: project
+  owners:
+  - leonxlnx/taste-skill
+  active_owner: leonxlnx/taste-skill
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/taste-skill-v1
+  runtime: null
+  scope: project
+  owners:
+  - leonxlnx/taste-skill
+  active_owner: leonxlnx/taste-skill
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/taste-skill-v1/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - leonxlnx/taste-skill
+  active_owner: leonxlnx/taste-skill
+  content_hash: sha256:033d45af1ed23832730642f95f40ab49db7fb5222848489a6c5656144bfc6dae
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/taste-skill/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - leonxlnx/taste-skill
+  active_owner: leonxlnx/taste-skill
+  content_hash: sha256:aa194351b246b8b4799099d4ed7b033d29eab6e6e3d58d8d2172978be7b3ec89
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/turborepo
+  runtime: null
+  scope: project
+  owners:
+  - vercel/turborepo
+  active_owner: vercel/turborepo
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/turborepo/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel/turborepo
+  active_owner: vercel/turborepo
+  content_hash: sha256:150b2d2dfbc7f1e6c1990827a8debd9bd2756320c8a0c439f69f7b54cdd57ced
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/turborepo/command/turborepo.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel/turborepo
+  active_owner: vercel/turborepo
+  content_hash: sha256:ad4437d5dd02aa30835c556504ef836f43c29e660d9ed7dd5865b7daf3b8b4fd
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/turborepo/references/best-practices/RULE.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel/turborepo
+  active_owner: vercel/turborepo
+  content_hash: sha256:ab7d339168386107d0a6b9259f2e6586b1526d53975682a08442babfa1b7bb58
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/turborepo/references/best-practices/dependencies.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel/turborepo
+  active_owner: vercel/turborepo
+  content_hash: sha256:422cbba88be554e857fd2bce4bd60983198bfd48e253f8b57ac833741077f3d3
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/turborepo/references/best-practices/packages.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel/turborepo
+  active_owner: vercel/turborepo
+  content_hash: sha256:eb393cfc4e2824612e862db5d30868948952e22c48b9885b20ef43f5d982732e
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/turborepo/references/best-practices/structure.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel/turborepo
+  active_owner: vercel/turborepo
+  content_hash: sha256:4ff5b82b785d83852f337e5994befe6534d99b9db862dbff8b7d950cf00d3369
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/turborepo/references/boundaries/RULE.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel/turborepo
+  active_owner: vercel/turborepo
+  content_hash: sha256:70d66f5ba31c0caa788b68b99b8f010eb71d1ab1a55d1d6faec024d4a86afb56
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/turborepo/references/caching/RULE.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel/turborepo
+  active_owner: vercel/turborepo
+  content_hash: sha256:cb68d066937eb4a91999236d2afb685b623ae641e44c8e839cb993b4c8f66527
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/turborepo/references/caching/gotchas.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel/turborepo
+  active_owner: vercel/turborepo
+  content_hash: sha256:4a301996476b0b140a7ff434767c6f9b1ac91559222706cf56987d520fdcf2ab
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/turborepo/references/caching/remote-cache.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel/turborepo
+  active_owner: vercel/turborepo
+  content_hash: sha256:aadde0562fd51fb6593c890af25851419730b714d84e9477d8c190479d31e530
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/turborepo/references/ci/RULE.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel/turborepo
+  active_owner: vercel/turborepo
+  content_hash: sha256:f78461824b21955f702c24a4fbf287c71a4f9eec79d79e9fc0fd11b014a2eaf1
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/turborepo/references/ci/github-actions.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel/turborepo
+  active_owner: vercel/turborepo
+  content_hash: sha256:3574ff2979a8fe859d3d30068c7a9d0d5fed392dc1733230e994c3e78051434d
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/turborepo/references/ci/patterns.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel/turborepo
+  active_owner: vercel/turborepo
+  content_hash: sha256:fdaa9fa17dae3f4849efa9a9312dfb2929181609b0ed428224db03bb4fcbe6d7
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/turborepo/references/ci/vercel.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel/turborepo
+  active_owner: vercel/turborepo
+  content_hash: sha256:cf47de0da926980841aebd9cbfc649f49e0d18a108afc622386825705538b946
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/turborepo/references/cli/RULE.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel/turborepo
+  active_owner: vercel/turborepo
+  content_hash: sha256:7f323ad405086b17fbafa516a9feec597ad94323492954329e9aafb5b51f8e18
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/turborepo/references/cli/commands.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel/turborepo
+  active_owner: vercel/turborepo
+  content_hash: sha256:2fcaae0230e350340655787b5c9116f535bc7f1abaa317111d492226cdb139c4
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/turborepo/references/configuration/RULE.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel/turborepo
+  active_owner: vercel/turborepo
+  content_hash: sha256:0d977a8eb3f247c9d5dc134acbf5997ce2acf1779108e9a76b8315e85235ea0e
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/turborepo/references/configuration/global-options.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel/turborepo
+  active_owner: vercel/turborepo
+  content_hash: sha256:a9cda5ba17756d82944b8f085f41790fcfcae26554ab5637476394c868c141a7
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/turborepo/references/configuration/gotchas.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel/turborepo
+  active_owner: vercel/turborepo
+  content_hash: sha256:5623c00a9b0ff15fe4e769a7cd5a447d3c4af356fbe053799523353976812d38
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/turborepo/references/configuration/tasks.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel/turborepo
+  active_owner: vercel/turborepo
+  content_hash: sha256:d41b3a6efc6852206aa2bf39778727fdc2f9dd84521b13702a403cb18f84fd55
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/turborepo/references/environment/RULE.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel/turborepo
+  active_owner: vercel/turborepo
+  content_hash: sha256:6c950440c2a7ab69cf006ad85f62e360352d705eb4593ab975c73055782217e5
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/turborepo/references/environment/gotchas.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel/turborepo
+  active_owner: vercel/turborepo
+  content_hash: sha256:91196dc9169b1f4bc297a9473bd500ddc66f2e0f8438acbc98af6399dbc5b299
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/turborepo/references/environment/modes.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel/turborepo
+  active_owner: vercel/turborepo
+  content_hash: sha256:e62247076f8b84d6897ab3ec835642736074fc36da10980ede69c23c1c923fd8
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/turborepo/references/filtering/RULE.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel/turborepo
+  active_owner: vercel/turborepo
+  content_hash: sha256:2d73e0190586e233cce7dd4599eb368d7d8f846fdc68f0d19ce06a7e3ec6166c
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/turborepo/references/filtering/patterns.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel/turborepo
+  active_owner: vercel/turborepo
+  content_hash: sha256:c03f856b8c76f137a1ef31efdbc9796b18c0a2b096e48aff6ce2ee5ff4cac4f0
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/turborepo/references/watch/RULE.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel/turborepo
+  active_owner: vercel/turborepo
+  content_hash: sha256:9f0706f10dc7cf3a9115214f31195d6dadf237966cba13fe7ff8b264ba993c2b
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/typescript-functional-patterns
+  runtime: null
+  scope: project
+  owners:
+  - siesdart/skills
+  active_owner: siesdart/skills
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/typescript-functional-patterns/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - siesdart/skills
+  active_owner: siesdart/skills
+  content_hash: sha256:4b072c6974d538373a0328d795e6fea5bbc1e42d965c6d80997378c482283ddd
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/typescript-functional-patterns/agents/openai.yaml
+  runtime: null
+  scope: project
+  owners:
+  - siesdart/skills
+  active_owner: siesdart/skills
+  content_hash: sha256:effac4408d317b380033fe079e4cb76c17686c64dfef419ae5a5e1b400485e35
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/typescript-functional-patterns/references/PATTERNS.md
+  runtime: null
+  scope: project
+  owners:
+  - siesdart/skills
+  active_owner: siesdart/skills
+  content_hash: sha256:aefc97d0b0a6e4c0e1b0fcec98a221ff84c1aedb27b70e9c6680a4d3a9f6c20a
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/web-design-guidelines
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/web-design-guidelines/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - vercel-labs/agent-skills
+  active_owner: vercel-labs/agent-skills
+  content_hash: sha256:f4647ca866a3accf763777f83e7682954f0187cd6bea7eea0399796652414e8f
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/web-quality-audit
+  runtime: null
+  scope: project
+  owners:
+  - addyosmani/web-quality-skills
+  active_owner: addyosmani/web-quality-skills
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/web-quality-audit/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - addyosmani/web-quality-skills
+  active_owner: addyosmani/web-quality-skills
+  content_hash: sha256:243889d1fa8282b948ae5356435670d95f6b89d9f83274ea9eef54aeab0521e3
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/web-quality-audit/scripts/analyze.sh
+  runtime: null
+  scope: project
+  owners:
+  - addyosmani/web-quality-skills
+  active_owner: addyosmani/web-quality-skills
+  content_hash: sha256:b1b28663af412f746baf5008618e3ae798e322b10ff5ab7ae1830826a6d8e4e2

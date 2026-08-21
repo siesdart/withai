@@ -1,0 +1,4 @@
+interface:
+  display_name: "TypeScript Functional Patterns"
+  short_description: "Remeda, neverthrow, and ts-pattern style"
+  default_prompt: "Apply TypeScript functional patterns to this task."

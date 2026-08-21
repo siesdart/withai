@@ -1,5 +1,7 @@
 packages:
-  - "apps/*"
-  - "packages/*"
+  - 'apps/*'
+  - 'packages/*'
+allowBuilds:
+  esbuild: set this to true or false
 minimumReleaseAgeExclude:
   - eslint@10.9.0

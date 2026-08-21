@@ -4,8 +4,9 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
+    "format": "prettier --write --ignore-unknown .",
     "lint": "turbo run lint",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\""
+    "typecheck": "turbo run typecheck"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.6",

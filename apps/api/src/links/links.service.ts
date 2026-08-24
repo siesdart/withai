@@ -4,7 +4,7 @@ import escapeHtml from 'escape-html';
 
 @Injectable()
 export class LinksService {
-  private readonly _links: Link[] = [
+  private readonly links: Link[] = [
     {
       id: 0,
       title: 'Installation',
@@ -30,7 +30,7 @@ export class LinksService {
     return `TODO: This action should add a new link '${escapeHtml(createLinkDto.title ?? '')}'`;
   }
   findAll() {
-    return this._links;
+    return this.links;
   }
   findOne(id: number) {
     return `TODO: This action should return a Link with id #${id}`;

@@ -1,14 +1,7 @@
-import { LinksService } from './links.service';
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Patch,
-  Post,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
 import type { CreateLinkDto, UpdateLinkDto } from '@repo/api';
+
+import { LinksService } from './links.service';
 
 @Controller('links')
 export class LinksController {

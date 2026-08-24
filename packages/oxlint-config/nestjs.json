@@ -1,0 +1,11 @@
+{
+  "$schema": "../../node_modules/oxlint/configuration_schema.json",
+  "extends": ["./base.json"],
+  "env": {
+    "builtin": true,
+    "node": true
+  },
+  "rules": {
+    "typescript/no-extraneous-class": ["warn", { "allowWithDecorator": true }]
+  }
+}

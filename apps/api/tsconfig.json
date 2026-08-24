@@ -5,5 +5,6 @@
     "outDir": "./dist",
     "strictNullChecks": true,
     "tsBuildInfoFile": "./tsconfig.build.tsbuildinfo"
-  }
+  },
+  "exclude": ["node_modules", "test", "dist", "**/*spec.ts"]
 }

@@ -15,6 +15,11 @@ Before any shadcn/ui work, find and read the relevant doc in `/shadcn`.
 Before working on the UI, check if there are appropriate components in shadcn/ui, and if so, use those components first.
 When installing new shadcn/ui components, do so to the `ui` package.
 
+## Linting and formatting
+
+- After making code changes, run `npx oxlint --fix`, then run `npx oxfmt`.
+- Before finishing, run `npx oxlint --deny-warnings --format=agent`.
+
 ## Agent skills
 
 ### Issue tracker

@@ -1,7 +1,0 @@
-**/apm_modules
-**/node_modules
-**/.agents
-**/docs
-**/apm.lock.yaml
-**/package-lock.json
-**/pnpm-lock.yaml

@@ -3,6 +3,11 @@
   "version": "0.0.0",
   "private": true,
   "license": "MIT",
+  "files": [
+    "./dist/**"
+  ],
+  "main": "./dist/entry.js",
+  "types": "./dist/entry.d.ts",
   "exports": {
     ".": {
       "import": "./dist/entry.js",
@@ -13,32 +18,23 @@
       "require": "./dist/*.js"
     }
   },
-  "main": "./dist/entry.js",
-  "types": "./dist/entry.d.ts",
-  "files": [
-    "./dist/**"
-  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -b -v",
-    "dev": "pnpm build --watch",
-    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\"",
-    "typecheck": "tsc --noEmit"
+    "dev": "pnpm build --watch"
   },
   "dependencies": {
     "@nestjs/mapped-types": "^2.1.1"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
+    "@repo/oxlint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "@types/node": "^26.2.0",
-    "eslint-plugin-prettier": "^5.5.6",
     "globals": "^17.11.0",
     "ts-loader": "^9.6.2",
     "ts-node": "^10.9.2",
-    "typescript": "6.0.3",
-    "typescript-eslint": "^8.67.0"
-  },
-  "publishConfig": {
-    "access": "public"
+    "typescript": "6.0.3"
   }
 }

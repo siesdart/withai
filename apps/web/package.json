@@ -12,7 +12,8 @@
     "@repo/ui": "workspace:*",
     "lucide-react": "^1.33.0",
     "react": "^19.2.6",
-    "react-dom": "^19.2.6"
+    "react-dom": "^19.2.6",
+    "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@repo/oxlint-config": "workspace:*",

@@ -2,18 +2,22 @@
 
 ## TypeScript: ALWAYS read docs before coding
 
-Before any TypeScript work, find and read the relevant doc in `/typescript-functional-patterns`.
+- Before any TypeScript work, find and read the relevant doc in `/typescript-functional-patterns`.
 
 ## React: ALWAYS read docs before coding
 
-Before any React work, find and read the relevant doc in `/react-best-practices`.
-Use `/design-taste-frontend` and `/gpt-taste` as the only sources of design rules.
+- Before any React work, find and read the relevant doc in `/react-best-practices`.
+- Use `/design-taste-frontend` and `/gpt-taste` as the only sources of design rules.
 
 ## shadcn/ui: ALWAYS read docs before coding
 
-Before any shadcn/ui work, find and read the relevant doc in `/shadcn`.
-Before working on the UI, check if there are appropriate components in shadcn/ui, and if so, use those components first.
-When installing new shadcn/ui components, do so to the `ui` package.
+- Before any shadcn/ui work, find and read the relevant doc in `/shadcn`.
+- Before working on the UI, check if there are appropriate components in shadcn/ui, and if so, use those components first.
+- When installing new shadcn/ui components, do so to the `ui` package.
+
+## Zustand
+
+- Always use Zustand when writing state management code.
 
 ## Linting and formatting
 

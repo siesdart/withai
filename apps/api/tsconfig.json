@@ -4,7 +4,8 @@
     "rootDir": "./src",
     "outDir": "./dist",
     "strictNullChecks": true,
-    "tsBuildInfoFile": "./tsconfig.build.tsbuildinfo"
+    "tsBuildInfoFile": "./tsconfig.build.tsbuildinfo",
+    "types": ["node", "jest"]
   },
   "exclude": ["node_modules", "test", "dist", "**/*spec.ts"]
 }

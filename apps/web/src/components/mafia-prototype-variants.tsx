@@ -76,7 +76,7 @@ export function ControlRoomVariant({ onAction }: PrototypeVariantProps) {
               </span>
             </div>
           </div>
-          <div className="flex min-h-[22rem] flex-col justify-end gap-4 p-5">
+          <div className="flex min-h-88 flex-col justify-end gap-4 p-5">
             {messages.map(([name, message], index) => (
               <article
                 key={name}

@@ -1,5 +1,8 @@
 {
   "$schema": "../../node_modules/oxlint/configuration_schema.json",
   "extends": ["node_modules/@repo/oxlint-config/nestjs.json"],
+  "env": {
+    "jest": true
+  },
   "ignorePatterns": ["node_modules", "dist"]
 }

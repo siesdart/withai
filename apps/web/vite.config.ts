@@ -20,4 +20,9 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    proxy: {
+      '/game-sessions': 'http://localhost:3000',
+    },
+  },
 });

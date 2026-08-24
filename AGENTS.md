@@ -19,6 +19,11 @@
 
 - Always use Zustand when writing state management code.
 
+## Tanstack Query: ALWAYS read docs before coding
+
+- Always use TanStack Query when writing server-state code.
+- Before any Tanstack Query work, find and read the relevant doc in `/router-query`.
+
 ## Linting and formatting
 
 - After making code changes, run `npx oxlint --fix`, then run `npx oxfmt`.

@@ -8,5 +8,8 @@
   ],
   "publishConfig": {
     "access": "public"
+  },
+  "dependencies": {
+    "oxlint-plugin-query": "^0.1.1"
   }
 }

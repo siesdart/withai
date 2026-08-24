@@ -19,6 +19,7 @@ dependencies:
         - typescript-functional-patterns
     - shadcn/ui
     - vercel/turborepo
+    - TanStack/router/packages/router-core
     - Leonxlnx/taste-skill
     - addyosmani/web-quality-skills
   mcp: []

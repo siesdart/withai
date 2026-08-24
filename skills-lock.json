@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "react-router": {
+      "source": "TanStack/router",
+      "sourceType": "github",
+      "skillPath": "packages/react-router/skills/react-router/SKILL.md",
+      "computedHash": "f63e0d9e9a22395b2122cdb9616779581561ebec69d4df3deb6a853deed3785b"
+    },
+    "router-query": {
+      "source": "TanStack/router",
+      "sourceType": "github",
+      "skillPath": "packages/react-router/skills/compositions/router-query/SKILL.md",
+      "computedHash": "d33828cdf1d2fb56044069e39a106910d50e84f315a055ab8e3b2afd078152ec"
+    }
+  }
+}

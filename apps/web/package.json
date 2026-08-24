@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@repo/ui": "workspace:*",
+    "@tanstack/react-router": "^1.170.32",
+    "@tanstack/react-router-devtools": "^1.167.1",
     "lucide-react": "^1.33.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
@@ -19,6 +21,7 @@
     "@repo/oxlint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "@tailwindcss/vite": "^4",
+    "@tanstack/router-plugin": "^1.168.35",
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",

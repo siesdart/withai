@@ -1,5 +1,5 @@
 lockfile_version: '1'
-generated_at: '2026-08-21T18:09:49.073694+00:00'
+generated_at: '2026-08-24T07:57:11.541928+00:00'
 apm_version: 0.28.0
 dependencies:
 - repo_url: addyosmani/web-quality-skills
@@ -186,6 +186,41 @@ dependencies:
   content_hash: sha256:7ce6a8a196c037e2b3ff0bc79337237808704d2d361f10b669a85f9e3b3e3269
   skill_subset:
   - typescript-functional-patterns
+- repo_url: tanstack/router
+  materialization_repo_url: TanStack/router
+  name: router
+  host: github.com
+  resolved_commit: 9f8990b5150338695c8870cbe443edadf2b7b825
+  version: unknown
+  virtual_path: packages/router-core
+  is_virtual: true
+  package_type: skill_bundle
+  deployed_files:
+  - .agents/skills/router-core
+  - .agents/skills/router-core/SKILL.md
+  - .agents/skills/router-core/auth-and-guards/SKILL.md
+  - .agents/skills/router-core/code-splitting/SKILL.md
+  - .agents/skills/router-core/data-loading/SKILL.md
+  - .agents/skills/router-core/navigation/SKILL.md
+  - .agents/skills/router-core/not-found-and-errors/SKILL.md
+  - .agents/skills/router-core/path-params/SKILL.md
+  - .agents/skills/router-core/search-params/SKILL.md
+  - .agents/skills/router-core/search-params/references/validation-patterns.md
+  - .agents/skills/router-core/ssr/SKILL.md
+  - .agents/skills/router-core/type-safety/SKILL.md
+  deployed_file_hashes:
+    .agents/skills/router-core/SKILL.md: sha256:03fc990919c2c025704de46ef87ee8efa133f811478a7eb66e04d11714608db0
+    .agents/skills/router-core/auth-and-guards/SKILL.md: sha256:0a9a9dcad681dbdd52b00b530d64a8f5e4999c6d1950d74f480ccc2b7e2fe632
+    .agents/skills/router-core/code-splitting/SKILL.md: sha256:12604138af8a6c65ceb5f7303453bf2c62eb291bae6e89c7c6a63f789b88caf3
+    .agents/skills/router-core/data-loading/SKILL.md: sha256:9510f3b50763eb6a47db678accf6e25eaad0a865dd8e4658050472043e3cc9dd
+    .agents/skills/router-core/navigation/SKILL.md: sha256:6d024af66514645e81347100f401ba8a1e2457cbe8b5024660ae9e409700ac80
+    .agents/skills/router-core/not-found-and-errors/SKILL.md: sha256:ed6da506ec765cf7bb5fd2cf3894021c55a807e55abb103b053fd2d6ed8ae477
+    .agents/skills/router-core/path-params/SKILL.md: sha256:caa1abefbf7751beaca3b1b55e5fe217cb56108cc037de757d7c5e8d09218b99
+    .agents/skills/router-core/search-params/SKILL.md: sha256:e886e5c3285309a0e95c52e30e73d4ff52cffc366f0d97d02003b9696e8a8804
+    .agents/skills/router-core/search-params/references/validation-patterns.md: sha256:bf803200ee0a1b390b9f42684565bb0ff080da8bb858e6c71ae0a593447b4941
+    .agents/skills/router-core/ssr/SKILL.md: sha256:b0ab5cc8f4315647c2b74bf5b048b6f436760de9b1dcec5dbe10a34639bd8004
+    .agents/skills/router-core/type-safety/SKILL.md: sha256:ed632376a36d71f4797e855ed9e42e83591a684c4ad0fc33b152f6c10fe3b5ef
+  content_hash: sha256:0170fe608e7a1f2a1d91f9d6f82feded5069a68d22bc9f68ac24b4578122683e
 - repo_url: vercel-labs/agent-skills
   name: agent-skills
   host: github.com
@@ -1497,6 +1532,114 @@ deployments:
   - leonxlnx/taste-skill
   active_owner: leonxlnx/taste-skill
   content_hash: sha256:98ad3e5b051bfb71b2795f7e8a6aa0d32b51ee095606c098a4b2822ac07926c9
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/router-core
+  runtime: null
+  scope: project
+  owners:
+  - tanstack/router/packages/router-core
+  active_owner: tanstack/router/packages/router-core
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/router-core/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - tanstack/router/packages/router-core
+  active_owner: tanstack/router/packages/router-core
+  content_hash: sha256:03fc990919c2c025704de46ef87ee8efa133f811478a7eb66e04d11714608db0
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/router-core/auth-and-guards/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - tanstack/router/packages/router-core
+  active_owner: tanstack/router/packages/router-core
+  content_hash: sha256:0a9a9dcad681dbdd52b00b530d64a8f5e4999c6d1950d74f480ccc2b7e2fe632
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/router-core/code-splitting/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - tanstack/router/packages/router-core
+  active_owner: tanstack/router/packages/router-core
+  content_hash: sha256:12604138af8a6c65ceb5f7303453bf2c62eb291bae6e89c7c6a63f789b88caf3
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/router-core/data-loading/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - tanstack/router/packages/router-core
+  active_owner: tanstack/router/packages/router-core
+  content_hash: sha256:9510f3b50763eb6a47db678accf6e25eaad0a865dd8e4658050472043e3cc9dd
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/router-core/navigation/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - tanstack/router/packages/router-core
+  active_owner: tanstack/router/packages/router-core
+  content_hash: sha256:6d024af66514645e81347100f401ba8a1e2457cbe8b5024660ae9e409700ac80
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/router-core/not-found-and-errors/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - tanstack/router/packages/router-core
+  active_owner: tanstack/router/packages/router-core
+  content_hash: sha256:ed6da506ec765cf7bb5fd2cf3894021c55a807e55abb103b053fd2d6ed8ae477
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/router-core/path-params/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - tanstack/router/packages/router-core
+  active_owner: tanstack/router/packages/router-core
+  content_hash: sha256:caa1abefbf7751beaca3b1b55e5fe217cb56108cc037de757d7c5e8d09218b99
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/router-core/search-params/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - tanstack/router/packages/router-core
+  active_owner: tanstack/router/packages/router-core
+  content_hash: sha256:e886e5c3285309a0e95c52e30e73d4ff52cffc366f0d97d02003b9696e8a8804
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/router-core/search-params/references/validation-patterns.md
+  runtime: null
+  scope: project
+  owners:
+  - tanstack/router/packages/router-core
+  active_owner: tanstack/router/packages/router-core
+  content_hash: sha256:bf803200ee0a1b390b9f42684565bb0ff080da8bb858e6c71ae0a593447b4941
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/router-core/ssr/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - tanstack/router/packages/router-core
+  active_owner: tanstack/router/packages/router-core
+  content_hash: sha256:b0ab5cc8f4315647c2b74bf5b048b6f436760de9b1dcec5dbe10a34639bd8004
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/router-core/type-safety/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - tanstack/router/packages/router-core
+  active_owner: tanstack/router/packages/router-core
+  content_hash: sha256:ed632376a36d71f4797e855ed9e42e83591a684c4ad0fc33b152f6c10fe3b5ef
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/seo

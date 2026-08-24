@@ -8,7 +8,7 @@
 
 ## React: ALWAYS read docs before coding
 
-- Before any React work, find and read the relevant doc in `/react-best-practices`.
+- Before any React work, find and read the relevant doc in `/react-best-practices` and `/react-view-logic-boundaries`.
 - Use `/design-taste-frontend` and `/gpt-taste` as the only sources of design rules.
 
 ## shadcn/ui: ALWAYS read docs before coding

@@ -1,5 +1,5 @@
 lockfile_version: '1'
-generated_at: '2026-08-24T12:22:25.449975+00:00'
+generated_at: '2026-08-24T16:24:28.121308+00:00'
 apm_version: 0.28.0
 dependencies:
 - repo_url: addyosmani/web-quality-skills
@@ -8,41 +8,13 @@ dependencies:
   resolved_commit: 95d6e255afe1596b557d7a8498517884438f5b3a
   version: 1.0.0
   package_type: marketplace_plugin
-  deployed_files:
-  - .agents/skills/accessibility
-  - .agents/skills/accessibility/SKILL.md
-  - .agents/skills/accessibility/references/A11Y-PATTERNS.md
-  - .agents/skills/accessibility/references/WCAG.md
-  - .agents/skills/best-practices
-  - .agents/skills/best-practices/SKILL.md
-  - .agents/skills/core-web-vitals
-  - .agents/skills/core-web-vitals/SKILL.md
-  - .agents/skills/core-web-vitals/references/LCP.md
-  - .agents/skills/performance
-  - .agents/skills/performance/SKILL.md
-  - .agents/skills/seo
-  - .agents/skills/seo/SKILL.md
-  - .agents/skills/web-quality-audit
-  - .agents/skills/web-quality-audit/SKILL.md
-  - .agents/skills/web-quality-audit/scripts/analyze.sh
-  deployed_file_hashes:
-    .agents/skills/accessibility/SKILL.md: sha256:ea58830345e10809e17df5cf79124c2f9e1d48d8b0028062eef4cafa5110fea8
-    .agents/skills/accessibility/references/A11Y-PATTERNS.md: sha256:f10e238dd4dd3c4f51134c2056bc02d3dd4f8fb6ccc9145c2c1ba7aab4d58140
-    .agents/skills/accessibility/references/WCAG.md: sha256:16683e025e3833d931c9d880645d98a448827f97e10189b6c8f12c832e7a2361
-    .agents/skills/best-practices/SKILL.md: sha256:5ed963ab6d8a1b69e1a785f06f16b6a0dbe0ab0ea421c70cf26fdf1ab0f1f4b5
-    .agents/skills/core-web-vitals/SKILL.md: sha256:0653e154f3130f72098073bf86588b2dd3872c23e70c231786016758a851c4be
-    .agents/skills/core-web-vitals/references/LCP.md: sha256:4c5043ef7e1ae4058191a51fbfe5121668bd3677842a2ef563a45a9ca6685d92
-    .agents/skills/performance/SKILL.md: sha256:f35e43c3ef9e9730af385c56451660956f88e78f553050985b31bf0959f3c619
-    .agents/skills/seo/SKILL.md: sha256:79064ce0edc9a21e0b8cae2cc44b9751fb397ef80584e72b4289a6a67b40f19c
-    .agents/skills/web-quality-audit/SKILL.md: sha256:243889d1fa8282b948ae5356435670d95f6b89d9f83274ea9eef54aeab0521e3
-    .agents/skills/web-quality-audit/scripts/analyze.sh: sha256:b1b28663af412f746baf5008618e3ae798e322b10ff5ab7ae1830826a6d8e4e2
   content_hash: sha256:ecaee03372fd57da4c544423f3483c54232195338cf058be9b60254c4c2e59dc
   declared_license: MIT
 - repo_url: anthropics/skills
   name: skills
   host: github.com
-  resolved_commit: 0a64e398ec6bb34a494f0c347e8ccae53a862f8e
-  version: 0a64e39
+  resolved_commit: 3b3fad96af16a10759d930941b4520ba0c40edae
+  version: 3b3fad9
   package_type: marketplace_plugin
   deployed_files:
   - .agents/skills/frontend-design
@@ -51,14 +23,14 @@ dependencies:
   deployed_file_hashes:
     .agents/skills/frontend-design/LICENSE.txt: sha256:0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594
     .agents/skills/frontend-design/SKILL.md: sha256:1608ea77fbb6fc30d13a97d12cfa8ebf31358d40f0dd97beed24829d6b3f45dd
-  content_hash: sha256:25cd5f2e10f408b7d879598fe4843c2725bf3a3cbec908acf0291b5274d385e3
+  content_hash: sha256:cbf073b864c2360c48fc842b468bda7e7cc1bcef3bc4db657da80a5e9b00de1d
   skill_subset:
   - frontend-design
 - repo_url: leonxlnx/taste-skill
   materialization_repo_url: Leonxlnx/taste-skill
   name: taste-skill
   host: github.com
-  resolved_commit: 843c8dd4d18ccff0d5a9cd4b0b71d7dbf7278293
+  resolved_commit: ccbc15639c97057cbfcf32ecebc38ef716e4bb37
   version: 1.0.0
   package_type: marketplace_plugin
   deployed_files:
@@ -104,12 +76,12 @@ dependencies:
     .agents/skills/stitch-skill/SKILL.md: sha256:46bdb08fee2dded38b6ba0a051230a502d6ac6e4044afd47592cb40c256028b5
     .agents/skills/taste-skill-v1/SKILL.md: sha256:033d45af1ed23832730642f95f40ab49db7fb5222848489a6c5656144bfc6dae
     .agents/skills/taste-skill/SKILL.md: sha256:aa194351b246b8b4799099d4ed7b033d29eab6e6e3d58d8d2172978be7b3ec89
-  content_hash: sha256:35426daafdad066e2416d81dc0d083cd0adb7459820ff1bdcfbde7e9c54fcb01
+  content_hash: sha256:1b69742e9409feeb340ef9d61671e84ae266631b98b27143928b84b926d8e091
   declared_license: MIT
 - repo_url: shadcn/ui
   name: shadcn
   host: github.com
-  resolved_commit: 1773ecfeeb4a04366978d353e69b5c7ded78dcb2
+  resolved_commit: b9938d94635fca7a4560449713b0b1ba87d77bc6
   version: 1.0.0
   package_type: marketplace_plugin
   deployed_files:
@@ -166,31 +138,37 @@ dependencies:
     .agents/skills/shadcn/rules/forms.md: sha256:29593e14381e34626f8e0e9c15c59f3394b92a0623af6a6ec94585400123853c
     .agents/skills/shadcn/rules/icons.md: sha256:d4a58266648872d9ee07d0c2368843a1cb88b8253b7f528dd7bda9d68b6c2535
     .agents/skills/shadcn/rules/styling.md: sha256:47bd2c3b6216b96af0ab169063a83dfef7f80c58536cf69445a6f4d22753326c
-  content_hash: sha256:0fe08d6a107042154de33d74b1d5d06ce82a258429698ce75471ea53e25a0c58
+  content_hash: sha256:0a88971f777c5aedd9c7ca52d714ecd9d498a91c9ea190836b8cfea98d5f010a
   declared_license: MIT
 - repo_url: siesdart/skills
   name: skills
   host: github.com
-  resolved_commit: 0f6f1acf7ac4e818e462ba0fef384409c2a0c4b7
+  resolved_commit: 5bfe6733ab5f7263a483cd74820049ac08579d02
   version: unknown
   package_type: skill_bundle
   deployed_files:
+  - .agents/skills/react-view-logic-boundaries
+  - .agents/skills/react-view-logic-boundaries/SKILL.md
+  - .agents/skills/react-view-logic-boundaries/agents/openai.yaml
   - .agents/skills/typescript-functional-patterns
   - .agents/skills/typescript-functional-patterns/SKILL.md
   - .agents/skills/typescript-functional-patterns/agents/openai.yaml
   - .agents/skills/typescript-functional-patterns/references/PATTERNS.md
   deployed_file_hashes:
+    .agents/skills/react-view-logic-boundaries/SKILL.md: sha256:3457fcd0bf8c1c99baec4c3eb880e9fff528203f1d82e460c2ac512f8d36db67
+    .agents/skills/react-view-logic-boundaries/agents/openai.yaml: sha256:b822e2c4346135d4434fc465dd7347c0a848cc41eb694e8d52596a24f3868ac4
     .agents/skills/typescript-functional-patterns/SKILL.md: sha256:4b072c6974d538373a0328d795e6fea5bbc1e42d965c6d80997378c482283ddd
     .agents/skills/typescript-functional-patterns/agents/openai.yaml: sha256:effac4408d317b380033fe079e4cb76c17686c64dfef419ae5a5e1b400485e35
     .agents/skills/typescript-functional-patterns/references/PATTERNS.md: sha256:aefc97d0b0a6e4c0e1b0fcec98a221ff84c1aedb27b70e9c6680a4d3a9f6c20a
-  content_hash: sha256:7ce6a8a196c037e2b3ff0bc79337237808704d2d361f10b669a85f9e3b3e3269
+  content_hash: sha256:1392bcb7c94a0a3f1a45ab4d9aa710a40ec7d33d58e3e64179e963632a2f6c1d
   skill_subset:
+  - react-view-logic-boundaries
   - typescript-functional-patterns
 - repo_url: tanstack/ai
   materialization_repo_url: TanStack/ai
   name: ai
   host: github.com
-  resolved_commit: dbb25bfb01d3d9660c4bc8becc7c54b81b23f949
+  resolved_commit: dd27c26974d2f8334601b2d16bf0f5937b10c247
   version: unknown
   virtual_path: packages/ai
   is_virtual: true
@@ -238,7 +216,7 @@ dependencies:
     .agents/skills/ai-core/middleware/SKILL.md: sha256:13d23d966f6a0d8e9db5fb5df9efcab0c02e3f14c1639a6b011832e34d85d107
     .agents/skills/ai-core/structured-outputs/SKILL.md: sha256:0fa3e2fec6df5b7c9c16ff9174841de8f721a06db4dd90fb5e55587877157030
     .agents/skills/ai-core/tool-calling/SKILL.md: sha256:8397ae59ffcb66983f7b125f90af5105475cb2087859d6632eb1954c53e1b863
-  content_hash: sha256:88864bdcecf985c8c37b2ebc1851fe6f618587a684aaa013414a95353ca58782
+  content_hash: sha256:aafaab766fff51fef3a728e3e53ec5860576089e522bc1a1eac3d1cf9e067eb3
 - repo_url: tanstack/router
   materialization_repo_url: TanStack/router
   name: router
@@ -277,7 +255,7 @@ dependencies:
 - repo_url: vercel-labs/agent-skills
   name: agent-skills
   host: github.com
-  resolved_commit: b8caa260a420a73042e35521de4b5c8baf6446cc
+  resolved_commit: dd089a8c752c966dee8bf0f27cb625ba193ffd9e
   version: unknown
   package_type: skill_bundle
   deployed_files:
@@ -438,14 +416,14 @@ dependencies:
     .agents/skills/react-best-practices/rules/server-parallel-nested-fetching.md: sha256:ad5d9656984d4a959997a2367bf59cc6632297b4634a1dd13a087939d83f30b3
     .agents/skills/react-best-practices/rules/server-serialization.md: sha256:f4c7d68b29c82381baad059c4a7f09e868e71ec9c3115a26ad3ae7d24c0dfe1f
     .agents/skills/web-design-guidelines/SKILL.md: sha256:f4647ca866a3accf763777f83e7682954f0187cd6bea7eea0399796652414e8f
-  content_hash: sha256:10277ad6c6ce69262ba7dfeb32181868825da533ec20abf50839bd85a91f79ad
+  content_hash: sha256:f0ff668fea4447964f175479da4d5fa2598cd866ddc1f57af5588f5adc90d05a
   skill_subset:
   - react-best-practices
   - web-design-guidelines
 - repo_url: vercel/turborepo
   name: turborepo
   host: github.com
-  resolved_commit: 0cfccdd8cb83e350739efa0cc272b4ede38548a4
+  resolved_commit: 39137a67837a7f32423e7082b53f297685164ef6
   version: unknown
   package_type: skill_bundle
   deployed_files:
@@ -503,44 +481,8 @@ dependencies:
     .agents/skills/turborepo/references/filtering/RULE.md: sha256:2d73e0190586e233cce7dd4599eb368d7d8f846fdc68f0d19ce06a7e3ec6166c
     .agents/skills/turborepo/references/filtering/patterns.md: sha256:c03f856b8c76f137a1ef31efdbc9796b18c0a2b096e48aff6ce2ee5ff4cac4f0
     .agents/skills/turborepo/references/watch/RULE.md: sha256:9f0706f10dc7cf3a9115214f31195d6dadf237966cba13fe7ff8b264ba993c2b
-  content_hash: sha256:d299cc81bc281195efb0b630324fbbb58b2001ea5e07ab4fbba6cff1285180d5
+  content_hash: sha256:3e4c0902e4c6479bc5de47593897b03165647184f5127a1608962224ae28e5fc
 deployments:
-- kind: project-relative
-  target: agent-skills
-  value: .agents/skills/accessibility
-  runtime: null
-  scope: project
-  owners:
-  - addyosmani/web-quality-skills
-  active_owner: addyosmani/web-quality-skills
-  content_hash: null
-- kind: project-relative
-  target: agent-skills
-  value: .agents/skills/accessibility/SKILL.md
-  runtime: null
-  scope: project
-  owners:
-  - addyosmani/web-quality-skills
-  active_owner: addyosmani/web-quality-skills
-  content_hash: sha256:ea58830345e10809e17df5cf79124c2f9e1d48d8b0028062eef4cafa5110fea8
-- kind: project-relative
-  target: agent-skills
-  value: .agents/skills/accessibility/references/A11Y-PATTERNS.md
-  runtime: null
-  scope: project
-  owners:
-  - addyosmani/web-quality-skills
-  active_owner: addyosmani/web-quality-skills
-  content_hash: sha256:f10e238dd4dd3c4f51134c2056bc02d3dd4f8fb6ccc9145c2c1ba7aab4d58140
-- kind: project-relative
-  target: agent-skills
-  value: .agents/skills/accessibility/references/WCAG.md
-  runtime: null
-  scope: project
-  owners:
-  - addyosmani/web-quality-skills
-  active_owner: addyosmani/web-quality-skills
-  content_hash: sha256:16683e025e3833d931c9d880645d98a448827f97e10189b6c8f12c832e7a2361
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/ai-core
@@ -732,24 +674,6 @@ deployments:
   content_hash: sha256:8397ae59ffcb66983f7b125f90af5105475cb2087859d6632eb1954c53e1b863
 - kind: project-relative
   target: agent-skills
-  value: .agents/skills/best-practices
-  runtime: null
-  scope: project
-  owners:
-  - addyosmani/web-quality-skills
-  active_owner: addyosmani/web-quality-skills
-  content_hash: null
-- kind: project-relative
-  target: agent-skills
-  value: .agents/skills/best-practices/SKILL.md
-  runtime: null
-  scope: project
-  owners:
-  - addyosmani/web-quality-skills
-  active_owner: addyosmani/web-quality-skills
-  content_hash: sha256:5ed963ab6d8a1b69e1a785f06f16b6a0dbe0ab0ea421c70cf26fdf1ab0f1f4b5
-- kind: project-relative
-  target: agent-skills
   value: .agents/skills/brandkit
   runtime: null
   scope: project
@@ -784,33 +708,6 @@ deployments:
   - leonxlnx/taste-skill
   active_owner: leonxlnx/taste-skill
   content_hash: sha256:fffbaac8597f07679e9d87145533567658aedba3b5eca6f16a7075a333048caa
-- kind: project-relative
-  target: agent-skills
-  value: .agents/skills/core-web-vitals
-  runtime: null
-  scope: project
-  owners:
-  - addyosmani/web-quality-skills
-  active_owner: addyosmani/web-quality-skills
-  content_hash: null
-- kind: project-relative
-  target: agent-skills
-  value: .agents/skills/core-web-vitals/SKILL.md
-  runtime: null
-  scope: project
-  owners:
-  - addyosmani/web-quality-skills
-  active_owner: addyosmani/web-quality-skills
-  content_hash: sha256:0653e154f3130f72098073bf86588b2dd3872c23e70c231786016758a851c4be
-- kind: project-relative
-  target: agent-skills
-  value: .agents/skills/core-web-vitals/references/LCP.md
-  runtime: null
-  scope: project
-  owners:
-  - addyosmani/web-quality-skills
-  active_owner: addyosmani/web-quality-skills
-  content_hash: sha256:4c5043ef7e1ae4058191a51fbfe5121668bd3677842a2ef563a45a9ca6685d92
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/frontend-design
@@ -1045,24 +942,6 @@ deployments:
   - leonxlnx/taste-skill
   active_owner: leonxlnx/taste-skill
   content_hash: sha256:e5bf48b1ae561511439cf71672209a10a88cee0968cc925909ff861dfa0a96a7
-- kind: project-relative
-  target: agent-skills
-  value: .agents/skills/performance
-  runtime: null
-  scope: project
-  owners:
-  - addyosmani/web-quality-skills
-  active_owner: addyosmani/web-quality-skills
-  content_hash: null
-- kind: project-relative
-  target: agent-skills
-  value: .agents/skills/performance/SKILL.md
-  runtime: null
-  scope: project
-  owners:
-  - addyosmani/web-quality-skills
-  active_owner: addyosmani/web-quality-skills
-  content_hash: sha256:f35e43c3ef9e9730af385c56451660956f88e78f553050985b31bf0959f3c619
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/react-best-practices
@@ -1758,6 +1637,33 @@ deployments:
   content_hash: sha256:f4c7d68b29c82381baad059c4a7f09e868e71ec9c3115a26ad3ae7d24c0dfe1f
 - kind: project-relative
   target: agent-skills
+  value: .agents/skills/react-view-logic-boundaries
+  runtime: null
+  scope: project
+  owners:
+  - siesdart/skills
+  active_owner: siesdart/skills
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-view-logic-boundaries/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - siesdart/skills
+  active_owner: siesdart/skills
+  content_hash: sha256:3457fcd0bf8c1c99baec4c3eb880e9fff528203f1d82e460c2ac512f8d36db67
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/react-view-logic-boundaries/agents/openai.yaml
+  runtime: null
+  scope: project
+  owners:
+  - siesdart/skills
+  active_owner: siesdart/skills
+  content_hash: sha256:b822e2c4346135d4434fc465dd7347c0a848cc41eb694e8d52596a24f3868ac4
+- kind: project-relative
+  target: agent-skills
   value: .agents/skills/redesign-skill
   runtime: null
   scope: project
@@ -1882,24 +1788,6 @@ deployments:
   - tanstack/router/packages/router-core
   active_owner: tanstack/router/packages/router-core
   content_hash: sha256:ed632376a36d71f4797e855ed9e42e83591a684c4ad0fc33b152f6c10fe3b5ef
-- kind: project-relative
-  target: agent-skills
-  value: .agents/skills/seo
-  runtime: null
-  scope: project
-  owners:
-  - addyosmani/web-quality-skills
-  active_owner: addyosmani/web-quality-skills
-  content_hash: null
-- kind: project-relative
-  target: agent-skills
-  value: .agents/skills/seo/SKILL.md
-  runtime: null
-  scope: project
-  owners:
-  - addyosmani/web-quality-skills
-  active_owner: addyosmani/web-quality-skills
-  content_hash: sha256:79064ce0edc9a21e0b8cae2cc44b9751fb397ef80584e72b4289a6a67b40f19c
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/shadcn
@@ -2422,30 +2310,3 @@ deployments:
   - vercel-labs/agent-skills
   active_owner: vercel-labs/agent-skills
   content_hash: sha256:f4647ca866a3accf763777f83e7682954f0187cd6bea7eea0399796652414e8f
-- kind: project-relative
-  target: agent-skills
-  value: .agents/skills/web-quality-audit
-  runtime: null
-  scope: project
-  owners:
-  - addyosmani/web-quality-skills
-  active_owner: addyosmani/web-quality-skills
-  content_hash: null
-- kind: project-relative
-  target: agent-skills
-  value: .agents/skills/web-quality-audit/SKILL.md
-  runtime: null
-  scope: project
-  owners:
-  - addyosmani/web-quality-skills
-  active_owner: addyosmani/web-quality-skills
-  content_hash: sha256:243889d1fa8282b948ae5356435670d95f6b89d9f83274ea9eef54aeab0521e3
-- kind: project-relative
-  target: agent-skills
-  value: .agents/skills/web-quality-audit/scripts/analyze.sh
-  runtime: null
-  scope: project
-  owners:
-  - addyosmani/web-quality-skills
-  active_owner: addyosmani/web-quality-skills
-  content_hash: sha256:b1b28663af412f746baf5008618e3ae798e322b10ff5ab7ae1830826a6d8e4e2

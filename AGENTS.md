@@ -12,7 +12,7 @@
 ## shadcn/ui: ALWAYS read docs before coding
 
 - Before any shadcn/ui work, find and read the relevant doc in `/shadcn`.
-- Before working on the UI, check if there are appropriate components in shadcn/ui, and if so, use those components first.
+- Before working on the UI, check if there are appropriate components in shadcn/ui, and if so, install and use those components first.
 - When installing new shadcn/ui components, do so to the `ui` package.
 
 ## Zustand

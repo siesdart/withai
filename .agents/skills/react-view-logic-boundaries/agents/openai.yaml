@@ -1,0 +1,4 @@
+interface:
+  display_name: "React View–Logic Boundaries"
+  short_description: "Extract cohesive React logic Hooks"
+  default_prompt: "Apply React View–Logic boundaries to this component task."

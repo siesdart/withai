@@ -16,6 +16,7 @@ dependencies:
         - web-design-guidelines
     - git: siesdart/skills
       skills:
+        - react-view-logic-boundaries
         - typescript-functional-patterns
     - shadcn/ui
     - vercel/turborepo

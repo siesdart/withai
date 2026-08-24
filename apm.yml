@@ -20,6 +20,7 @@ dependencies:
     - shadcn/ui
     - vercel/turborepo
     - TanStack/router/packages/router-core
+    - TanStack/ai/packages/ai
     - Leonxlnx/taste-skill
     - addyosmani/web-quality-skills
   mcp: []

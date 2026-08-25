@@ -12,7 +12,13 @@ function formatDuration(deadline: string, now: dayjs.Dayjs) {
 export function useDeadlineCountdown(deadline: string) {
   const [now, setNow] = useState(() => dayjs());
 
+  const isExpired = !dayjs(deadline).isAfter(now);
+
   useEffect(() => {
+    if (isExpired) {
+      return undefined;
+    }
+
     const intervalId = window.setInterval(() => {
       setNow(dayjs());
     }, 1000);
@@ -20,7 +26,7 @@ export function useDeadlineCountdown(deadline: string) {
     return () => {
       window.clearInterval(intervalId);
     };
-  }, []);
+  }, [isExpired]);
 
   return formatDuration(deadline, now);
 }

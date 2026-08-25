@@ -1,5 +1,5 @@
 lockfile_version: '1'
-generated_at: '2026-08-25T18:02:32.247538+00:00'
+generated_at: '2026-08-25T18:55:39.062624+00:00'
 apm_version: 0.28.0
 dependencies:
 - repo_url: addyosmani/web-quality-skills
@@ -143,7 +143,7 @@ dependencies:
 - repo_url: siesdart/skills
   name: skills
   host: github.com
-  resolved_commit: 6203dd92993db3f50d130cfac4f1d5997a0f5b5c
+  resolved_commit: d7b6415f4663a410174d174da8c50d48acb79941
   version: 0.0.0
   package_type: skill_bundle
   deployed_files:
@@ -160,7 +160,7 @@ dependencies:
     .agents/skills/typescript-functional-patterns/SKILL.md: sha256:835a9686d0234cc29b24286221129e6f54b5deb5c76b706ec902257efea20c3e
     .agents/skills/typescript-functional-patterns/agents/openai.yaml: sha256:effac4408d317b380033fe079e4cb76c17686c64dfef419ae5a5e1b400485e35
     .agents/skills/typescript-functional-patterns/references/PATTERNS.md: sha256:aefc97d0b0a6e4c0e1b0fcec98a221ff84c1aedb27b70e9c6680a4d3a9f6c20a
-  content_hash: sha256:7c540d1282c3ef70c85adc21fdaefaf6612637d5fa1907022cb176621b2127ee
+  content_hash: sha256:c068c5e61af9b768f7667b26e9a873428f2fdf2d625b3a7294f55c3b722c5d43
   skill_subset:
   - react-view-logic-boundaries
   - typescript-functional-patterns
@@ -219,10 +219,10 @@ dependencies:
   content_hash: sha256:de965eac425cf2204485fa05ace0a2295631cd75abeeab97118374fefc47dbec
 - repo_url: tanstack/router
   materialization_repo_url: TanStack/router
-  name: router-core
+  name: router
   host: github.com
   resolved_commit: ebf13ed51725d6b472546e26fce7ae1e36d0c9cd
-  version: 0.0.0
+  version: unknown
   virtual_path: packages/router-core
   is_virtual: true
   package_type: skill_bundle
@@ -423,8 +423,8 @@ dependencies:
 - repo_url: vercel/turborepo
   name: turborepo
   host: github.com
-  resolved_commit: c97782bc4ef43697e0ee8c4fc7ad3cee81a0e1cf
-  version: unknown
+  resolved_commit: 32748f5ba4d777e3e5d44809c51a135dbd813edb
+  version: 0.0.0
   package_type: skill_bundle
   deployed_files:
   - .agents/skills/turborepo
@@ -455,12 +455,12 @@ dependencies:
   - .agents/skills/turborepo/references/filtering/patterns.md
   - .agents/skills/turborepo/references/watch/RULE.md
   deployed_file_hashes:
-    .agents/skills/turborepo/SKILL.md: sha256:150b2d2dfbc7f1e6c1990827a8debd9bd2756320c8a0c439f69f7b54cdd57ced
+    .agents/skills/turborepo/SKILL.md: sha256:a24cc62950778d21b4a01095d9952e46e573d4ec82567f4b4e7b57644a2a4183
     .agents/skills/turborepo/command/turborepo.md: sha256:ad4437d5dd02aa30835c556504ef836f43c29e660d9ed7dd5865b7daf3b8b4fd
     .agents/skills/turborepo/references/best-practices/RULE.md: sha256:ab7d339168386107d0a6b9259f2e6586b1526d53975682a08442babfa1b7bb58
     .agents/skills/turborepo/references/best-practices/dependencies.md: sha256:422cbba88be554e857fd2bce4bd60983198bfd48e253f8b57ac833741077f3d3
     .agents/skills/turborepo/references/best-practices/packages.md: sha256:eb393cfc4e2824612e862db5d30868948952e22c48b9885b20ef43f5d982732e
-    .agents/skills/turborepo/references/best-practices/structure.md: sha256:4ff5b82b785d83852f337e5994befe6534d99b9db862dbff8b7d950cf00d3369
+    .agents/skills/turborepo/references/best-practices/structure.md: sha256:1bac743e89aacb5a43e6ec8a70cd657d08cab9d513fa17538d8cc6175dd40235
     .agents/skills/turborepo/references/boundaries/RULE.md: sha256:70d66f5ba31c0caa788b68b99b8f010eb71d1ab1a55d1d6faec024d4a86afb56
     .agents/skills/turborepo/references/caching/RULE.md: sha256:cb68d066937eb4a91999236d2afb685b623ae641e44c8e839cb993b4c8f66527
     .agents/skills/turborepo/references/caching/gotchas.md: sha256:4a301996476b0b140a7ff434767c6f9b1ac91559222706cf56987d520fdcf2ab
@@ -471,17 +471,17 @@ dependencies:
     .agents/skills/turborepo/references/ci/vercel.md: sha256:cf47de0da926980841aebd9cbfc649f49e0d18a108afc622386825705538b946
     .agents/skills/turborepo/references/cli/RULE.md: sha256:7f323ad405086b17fbafa516a9feec597ad94323492954329e9aafb5b51f8e18
     .agents/skills/turborepo/references/cli/commands.md: sha256:2fcaae0230e350340655787b5c9116f535bc7f1abaa317111d492226cdb139c4
-    .agents/skills/turborepo/references/configuration/RULE.md: sha256:0d977a8eb3f247c9d5dc134acbf5997ce2acf1779108e9a76b8315e85235ea0e
+    .agents/skills/turborepo/references/configuration/RULE.md: sha256:e6cc11b1eed52f277b1631f80bc66cd52ebcc229858a2dee15a152c695f512d4
     .agents/skills/turborepo/references/configuration/global-options.md: sha256:a9cda5ba17756d82944b8f085f41790fcfcae26554ab5637476394c868c141a7
     .agents/skills/turborepo/references/configuration/gotchas.md: sha256:5623c00a9b0ff15fe4e769a7cd5a447d3c4af356fbe053799523353976812d38
     .agents/skills/turborepo/references/configuration/tasks.md: sha256:d41b3a6efc6852206aa2bf39778727fdc2f9dd84521b13702a403cb18f84fd55
-    .agents/skills/turborepo/references/environment/RULE.md: sha256:6c950440c2a7ab69cf006ad85f62e360352d705eb4593ab975c73055782217e5
-    .agents/skills/turborepo/references/environment/gotchas.md: sha256:91196dc9169b1f4bc297a9473bd500ddc66f2e0f8438acbc98af6399dbc5b299
+    .agents/skills/turborepo/references/environment/RULE.md: sha256:6e2c40248d8b8e16a082118175630e0bb5e44d09d445ce0fe73dd19a6e394b14
+    .agents/skills/turborepo/references/environment/gotchas.md: sha256:741d9b98f60516f6959d1e4e53d3c3ada8c9d83915a108e758f188ace4b96a91
     .agents/skills/turborepo/references/environment/modes.md: sha256:e62247076f8b84d6897ab3ec835642736074fc36da10980ede69c23c1c923fd8
     .agents/skills/turborepo/references/filtering/RULE.md: sha256:2d73e0190586e233cce7dd4599eb368d7d8f846fdc68f0d19ce06a7e3ec6166c
     .agents/skills/turborepo/references/filtering/patterns.md: sha256:c03f856b8c76f137a1ef31efdbc9796b18c0a2b096e48aff6ce2ee5ff4cac4f0
     .agents/skills/turborepo/references/watch/RULE.md: sha256:9f0706f10dc7cf3a9115214f31195d6dadf237966cba13fe7ff8b264ba993c2b
-  content_hash: sha256:ce3fb928d2953174289e51469c2bf31d97cc7f1306eb34b39a24303903150052
+  content_hash: sha256:a710b0923dbe13b6f6c5f4ca9dc21029cb18fd56b5c1fe0429687eafe414e601
 deployments:
 - kind: project-relative
   target: agent-skills
@@ -2030,7 +2030,7 @@ deployments:
   owners:
   - vercel/turborepo
   active_owner: vercel/turborepo
-  content_hash: sha256:150b2d2dfbc7f1e6c1990827a8debd9bd2756320c8a0c439f69f7b54cdd57ced
+  content_hash: sha256:a24cc62950778d21b4a01095d9952e46e573d4ec82567f4b4e7b57644a2a4183
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/turborepo/command/turborepo.md
@@ -2075,7 +2075,7 @@ deployments:
   owners:
   - vercel/turborepo
   active_owner: vercel/turborepo
-  content_hash: sha256:4ff5b82b785d83852f337e5994befe6534d99b9db862dbff8b7d950cf00d3369
+  content_hash: sha256:1bac743e89aacb5a43e6ec8a70cd657d08cab9d513fa17538d8cc6175dd40235
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/turborepo/references/boundaries/RULE.md
@@ -2174,7 +2174,7 @@ deployments:
   owners:
   - vercel/turborepo
   active_owner: vercel/turborepo
-  content_hash: sha256:0d977a8eb3f247c9d5dc134acbf5997ce2acf1779108e9a76b8315e85235ea0e
+  content_hash: sha256:e6cc11b1eed52f277b1631f80bc66cd52ebcc229858a2dee15a152c695f512d4
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/turborepo/references/configuration/global-options.md
@@ -2210,7 +2210,7 @@ deployments:
   owners:
   - vercel/turborepo
   active_owner: vercel/turborepo
-  content_hash: sha256:6c950440c2a7ab69cf006ad85f62e360352d705eb4593ab975c73055782217e5
+  content_hash: sha256:6e2c40248d8b8e16a082118175630e0bb5e44d09d445ce0fe73dd19a6e394b14
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/turborepo/references/environment/gotchas.md
@@ -2219,7 +2219,7 @@ deployments:
   owners:
   - vercel/turborepo
   active_owner: vercel/turborepo
-  content_hash: sha256:91196dc9169b1f4bc297a9473bd500ddc66f2e0f8438acbc98af6399dbc5b299
+  content_hash: sha256:741d9b98f60516f6959d1e4e53d3c3ada8c9d83915a108e758f188ace4b96a91
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/turborepo/references/environment/modes.md

@@ -28,12 +28,14 @@
   "devDependencies": {
     "@repo/oxlint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
+    "@rolldown/plugin-babel": "^0.2.3",
     "@tailwindcss/vite": "^4",
     "@tanstack/router-plugin": "^1.168.35",
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^6",
+    "babel-plugin-react-compiler": "^1.0.0",
     "globals": "^17",
     "typescript": "~6",
     "vite": "^8"

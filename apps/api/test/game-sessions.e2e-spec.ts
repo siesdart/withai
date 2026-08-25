@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from '@jest/globals';
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 
@@ -26,6 +26,13 @@ describe('Mafia Game Session API', () => {
     }).compile();
 
     app = moduleRef.createNestApplication();
+    app.useGlobalPipes(
+      new ValidationPipe({
+        transform: true,
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      }),
+    );
     await app.listen(0, '127.0.0.1');
   });
 
@@ -108,6 +115,54 @@ describe('Mafia Game Session API', () => {
       .post('/game-sessions/mafia')
       .send({ participantCount: 5 });
     const guestCookie = firstSetCookie(first.headers['set-cookie']);
+
+    for (let index = 0; index < 9; index += 1) {
+      // oxlint-disable-next-line no-await-in-loop -- each request must observe the previous allowance count.
+      await request(app.getHttpServer())
+        .post('/game-sessions/mafia')
+        .set('Cookie', guestCookie)
+        .send({ participantCount: 5 })
+        .expect(201);
+    }
+
+    await request(app.getHttpServer())
+      .post('/game-sessions/mafia')
+      .set('Cookie', guestCookie)
+      .send({ participantCount: 5 })
+      .expect(429);
+  });
+
+  it('reuses a Game Session when a creation request is retried with the same idempotency key', async () => {
+    const idempotencyKey = 'a-secure-client-generated-idempotency-key';
+    const first = await request(app.getHttpServer())
+      .post('/game-sessions/mafia')
+      .set('Idempotency-Key', idempotencyKey)
+      .send({ participantCount: 5 })
+      .expect(201);
+
+    const retried = await request(app.getHttpServer())
+      .post('/game-sessions/mafia')
+      .set('Idempotency-Key', idempotencyKey)
+      .send({ participantCount: 5 })
+      .expect(201);
+
+    expect(retried.body.sessionId).toBe(first.body.sessionId);
+    expect(first.body.eventId).toBe(1);
+    expect(retried.body.eventId).toBe(1);
+  });
+
+  it('rejects invalid participant counts without consuming the Guest Play Allowance', async () => {
+    const first = await request(app.getHttpServer())
+      .post('/game-sessions/mafia')
+      .send({ participantCount: 5 })
+      .expect(201);
+    const guestCookie = firstSetCookie(first.headers['set-cookie']);
+
+    await request(app.getHttpServer())
+      .post('/game-sessions/mafia')
+      .set('Cookie', guestCookie)
+      .send({ participantCount: 5.5 })
+      .expect(400);
 
     for (let index = 0; index < 9; index += 1) {
       // oxlint-disable-next-line no-await-in-loop -- each request must observe the previous allowance count.

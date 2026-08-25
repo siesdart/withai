@@ -1,9 +1,11 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   ForbiddenException,
   Get,
   Header,
+  Headers,
   Param,
   Post,
   Req,
@@ -15,6 +17,7 @@ import {
   ApiCookieAuth,
   ApiCreatedResponse,
   ApiForbiddenResponse,
+  ApiHeader,
   ApiOkResponse,
   ApiOperation,
   ApiResponse,
@@ -36,6 +39,11 @@ export class GameSessionsController {
   @Post('mafia')
   @ApiOperation({ summary: 'Create an anonymous Mafia Game Session' })
   @ApiBody({ type: CreateMafiaSessionDto })
+  @ApiHeader({
+    name: 'Idempotency-Key',
+    required: false,
+    description: 'A client-generated key that makes a Game Session creation retry safe.',
+  })
   @ApiCreatedResponse({
     description: 'The initial authorized projection and a signed anonymous guest cookie.',
     type: MafiaGameSessionProjectionEntity,
@@ -45,10 +53,15 @@ export class GameSessionsController {
     @Body() body: CreateMafiaSessionDto,
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
   ) {
+    if (idempotencyKey && (idempotencyKey.length < 16 || idempotencyKey.length > 200)) {
+      throw new BadRequestException('The Idempotency-Key header is invalid.');
+    }
     const { holderId, projection } = this.gameSessionsService.createMafiaSession(
       request.headers.cookie,
       body.participantCount,
+      idempotencyKey,
     );
     response.cookie(
       this.gameSessionsService.guestCookieName(),

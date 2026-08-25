@@ -4,7 +4,13 @@ import type { MafiaGameProjection } from '@/lib/game-session-api';
 
 import { useDeadlineCountdown } from '../-hooks/use-deadline-countdown';
 
-export function ControlRoom({ projection }: { projection: MafiaGameProjection }) {
+export function ControlRoom({
+  projection,
+  isReconnecting,
+}: {
+  projection: MafiaGameProjection;
+  isReconnecting: boolean;
+}) {
   const deadline = useDeadlineCountdown(projection.public.phaseDeadline);
 
   return (
@@ -17,6 +23,7 @@ export function ControlRoom({ projection }: { projection: MafiaGameProjection })
         <div className="flex items-center gap-2 text-sm text-[#625e55]">
           <TimerIcon aria-hidden="true" />
           <span>Deadline in {deadline}</span>
+          {isReconnecting ? <span aria-live="polite">Reconnecting live updates…</span> : null}
         </div>
       </header>
 

@@ -12,17 +12,32 @@ export const Route = createFileRoute('/mafia/')({
 });
 
 function MafiaControlRoom() {
-  const { sessionId, retry, isCreating, hasCreationError } = useMafiaGameSession();
-  const sessionQuery = useGameSessionProjection(sessionId);
-  useGameSessionSubscription(sessionId);
+  const { sessionId, retry, startNewGame, isCreating, hasCreationError } = useMafiaGameSession();
+  const { isFetching, isUnavailable, isError, projection, retrySnapshot } =
+    useGameSessionProjection(sessionId);
+  const { isReconnecting } = useGameSessionSubscription(sessionId);
 
-  if (isCreating || sessionQuery.fetchStatus === 'fetching') {
+  if (isCreating || isFetching) {
     return <ControlRoomLoading />;
   }
 
-  if (hasCreationError || sessionQuery.isError || !sessionQuery.data) {
+  if (hasCreationError) {
     return <ControlRoomError onRetry={retry} />;
   }
 
-  return <ControlRoom projection={sessionQuery.data} />;
+  if (isUnavailable) {
+    return (
+      <ControlRoomError
+        onStartNewGame={startNewGame}
+        title="This Game Session is no longer available."
+        description="Start a new Game Session when you are ready."
+      />
+    );
+  }
+
+  if (isError || !projection) {
+    return <ControlRoomError onRetry={retrySnapshot} />;
+  }
+
+  return <ControlRoom isReconnecting={isReconnecting} projection={projection} />;
 }

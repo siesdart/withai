@@ -8,7 +8,8 @@
 
 ## React: ALWAYS read docs before coding
 
-- Before any React work, find and read the relevant doc in `/react-best-practices` and `/react-view-logic-boundaries`.
+- Before any React work, find and read the relevant doc in `/react-best-practices`.
+- Do not over-list hooks at the top of your components. Use the `/react-view-logic-boundaries` skill to separate them into custom hooks appropriately.
 - Use `/design-taste-frontend` and `/gpt-taste` as the only sources of design rules.
 
 ## shadcn/ui: ALWAYS read docs before coding
@@ -20,6 +21,10 @@
 ## Zustand
 
 - Always use Zustand when writing state management code.
+
+## Tanstack Router: ALWAYS read docs before coding
+
+- Before any Tanstack Router work, find and read the relevant doc in `/router-core`, `/react-router`, and `/router-query`.
 
 ## Tanstack Query: ALWAYS read docs before coding
 

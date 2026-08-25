@@ -1,6 +1,6 @@
 ---
 name: typescript-functional-patterns
-description: Apply a coherent TypeScript style built around Remeda for data transformation, neverthrow for typed recoverable failures, and ts-pattern for exhaustive domain branching. Use automatically when creating, modifying, or reviewing TypeScript code; preserve existing project conventions and add these dependencies automatically only for genuinely new projects.
+description: Apply a project-wide TypeScript style built around Remeda for data transformation, neverthrow for typed recoverable failures, and ts-pattern for exhaustive domain branching. Use automatically for TypeScript projects and install the three dependencies when this skill is active.
 ---
 
 # TypeScript Functional Patterns
@@ -17,22 +17,22 @@ non-trivial pipeline, error boundary, or discriminated-union decision.
 
 ## Process
 
-### 1. Establish the dependency and style context
+### 1. Establish and enforce the project baseline
 
 Inspect `package.json`, lockfiles, TypeScript configuration, scripts, and nearby
-code before editing.
+code before editing. This skill establishes a project-wide baseline, so the
+three libraries are required dependencies of every TypeScript project where the
+skill is active.
 
-- Treat a directory as a **new project** only when it has no established package
-  manifest/lockfile and no existing application or library source to preserve.
-- In a new project, add `remeda`, `neverthrow`, and `ts-pattern` using the
-  project's package manager, then use them in the implementation.
-- In an existing project, use an installed library when it is already present;
-  preserve the project's equivalent conventions when it is absent. Report a
-  possible dependency addition instead of silently changing the dependency
-  graph.
+- Add `remeda`, `neverthrow`, and `ts-pattern` with the project's package
+  manager whenever any of them is absent. Respect the existing package manager,
+  lockfile, workspace layout, version policy, and dependency section; do not
+  install a second copy or bypass the lockfile.
+- Apply the style to new TypeScript code and migrate touched code toward it. Do
+  not preserve an equivalent legacy utility/error/branching style merely because
+  it predates this skill.
 - Follow the project's module system, strictness, formatting, naming, runtime,
-  and test conventions. Never introduce a second functional style merely to
-  force a library into one file.
+  and test conventions around this functional baseline.
 
 Completion criterion: the project status, available dependencies, relevant
 compiler settings, and validation commands are known, and the dependency policy
@@ -55,9 +55,11 @@ Classify each meaningful piece of logic:
   the edge; make the transformation, result composition, and decision logic
   pure where practical.
 
-Do not add a library call just to demonstrate the library. A plain expression is
-better when it is clearer and has no meaningful pipeline, recoverable error, or
-finite union to model.
+The three libraries are project defaults, not a demand to wrap every expression
+in a library call. A local omission is valid only when the corresponding
+construct does not exist—for example, a function has no recoverable failure or
+finite union. When omitting one in a substantial TypeScript area, state the
+reason in the change summary or code-level design note.
 
 Completion criterion: every non-trivial branch or transformation has a named
 reason for its chosen representation, and the core logic is separable from
@@ -81,7 +83,9 @@ Use Remeda to express a sequence as a left-to-right pipeline:
 
 If a transformation can fail, keep the failure visible: parse/validate before
 the successful pipeline, or make the stage return a `Result` and compose the
-results instead of throwing from a Remeda callback.
+results instead of throwing from a Remeda callback. In a touched module, replace
+the old collection transformation style with Remeda where the operation has a
+corresponding Remeda primitive.
 
 Completion criterion: the pipeline has a clear input-to-output story, no stage
 silently swallows invalid data, and its complexity is lower than the equivalent
@@ -90,8 +94,9 @@ nested or mutation-heavy code.
 ### 4. Model and compose recoverable failures
 
 Use neverthrow at boundaries such as parsing, validation, filesystem/database
-access, HTTP calls, and domain commands where the caller can reasonably recover
-or present an error.
+access, HTTP calls, and domain commands. Expected failure in a touched module
+must be represented as `Result`/`ResultAsync`, even when the old code used
+exceptions, nullable values, or an untyped rejected promise.
 
 - Define an error union or discriminated error type that carries actionable
   context. Avoid `Result<T, Error>` when callers need to distinguish cases.
@@ -137,9 +142,10 @@ variants, guards, or more than one consumer:
 - Use `when` for a predicate that is truly part of the branch condition, while
   keeping the predicate named and testable if it carries domain meaning.
 
-For a single boolean or a trivial two-way check, an `if` is often the clearer
-choice. The value of ts-pattern is compile-time completeness and structural
-clarity, not replacing every conditional.
+For a single boolean or a trivial two-way check, an `if` may remain clearer, but
+all finite domain unions in touched TypeScript code must use ts-pattern or have
+an explicit design note explaining the incompatibility. The value of ts-pattern
+is compile-time completeness and structural clarity, not decorative syntax.
 
 Completion criterion: adding a new union variant would produce a useful compile
 failure at every closed decision, and every branch returns the same intentional

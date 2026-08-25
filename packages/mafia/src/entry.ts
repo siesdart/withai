@@ -60,7 +60,7 @@ function createParticipants(participantCount: number): MafiaParticipant[] {
     id: `participant-${index + 1}`,
     name,
     alive: true,
-    role: assignRoles(participantCount)[index]!,
+    role: assignRoles(participantCount)[index],
   }));
 }
 

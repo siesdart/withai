@@ -11,6 +11,12 @@ export function useGameSessionProjection(sessionId: string | undefined) {
   const sessionQuery = useQuery({
     queryKey: gameSessionProjectionQueryKey(sessionId),
     queryFn: () => getGameSessionSnapshot(sessionId!),
+    retry: (failureCount, error) => {
+      if (isUnavailableGameSession(error)) {
+        return false;
+      }
+      return failureCount < 3;
+    },
     enabled: Boolean(sessionId),
   });
 

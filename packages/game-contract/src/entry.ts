@@ -1,19 +1,29 @@
+import type { Result } from 'neverthrow';
+
 export type GameModule<
   CreateInput,
   PublicInformation extends object,
   PersonalInformation extends object,
+  CreateError,
+  ProjectionError,
 > = {
-  create(input: CreateInput): GameModuleSession<PublicInformation, PersonalInformation>;
+  create(
+    input: CreateInput,
+  ): Result<
+    GameModuleSession<PublicInformation, PersonalInformation, ProjectionError>,
+    CreateError
+  >;
 };
 
 export type GameModuleSession<
   PublicInformation extends object,
   PersonalInformation extends object,
+  ProjectionError,
 > = {
   projectionFor(
     participantId: string,
     eventId: number,
-  ): AuthorizedGameProjection<PublicInformation, PersonalInformation>;
+  ): Result<AuthorizedGameProjection<PublicInformation, PersonalInformation>, ProjectionError>;
 };
 
 export type AuthorizedGameProjection<

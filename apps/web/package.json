@@ -18,9 +18,11 @@
     "dayjs": "^1.11.23",
     "ky": "^2.0.2",
     "lucide-react": "^1.33.0",
+    "neverthrow": "^8.2.0",
     "parse-sse": "^0.1.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
+    "ts-pattern": "^5.9.0",
     "zustand": "^5.0.15"
   },
   "devDependencies": {

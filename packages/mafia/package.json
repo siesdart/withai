@@ -12,7 +12,10 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@repo/game-contract": "workspace:*"
+    "@repo/game-contract": "workspace:*",
+    "neverthrow": "^8.2.0",
+    "remeda": "^2.43.0",
+    "ts-pattern": "^5.9.0"
   },
   "devDependencies": {
     "@repo/oxlint-config": "workspace:*",

@@ -1,14 +1,14 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 
+import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import {
-  HttpException,
-  HttpStatus,
-  Injectable,
-  OnModuleDestroy,
-  OnModuleInit,
-} from '@nestjs/common';
-import { MafiaGameModule } from '@repo/mafia';
+  MafiaGameModule,
+  type MafiaProjectionError,
+  type MafiaSessionInputError,
+} from '@repo/mafia';
 import dayjs from 'dayjs';
+import { err, ok, type Result } from 'neverthrow';
+import { find, map, pipe } from 'remeda';
 import { defer, filter, finalize, type Observable, ReplaySubject } from 'rxjs';
 
 import type { MafiaGameSessionProjectionEntity } from './entities/mafia-game-session-projection.entity';
@@ -19,6 +19,19 @@ const guestAllowance = 10;
 const dayDiscussionDurationMs = 2 * 60 * 1000;
 const sessionIdleTtlHours = 24;
 const cleanupIntervalMs = 60 * 60 * 1000;
+
+export type GameSessionError =
+  | { type: 'idempotency-conflict' }
+  | { type: 'guest-allowance-exhausted' }
+  | { type: 'unavailable-to-guest'; sessionId: string }
+  | { type: 'session-not-found'; sessionId: string }
+  | { type: 'invalid-mafia-session-input'; cause: MafiaSessionInputError }
+  | { type: 'invalid-mafia-projection'; cause: MafiaProjectionError };
+
+type CreatedMafiaSession = {
+  holderId: string;
+  projection: MafiaGameSessionProjectionEntity;
+};
 
 @Injectable()
 export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
@@ -47,7 +60,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     cookie: string | undefined,
     participantCount = 5,
     idempotencyKey: string | undefined,
-  ) {
+  ): Result<CreatedMafiaSession, GameSessionError> {
     this.cleanupExpiredSessions();
     const holderId = this.readGuestId(cookie) ?? randomUUID();
     const scopedIdempotencyKey = idempotencyKey && `${holderId}:${idempotencyKey}`;
@@ -55,19 +68,13 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       scopedIdempotencyKey && this.idempotencyKeys.get(scopedIdempotencyKey);
     if (idempotencyRecord) {
       if (idempotencyRecord.participantCount !== participantCount) {
-        throw new HttpException(
-          'The Idempotency-Key was already used with a different request.',
-          HttpStatus.CONFLICT,
-        );
+        return err({ type: 'idempotency-conflict' });
       }
 
       const existingSession = this.sessions.get(idempotencyRecord.sessionId);
       if (existingSession) {
         this.touch(existingSession);
-        return {
-          holderId,
-          projection: this.projectionFor(existingSession),
-        };
+        return this.projectionFor(existingSession).map((projection) => ({ holderId, projection }));
       }
 
       this.idempotencyKeys.delete(scopedIdempotencyKey);
@@ -76,18 +83,20 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     const countKey = `${this.utcDay()}:${holderId}`;
     const count = this.guestSessionCounts.get(countKey) ?? 0;
     if (count >= guestAllowance) {
-      throw new HttpException(
-        'Your Guest Play Allowance is exhausted for today.',
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
+      return err({ type: 'guest-allowance-exhausted' });
     }
 
     const sessionId = randomUUID();
-    const gameSession = this.mafiaModule.create({
+    const gameSessionResult = this.mafiaModule.create({
       sessionId,
       participantCount,
       phaseDeadline: new Date(Date.now() + dayDiscussionDurationMs),
     });
+    if (gameSessionResult.isErr()) {
+      return err({ type: 'invalid-mafia-session-input', cause: gameSessionResult.error });
+    }
+
+    const gameSession = gameSessionResult.value;
     const session: StoredGameSessionEntity = {
       holderId,
       humanParticipantId: 'participant-1',
@@ -103,39 +112,46 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     }
     this.guestSessionCounts.set(countKey, count + 1);
 
-    return { holderId, projection: this.publishProjection(session) };
+    return this.publishProjection(session).map((projection) => ({ holderId, projection }));
   }
 
-  getProjection(sessionId: string, cookie: string | undefined): MafiaGameSessionProjectionEntity {
+  getProjection(
+    sessionId: string,
+    cookie: string | undefined,
+  ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
     this.cleanupExpiredSessions();
-    const session = this.sessionForHolder(sessionId, cookie);
-    return this.projectionFor(session);
+    return this.sessionForHolder(sessionId, cookie).andThen((session) =>
+      this.projectionFor(session),
+    );
   }
 
   eventsFor(
     sessionId: string,
     cookie: string | undefined,
     lastEventId: number | undefined,
-  ): Observable<MafiaGameSessionProjectionEntity> {
+  ): Result<Observable<MafiaGameSessionProjectionEntity>, GameSessionError> {
     this.cleanupExpiredSessions();
-    const session = this.sessionForHolder(sessionId, cookie);
-    return defer(() => {
-      session.activeEventSubscribers += 1;
-      this.touch(session);
-      return session.events.asObservable().pipe(
-        filter((projection) => lastEventId === undefined || projection.eventId > lastEventId),
-        finalize(() => {
-          session.activeEventSubscribers -= 1;
-          this.touch(session);
-        }),
-      );
-    });
+    return this.sessionForHolder(sessionId, cookie).map((session) =>
+      defer(() => {
+        session.activeEventSubscribers += 1;
+        this.touch(session);
+        return session.events.asObservable().pipe(
+          filter((projection) => lastEventId === undefined || projection.eventId > lastEventId),
+          finalize(() => {
+            session.activeEventSubscribers -= 1;
+            this.touch(session);
+          }),
+        );
+      }),
+    );
   }
 
-  publishSessionProjection(sessionId: string) {
+  publishSessionProjection(
+    sessionId: string,
+  ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
     const session = this.sessions.get(sessionId);
     if (!session) {
-      throw new Error('Game Session is not available.');
+      return err({ type: 'session-not-found', sessionId });
     }
 
     return this.publishProjection(session);
@@ -150,11 +166,11 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
   }
 
   private readGuestId(cookie: string | undefined) {
-    const value = cookie
-      ?.split(';')
-      .map((part) => part.trim())
-      .find((part) => part.startsWith(`${guestCookieName}=`))
-      ?.slice(guestCookieName.length + 1);
+    const value = pipe(
+      cookie?.split(';') ?? [],
+      map((part) => part.trim()),
+      find((part) => part.startsWith(`${guestCookieName}=`)),
+    )?.slice(guestCookieName.length + 1);
     if (!value) {
       return undefined;
     }
@@ -196,30 +212,45 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     return 'local-development-secret';
   }
 
-  private publishProjection(session: StoredGameSessionEntity): MafiaGameSessionProjectionEntity {
+  private publishProjection(
+    session: StoredGameSessionEntity,
+  ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
     this.touch(session);
     session.nextEventId += 1;
-    const projection = session.gameSession.projectionFor(
-      session.humanParticipantId,
-      session.nextEventId,
-    );
-    session.events.next(projection);
-    return projection;
+    return session.gameSession
+      .projectionFor(session.humanParticipantId, session.nextEventId)
+      .mapErr((cause): GameSessionError => ({
+        type: 'invalid-mafia-projection',
+        cause,
+      }))
+      .andTee((projection) => {
+        session.events.next(projection);
+      });
   }
 
-  private sessionForHolder(sessionId: string, cookie: string | undefined) {
+  private sessionForHolder(
+    sessionId: string,
+    cookie: string | undefined,
+  ): Result<StoredGameSessionEntity, GameSessionError> {
     const session = this.sessions.get(sessionId);
     const holderId = this.readGuestId(cookie);
     if (!session || !holderId || session.holderId !== holderId) {
-      throw new Error('Game Session is not available to this guest.');
+      return err({ type: 'unavailable-to-guest', sessionId });
     }
 
     this.touch(session);
-    return session;
+    return ok(session);
   }
 
-  private projectionFor(session: StoredGameSessionEntity): MafiaGameSessionProjectionEntity {
-    return session.gameSession.projectionFor(session.humanParticipantId, session.nextEventId);
+  private projectionFor(
+    session: StoredGameSessionEntity,
+  ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
+    return session.gameSession
+      .projectionFor(session.humanParticipantId, session.nextEventId)
+      .mapErr((cause): GameSessionError => ({
+        type: 'invalid-mafia-projection',
+        cause,
+      }));
   }
 
   private touch(session: StoredGameSessionEntity) {

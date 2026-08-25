@@ -1,6 +1,9 @@
 import { randomInt } from 'node:crypto';
 
 import type { AuthorizedGameProjection, GameModule, GameModuleSession } from '@repo/game-contract';
+import { err, ok, type Result } from 'neverthrow';
+import { map } from 'remeda';
+import { match } from 'ts-pattern';
 
 export type MafiaSessionInput = {
   sessionId: string;
@@ -44,6 +47,16 @@ const participantNames = [
 
 export type RandomInt = (maxExclusive: number) => number;
 
+export type MafiaSessionInputError = {
+  type: 'invalid-participant-count';
+  participantCount: number;
+};
+
+export type MafiaProjectionError = {
+  type: 'unknown-participant';
+  participantId: string;
+};
+
 function assignRoles(participantCount: number): MafiaRole[] {
   const mafiaCount = participantCount <= 6 ? 1 : 2;
   return [
@@ -71,7 +84,7 @@ function createParticipants(
   randomIntExclusive: RandomInt,
 ): MafiaParticipant[] {
   const roles = shuffleRoles(assignRoles(participantCount), randomIntExclusive);
-  return participantNames.slice(0, participantCount).map((name, index) => ({
+  return map(participantNames.slice(0, participantCount), (name, index) => ({
     id: `participant-${index + 1}`,
     name,
     alive: true,
@@ -83,14 +96,19 @@ function toPersonalInformation(participant: MafiaParticipant): MafiaPersonalInfo
   return {
     participantId: participant.id,
     role: participant.role,
-    allegiance: participant.role === 'Mafia' ? 'Mafia' : 'Citizen',
+    allegiance: match(participant.role)
+      .with('Mafia', () => 'Mafia' as const)
+      .with('Detective', 'Doctor', 'Citizen', () => 'Citizen' as const)
+      .exhaustive(),
   };
 }
 
 export class MafiaGameModule implements GameModule<
   MafiaSessionInput,
   MafiaPublicInformation,
-  MafiaPersonalInformation
+  MafiaPersonalInformation,
+  MafiaSessionInputError,
+  MafiaProjectionError
 > {
   constructor(private readonly randomIntExclusive: RandomInt = randomInt) {}
 
@@ -98,22 +116,28 @@ export class MafiaGameModule implements GameModule<
     sessionId,
     participantCount,
     phaseDeadline,
-  }: MafiaSessionInput): GameModuleSession<MafiaPublicInformation, MafiaPersonalInformation> {
+  }: MafiaSessionInput): Result<
+    GameModuleSession<MafiaPublicInformation, MafiaPersonalInformation, MafiaProjectionError>,
+    MafiaSessionInputError
+  > {
     if (participantCount < 5 || participantCount > 10) {
-      throw new Error('A Mafia Game Session requires five to ten Participants.');
+      return err({ type: 'invalid-participant-count', participantCount });
     }
 
-    return new MafiaGameSession(
-      sessionId,
-      phaseDeadline,
-      createParticipants(participantCount, this.randomIntExclusive),
+    return ok(
+      new MafiaGameSession(
+        sessionId,
+        phaseDeadline,
+        createParticipants(participantCount, this.randomIntExclusive),
+      ),
     );
   }
 }
 
 class MafiaGameSession implements GameModuleSession<
   MafiaPublicInformation,
-  MafiaPersonalInformation
+  MafiaPersonalInformation,
+  MafiaProjectionError
 > {
   constructor(
     private readonly sessionId: string,
@@ -121,22 +145,25 @@ class MafiaGameSession implements GameModuleSession<
     private readonly participants: ReadonlyArray<MafiaParticipant>,
   ) {}
 
-  projectionFor(participantId: string, eventId: number): MafiaGameProjection {
+  projectionFor(
+    participantId: string,
+    eventId: number,
+  ): Result<MafiaGameProjection, MafiaProjectionError> {
     const participant = this.participants.find(({ id }) => id === participantId);
     if (!participant) {
-      throw new Error('Participant does not belong to this Game Session.');
+      return err({ type: 'unknown-participant', participantId });
     }
 
-    return {
+    return ok({
       eventId,
       sessionId: this.sessionId,
       public: {
         phase: 'day-discussion',
         phaseDeadline: this.phaseDeadline.toISOString(),
-        participants: this.participants.map(({ id, name, alive }) => ({ id, name, alive })),
+        participants: map(this.participants, ({ id, name, alive }) => ({ id, name, alive })),
       },
       personal: toPersonalInformation(participant),
-    };
+    });
   }
 }
 

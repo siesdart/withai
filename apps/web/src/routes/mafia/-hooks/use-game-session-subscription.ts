@@ -1,7 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { match } from 'ts-pattern';
 
-import { isUnavailableGameSession, subscribeToGameSession } from '@/lib/game-session-api';
+import { subscribeToGameSession } from '@/lib/api/game-session/api';
 
 import { gameSessionSnapshotQueryKey } from './use-game-session-snapshot';
 
@@ -20,33 +21,40 @@ export function useGameSessionSubscription(sessionId: string | undefined) {
 
     const subscribe = async () => {
       while (!abortController.signal.aborted) {
-        try {
-          // oxlint-disable-next-line no-await-in-loop -- reconnect attempts must remain ordered.
-          await subscribeToGameSession(sessionId, {
-            lastEventId,
-            onConnected: () => {
-              retryCount = 0;
-              setIsReconnecting(false);
-              void queryClient.invalidateQueries({
-                queryKey: gameSessionSnapshotQueryKey(sessionId),
-              });
-            },
-            onProjection: (projection, eventId) => {
-              lastEventId = eventId;
-              queryClient.setQueryData(gameSessionSnapshotQueryKey(sessionId), projection);
-            },
-            signal: abortController.signal,
-          });
-        } catch (error) {
-          if (abortController.signal.aborted) {
-            return;
-          }
-          if (isUnavailableGameSession(error)) {
+        // oxlint-disable-next-line no-await-in-loop -- reconnect attempts must remain ordered.
+        const result = await subscribeToGameSession(sessionId, {
+          lastEventId,
+          onConnected: () => {
+            retryCount = 0;
+            setIsReconnecting(false);
             void queryClient.invalidateQueries({
               queryKey: gameSessionSnapshotQueryKey(sessionId),
             });
-            return;
-          }
+          },
+          onProjection: (projection, eventId) => {
+            lastEventId = eventId;
+            queryClient.setQueryData(gameSessionSnapshotQueryKey(sessionId), projection);
+          },
+          signal: abortController.signal,
+        });
+
+        const shouldReconnect = result.match(
+          () => true,
+          (error) =>
+            match(error)
+              .with({ type: 'aborted' }, () => false)
+              .with({ type: 'unavailable' }, () => {
+                void queryClient.invalidateQueries({
+                  queryKey: gameSessionSnapshotQueryKey(sessionId),
+                });
+                return false;
+              })
+              .with({ type: 'invalid-event' }, () => true)
+              .with({ type: 'request-failed' }, () => true)
+              .exhaustive(),
+        );
+        if (!shouldReconnect) {
+          return;
         }
 
         retryCount += 1;

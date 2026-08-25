@@ -1,8 +1,9 @@
 import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { useCallback } from 'react';
 
-import { createMafiaGameSession, isUnavailableGameSession } from '@/lib/game-session-api';
-import { useGameSessionStore } from '@/lib/game-session-store';
+import { createMafiaGameSession } from '@/lib/api/game-session/api';
+import { isUnavailableGameSession } from '@/lib/api/game-session/error';
+import { useGameSessionStore } from '@/lib/stores/game-session';
 import { ControlRoom } from '@/routes/mafia/-components/control-room';
 import { ControlRoomError } from '@/routes/mafia/-components/control-room-error';
 import { ControlRoomLoading } from '@/routes/mafia/-components/control-room-loading';
@@ -16,9 +17,16 @@ export const Route = createFileRoute('/mafia/')({
       return { sessionId };
     }
 
-    const projection = await createMafiaGameSession(ensureCreationKey());
-    setSessionId(projection.sessionId);
-    return { sessionId: projection.sessionId };
+    const result = await createMafiaGameSession(ensureCreationKey());
+    return result.match(
+      (projection) => {
+        setSessionId(projection.sessionId);
+        return { sessionId: projection.sessionId };
+      },
+      (error) => {
+        throw error;
+      },
+    );
   },
   component: () => {
     const { sessionId } = Route.useRouteContext();

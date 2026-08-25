@@ -11,6 +11,9 @@
   "scripts": {
     "build": "tsc -b"
   },
+  "dependencies": {
+    "neverthrow": "^8.2.0"
+  },
   "devDependencies": {
     "@repo/oxlint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",

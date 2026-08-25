@@ -1,6 +1,6 @@
 import { EyeOffIcon, RadioIcon, TimerIcon, UsersIcon } from 'lucide-react';
 
-import type { MafiaGameProjection } from '@/lib/game-session-api';
+import type { MafiaGameProjection } from '@/lib/api/game-session/api';
 
 import { useDeadlineCountdown } from '../-hooks/use-deadline-countdown';
 

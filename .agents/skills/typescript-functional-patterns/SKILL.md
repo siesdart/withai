@@ -1,6 +1,6 @@
 ---
 name: typescript-functional-patterns
-description: Apply a project-wide TypeScript style built around Remeda for data transformation, neverthrow for typed recoverable failures, and ts-pattern for exhaustive domain branching. Use automatically for TypeScript projects and install the three dependencies when this skill is active.
+description: Apply Transform, Result, and Match TypeScript patterns with Remeda, neverthrow, and ts-pattern; add each dependency only where code or a public type API uses it.
 ---
 
 # TypeScript Functional Patterns
@@ -20,12 +20,15 @@ non-trivial pipeline, error boundary, or discriminated-union decision.
 ### 1. Establish and enforce the project baseline
 
 Inspect `package.json`, lockfiles, TypeScript configuration, scripts, and nearby
-code before editing. This skill establishes a project-wide baseline, so the
-three libraries are required dependencies of every TypeScript project where the
-skill is active.
+code before editing. This skill establishes a project-wide behavioral baseline,
+not a package-wide dependency baseline.
 
-- Add `remeda`, `neverthrow`, and `ts-pattern` with the project's package
-  manager whenever any of them is absent. Respect the existing package manager,
+- Add `remeda`, `neverthrow`, or `ts-pattern` with the project's package manager
+  only to a package whose source imports it or whose exported type declarations
+  reference it. In a workspace, inspect each package independently and keep
+  dependencies in the package that owns the import or public type.
+- Remove a direct dependency after confirming that the package has no source or
+  public declaration reference to it. Respect the existing package manager,
   lockfile, workspace layout, version policy, and dependency section; do not
   install a second copy or bypass the lockfile.
 - Apply the style to new TypeScript code and migrate touched code toward it. Do
@@ -34,9 +37,9 @@ skill is active.
 - Follow the project's module system, strictness, formatting, naming, runtime,
   and test conventions around this functional baseline.
 
-Completion criterion: the project status, available dependencies, relevant
-compiler settings, and validation commands are known, and the dependency policy
-has been applied without guessing.
+Completion criterion: the project status, package ownership of every library
+reference, relevant compiler settings, and validation commands are known; every
+direct dependency has a source or public-type owner.
 
 ### 2. Name the problem before choosing the abstraction
 

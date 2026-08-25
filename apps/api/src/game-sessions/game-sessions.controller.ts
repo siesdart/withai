@@ -15,6 +15,7 @@ import {
 import {
   ApiBody,
   ApiCookieAuth,
+  ApiConflictResponse,
   ApiCreatedResponse,
   ApiForbiddenResponse,
   ApiHeader,
@@ -49,6 +50,9 @@ export class GameSessionsController {
     type: MafiaGameSessionProjectionEntity,
   })
   @ApiTooManyRequestsResponse({ description: 'The Guest Play Allowance is exhausted for today.' })
+  @ApiConflictResponse({
+    description: 'The Idempotency-Key was already used with a different request.',
+  })
   createMafiaSession(
     @Body() body: CreateMafiaSessionDto,
     @Req() request: Request,

@@ -25,7 +25,10 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
   private readonly mafiaModule = new MafiaGameModule();
   private readonly sessions = new Map<string, StoredGameSessionEntity>();
   private readonly guestSessionCounts = new Map<string, number>();
-  private readonly idempotencyKeys = new Map<string, string>();
+  private readonly idempotencyKeys = new Map<
+    string,
+    { sessionId: string; participantCount: number }
+  >();
   private readonly cookieSecret = this.guestCookieSecret();
   private cleanupTimer: NodeJS.Timeout | undefined;
 
@@ -46,21 +49,30 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     idempotencyKey: string | undefined,
   ) {
     this.cleanupExpiredSessions();
-    const existingSessionId = idempotencyKey && this.idempotencyKeys.get(idempotencyKey);
-    if (existingSessionId) {
-      const existingSession = this.sessions.get(existingSessionId);
+    const holderId = this.readGuestId(cookie) ?? randomUUID();
+    const scopedIdempotencyKey = idempotencyKey && `${holderId}:${idempotencyKey}`;
+    const idempotencyRecord =
+      scopedIdempotencyKey && this.idempotencyKeys.get(scopedIdempotencyKey);
+    if (idempotencyRecord) {
+      if (idempotencyRecord.participantCount !== participantCount) {
+        throw new HttpException(
+          'The Idempotency-Key was already used with a different request.',
+          HttpStatus.CONFLICT,
+        );
+      }
+
+      const existingSession = this.sessions.get(idempotencyRecord.sessionId);
       if (existingSession) {
         this.touch(existingSession);
         return {
-          holderId: existingSession.holderId,
+          holderId,
           projection: this.projectionFor(existingSession),
         };
       }
 
-      this.idempotencyKeys.delete(idempotencyKey);
+      this.idempotencyKeys.delete(scopedIdempotencyKey);
     }
 
-    const holderId = this.readGuestId(cookie) ?? randomUUID();
     const countKey = `${this.utcDay()}:${holderId}`;
     const count = this.guestSessionCounts.get(countKey) ?? 0;
     if (count >= guestAllowance) {
@@ -86,8 +98,8 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       activeEventSubscribers: 0,
     };
     this.sessions.set(sessionId, session);
-    if (idempotencyKey) {
-      this.idempotencyKeys.set(idempotencyKey, sessionId);
+    if (scopedIdempotencyKey) {
+      this.idempotencyKeys.set(scopedIdempotencyKey, { sessionId, participantCount });
     }
     this.guestSessionCounts.set(countKey, count + 1);
 
@@ -226,8 +238,8 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
       session.events.complete();
       this.sessions.delete(sessionId);
-      for (const [key, storedSessionId] of this.idempotencyKeys) {
-        if (storedSessionId === sessionId) {
+      for (const [key, record] of this.idempotencyKeys) {
+        if (record.sessionId === sessionId) {
           this.idempotencyKeys.delete(key);
         }
       }

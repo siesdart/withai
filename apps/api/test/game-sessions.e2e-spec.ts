@@ -142,6 +142,7 @@ describe('Mafia Game Session API', () => {
 
     const retried = await request(app.getHttpServer())
       .post('/game-sessions/mafia')
+      .set('Cookie', firstSetCookie(first.headers['set-cookie']))
       .set('Idempotency-Key', idempotencyKey)
       .send({ participantCount: 5 })
       .expect(201);
@@ -149,6 +150,42 @@ describe('Mafia Game Session API', () => {
     expect(retried.body.sessionId).toBe(first.body.sessionId);
     expect(first.body.eventId).toBe(1);
     expect(retried.body.eventId).toBe(1);
+  });
+
+  it('does not share an idempotent session with a different guest', async () => {
+    const idempotencyKey = 'a-secure-client-generated-idempotency-key';
+    const first = await request(app.getHttpServer())
+      .post('/game-sessions/mafia')
+      .set('Idempotency-Key', idempotencyKey)
+      .send({ participantCount: 5 })
+      .expect(201);
+    const second = await request(app.getHttpServer())
+      .post('/game-sessions/mafia')
+      .set('Idempotency-Key', idempotencyKey)
+      .send({ participantCount: 5 })
+      .expect(201);
+
+    expect(second.body.sessionId).not.toBe(first.body.sessionId);
+    await request(app.getHttpServer())
+      .get(`/game-sessions/${first.body.sessionId}/snapshot`)
+      .set('Cookie', firstSetCookie(second.headers['set-cookie']))
+      .expect(403);
+  });
+
+  it('rejects idempotency key reuse with a different request body', async () => {
+    const idempotencyKey = 'a-secure-client-generated-idempotency-key';
+    const first = await request(app.getHttpServer())
+      .post('/game-sessions/mafia')
+      .set('Idempotency-Key', idempotencyKey)
+      .send({ participantCount: 5 })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post('/game-sessions/mafia')
+      .set('Cookie', firstSetCookie(first.headers['set-cookie']))
+      .set('Idempotency-Key', idempotencyKey)
+      .send({ participantCount: 10 })
+      .expect(409);
   });
 
   it('rejects invalid participant counts without consuming the Guest Play Allowance', async () => {

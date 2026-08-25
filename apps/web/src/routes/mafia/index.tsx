@@ -16,7 +16,7 @@ function MafiaControlRoom() {
   const sessionQuery = useGameSessionProjection(sessionId);
   useGameSessionSubscription(sessionId);
 
-  if (isCreating || sessionQuery.isPending) {
+  if (isCreating || sessionQuery.fetchStatus === 'fetching') {
     return <ControlRoomLoading />;
   }
 

@@ -1,10 +1,10 @@
 import { EyeOffIcon, RadioIcon, TimerIcon, UsersIcon } from 'lucide-react';
 
-import type { GameSessionProjection } from '@/lib/game-session-api';
+import type { MafiaGameProjection } from '@/lib/game-session-api';
 
 import { useDeadlineCountdown } from '../-hooks/use-deadline-countdown';
 
-export function ControlRoom({ projection }: { projection: GameSessionProjection }) {
+export function ControlRoom({ projection }: { projection: MafiaGameProjection }) {
   const deadline = useDeadlineCountdown(projection.public.phaseDeadline);
 
   return (

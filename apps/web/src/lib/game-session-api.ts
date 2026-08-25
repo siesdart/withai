@@ -30,14 +30,12 @@ async function* gameSessionEvents(
   }
 }
 
-export async function getInitialGameSessionSnapshot(
-  sessionId: string,
-): Promise<MafiaGameProjection> {
-  for await (const projection of gameSessionEvents(sessionId)) {
-    return projection;
-  }
+export async function getGameSessionSnapshot(sessionId: string): Promise<MafiaGameProjection> {
+  const response = await gameSessionsApi.get<MafiaGameProjection>(
+    `/game-sessions/${sessionId}/snapshot`,
+  );
 
-  throw new Error('Unable to load this Game Session.');
+  return response.json();
 }
 
 export async function subscribeToGameSession(

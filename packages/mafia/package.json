@@ -1,0 +1,23 @@
+{
+  "name": "@repo/mafia",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    ".": {
+      "types": "./dist/entry.d.ts",
+      "default": "./dist/entry.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@repo/game-contract": "workspace:*"
+  },
+  "devDependencies": {
+    "@repo/oxlint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^26.2.0",
+    "typescript": "6.0.3"
+  }
+}

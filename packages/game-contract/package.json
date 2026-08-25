@@ -1,0 +1,19 @@
+{
+  "name": "@repo/game-contract",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    ".": {
+      "types": "./dist/entry.d.ts",
+      "default": "./dist/entry.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "devDependencies": {
+    "@repo/oxlint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "typescript": "6.0.3"
+  }
+}

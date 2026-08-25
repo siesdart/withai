@@ -2,7 +2,9 @@
 
 ## TypeScript: ALWAYS read docs before coding
 
-- Before any TypeScript work, find and read the relevant doc in `/typescript-functional-patterns`.
+- Before any TypeScript work, find and read the relevant doc in `/typescript-functional-patterns` and install and use those packages if necessary.
+- Use `ky` package instead of native `fetch`.
+- Use `dayjs` first when doing time-related work.
 
 ## React: ALWAYS read docs before coding
 
@@ -23,6 +25,10 @@
 
 - Always use TanStack Query when writing server-state code.
 - Before any Tanstack Query work, find and read the relevant doc in `/router-query`.
+
+## Nest.js
+
+- When creating or changing API endpoints, reflect them in the Scalar API Reference.
 
 ## Linting and formatting
 

@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { useCallback } from 'react';
 
@@ -7,6 +8,7 @@ import { useGameSessionStore } from '@/lib/stores/game-session';
 import { ControlRoom } from '@/routes/mafia/-components/control-room';
 import { ControlRoomError } from '@/routes/mafia/-components/control-room-error';
 import { ControlRoomLoading } from '@/routes/mafia/-components/control-room-loading';
+import { gameSessionSnapshotOptions } from '@/routes/mafia/-hooks/use-game-session-snapshot';
 import { useGameSessionSnapshot } from '@/routes/mafia/-hooks/use-game-session-snapshot';
 import { useGameSessionSubscription } from '@/routes/mafia/-hooks/use-game-session-subscription';
 
@@ -28,15 +30,31 @@ export const Route = createFileRoute('/mafia/')({
       },
     );
   },
+  loader: ({ context }) => {
+    const { sessionId } = useGameSessionStore.getState();
+    if (sessionId) {
+      void context.queryClient.query({
+        ...gameSessionSnapshotOptions(sessionId),
+        staleTime: 'static',
+      });
+    }
+  },
   component: () => {
     const { sessionId } = Route.useRouteContext();
     return <MafiaControlRoom sessionId={sessionId} />;
   },
   errorComponent: ({ error }) => {
     const router = useRouter();
+    const queryClient = useQueryClient();
     const onRetry = useCallback(() => {
+      const { sessionId } = useGameSessionStore.getState();
+      if (sessionId) {
+        void queryClient.invalidateQueries({
+          queryKey: gameSessionSnapshotOptions(sessionId).queryKey,
+        });
+      }
       void router.invalidate();
-    }, [router]);
+    }, [queryClient, router]);
     const onStartNewGame = useCallback(() => {
       useGameSessionStore.getState().clearSession();
       void router.invalidate();
@@ -60,5 +78,6 @@ export const Route = createFileRoute('/mafia/')({
 function MafiaControlRoom({ sessionId }: { sessionId: string }) {
   const { snapshot } = useGameSessionSnapshot(sessionId);
   const { isReconnecting } = useGameSessionSubscription(sessionId);
+
   return <ControlRoom isReconnecting={isReconnecting} snapshot={snapshot} />;
 }

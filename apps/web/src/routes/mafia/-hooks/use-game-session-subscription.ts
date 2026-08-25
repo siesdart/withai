@@ -4,7 +4,7 @@ import { match } from 'ts-pattern';
 
 import { subscribeToGameSession } from '@/lib/api/game-session/api';
 
-import { gameSessionSnapshotQueryKey } from './use-game-session-snapshot';
+import { gameSessionSnapshotOptions } from './use-game-session-snapshot';
 
 export function useGameSessionSubscription(sessionId: string | undefined) {
   const queryClient = useQueryClient();
@@ -27,13 +27,11 @@ export function useGameSessionSubscription(sessionId: string | undefined) {
           onConnected: () => {
             retryCount = 0;
             setIsReconnecting(false);
-            void queryClient.invalidateQueries({
-              queryKey: gameSessionSnapshotQueryKey(sessionId),
-            });
+            void queryClient.invalidateQueries(gameSessionSnapshotOptions(sessionId));
           },
           onProjection: (projection, eventId) => {
             lastEventId = eventId;
-            queryClient.setQueryData(gameSessionSnapshotQueryKey(sessionId), projection);
+            queryClient.setQueryData(gameSessionSnapshotOptions(sessionId).queryKey, projection);
           },
           signal: abortController.signal,
         });
@@ -44,9 +42,7 @@ export function useGameSessionSubscription(sessionId: string | undefined) {
             match(error)
               .with({ type: 'aborted' }, () => false)
               .with({ type: 'unavailable' }, () => {
-                void queryClient.invalidateQueries({
-                  queryKey: gameSessionSnapshotQueryKey(sessionId),
-                });
+                void queryClient.invalidateQueries(gameSessionSnapshotOptions(sessionId));
                 return false;
               })
               .with({ type: 'invalid-event' }, () => true)

@@ -28,15 +28,11 @@ export const Route = createFileRoute('/mafia')({
       },
     );
   },
-  loader: ({ context }) => {
-    const { sessionId } = useGameSessionStore.getState();
-    if (sessionId) {
-      void context.queryClient.query({
-        ...gameSessionSnapshotOptions(sessionId),
-        staleTime: 'static',
-      });
-    }
-  },
+  loader: ({ context }) =>
+    context.queryClient.query({
+      ...gameSessionSnapshotOptions(context.sessionId),
+      staleTime: 'static',
+    }),
   component: () => {
     const { sessionId } = Route.useRouteContext();
     return <MafiaSessionPage sessionId={sessionId} />;
@@ -47,7 +43,7 @@ export const Route = createFileRoute('/mafia')({
     const onRetry = useCallback(() => {
       const { sessionId } = useGameSessionStore.getState();
       if (sessionId) {
-        void queryClient.invalidateQueries({
+        queryClient.removeQueries({
           queryKey: gameSessionSnapshotOptions(sessionId).queryKey,
         });
       }

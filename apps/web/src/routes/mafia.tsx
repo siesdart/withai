@@ -2,17 +2,15 @@ import { useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { useCallback } from 'react';
 
-import { createMafiaGameSession } from '@/lib/api/game-session/api';
-import { isUnavailableGameSession } from '@/lib/api/game-session/error';
-import { useGameSessionStore } from '@/lib/stores/game-session';
-import { ControlRoom } from '@/routes/mafia/-components/control-room';
-import { ControlRoomError } from '@/routes/mafia/-components/control-room-error';
-import { ControlRoomLoading } from '@/routes/mafia/-components/control-room-loading';
-import { gameSessionSnapshotOptions } from '@/routes/mafia/-hooks/use-game-session-snapshot';
-import { useGameSessionSnapshot } from '@/routes/mafia/-hooks/use-game-session-snapshot';
-import { useGameSessionSubscription } from '@/routes/mafia/-hooks/use-game-session-subscription';
+import { createMafiaGameSession } from '@/features/mafia-session/api/api';
+import { isUnavailableGameSession } from '@/features/mafia-session/api/error';
+import { ControlRoomError } from '@/features/mafia-session/components/control-room-error';
+import { ControlRoomLoading } from '@/features/mafia-session/components/control-room-loading';
+import { MafiaSessionPage } from '@/features/mafia-session/components/mafia-session-page';
+import { gameSessionSnapshotOptions } from '@/features/mafia-session/hooks/use-game-session-snapshot';
+import { useGameSessionStore } from '@/features/mafia-session/store/game-session';
 
-export const Route = createFileRoute('/mafia/')({
+export const Route = createFileRoute('/mafia')({
   beforeLoad: async (): Promise<{ sessionId: string }> => {
     const { sessionId, ensureCreationKey, setSessionId } = useGameSessionStore.getState();
     if (sessionId) {
@@ -41,7 +39,7 @@ export const Route = createFileRoute('/mafia/')({
   },
   component: () => {
     const { sessionId } = Route.useRouteContext();
-    return <MafiaControlRoom sessionId={sessionId} />;
+    return <MafiaSessionPage sessionId={sessionId} />;
   },
   errorComponent: ({ error }) => {
     const router = useRouter();
@@ -74,10 +72,3 @@ export const Route = createFileRoute('/mafia/')({
   },
   pendingComponent: ControlRoomLoading,
 });
-
-function MafiaControlRoom({ sessionId }: { sessionId: string }) {
-  const { snapshot } = useGameSessionSnapshot(sessionId);
-  const { isReconnecting } = useGameSessionSubscription(sessionId);
-
-  return <ControlRoom isReconnecting={isReconnecting} snapshot={snapshot} />;
-}

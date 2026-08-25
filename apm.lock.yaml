@@ -1,5 +1,5 @@
 lockfile_version: '1'
-generated_at: '2026-08-25T18:55:39.062624+00:00'
+generated_at: '2026-08-25T18:56:33.671277+00:00'
 apm_version: 0.28.0
 dependencies:
 - repo_url: addyosmani/web-quality-skills
@@ -144,9 +144,11 @@ dependencies:
   name: skills
   host: github.com
   resolved_commit: d7b6415f4663a410174d174da8c50d48acb79941
-  version: 0.0.0
+  version: unknown
   package_type: skill_bundle
   deployed_files:
+  - .agents/skills/canonical-package-layout
+  - .agents/skills/canonical-package-layout/SKILL.md
   - .agents/skills/react-view-logic-boundaries
   - .agents/skills/react-view-logic-boundaries/SKILL.md
   - .agents/skills/react-view-logic-boundaries/agents/openai.yaml
@@ -155,6 +157,7 @@ dependencies:
   - .agents/skills/typescript-functional-patterns/agents/openai.yaml
   - .agents/skills/typescript-functional-patterns/references/PATTERNS.md
   deployed_file_hashes:
+    .agents/skills/canonical-package-layout/SKILL.md: sha256:e8ea816a0d58d329feaba3baaab9ccdc38642c3741485f02efa89f10f916756b
     .agents/skills/react-view-logic-boundaries/SKILL.md: sha256:3457fcd0bf8c1c99baec4c3eb880e9fff528203f1d82e460c2ac512f8d36db67
     .agents/skills/react-view-logic-boundaries/agents/openai.yaml: sha256:b822e2c4346135d4434fc465dd7347c0a848cc41eb694e8d52596a24f3868ac4
     .agents/skills/typescript-functional-patterns/SKILL.md: sha256:835a9686d0234cc29b24286221129e6f54b5deb5c76b706ec902257efea20c3e
@@ -162,6 +165,7 @@ dependencies:
     .agents/skills/typescript-functional-patterns/references/PATTERNS.md: sha256:aefc97d0b0a6e4c0e1b0fcec98a221ff84c1aedb27b70e9c6680a4d3a9f6c20a
   content_hash: sha256:c068c5e61af9b768f7667b26e9a873428f2fdf2d625b3a7294f55c3b722c5d43
   skill_subset:
+  - canonical-package-layout
   - react-view-logic-boundaries
   - typescript-functional-patterns
 - repo_url: tanstack/ai
@@ -424,7 +428,7 @@ dependencies:
   name: turborepo
   host: github.com
   resolved_commit: 32748f5ba4d777e3e5d44809c51a135dbd813edb
-  version: 0.0.0
+  version: unknown
   package_type: skill_bundle
   deployed_files:
   - .agents/skills/turborepo
@@ -708,6 +712,24 @@ deployments:
   - leonxlnx/taste-skill
   active_owner: leonxlnx/taste-skill
   content_hash: sha256:fffbaac8597f07679e9d87145533567658aedba3b5eca6f16a7075a333048caa
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/canonical-package-layout
+  runtime: null
+  scope: project
+  owners:
+  - siesdart/skills
+  active_owner: siesdart/skills
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/canonical-package-layout/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - siesdart/skills
+  active_owner: siesdart/skills
+  content_hash: sha256:e8ea816a0d58d329feaba3baaab9ccdc38642c3741485f02efa89f10f916756b
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/frontend-design

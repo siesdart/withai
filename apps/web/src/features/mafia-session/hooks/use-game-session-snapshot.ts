@@ -1,7 +1,7 @@
 import { queryOptions, useSuspenseQuery } from '@tanstack/react-query';
 
-import { getGameSessionSnapshot } from '@/lib/api/game-session/api';
-import { isUnavailableGameSession } from '@/lib/api/game-session/error';
+import { getGameSessionSnapshot } from '../api/api';
+import { isUnavailableGameSession } from '../api/error';
 
 export const gameSessionSnapshotOptions = (sessionId: string) =>
   queryOptions({

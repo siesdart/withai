@@ -2,8 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { match } from 'ts-pattern';
 
-import { subscribeToGameSession } from '@/lib/api/game-session/api';
-
+import { subscribeToGameSession } from '../api/api';
 import { gameSessionSnapshotOptions } from './use-game-session-snapshot';
 
 export function useGameSessionSubscription(sessionId: string | undefined) {

@@ -10,7 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as MafiaIndexRouteImport } from './routes/mafia/index'
+import { Route as MafiaRouteImport } from './routes/mafia'
 import { Route as PrototypeMafiaRouteImport } from './routes/prototype.mafia'
 
 const IndexRoute = IndexRouteImport.update({
@@ -18,9 +18,9 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const MafiaIndexRoute = MafiaIndexRouteImport.update({
-  id: '/mafia/',
-  path: '/mafia/',
+const MafiaRoute = MafiaRouteImport.update({
+  id: '/mafia',
+  path: '/mafia',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrototypeMafiaRoute = PrototypeMafiaRouteImport.update({
@@ -31,32 +31,32 @@ const PrototypeMafiaRoute = PrototypeMafiaRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/mafia': typeof MafiaRoute
   '/prototype/mafia': typeof PrototypeMafiaRoute
-  '/mafia/': typeof MafiaIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/mafia': typeof MafiaRoute
   '/prototype/mafia': typeof PrototypeMafiaRoute
-  '/mafia': typeof MafiaIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/mafia': typeof MafiaRoute
   '/prototype/mafia': typeof PrototypeMafiaRoute
-  '/mafia/': typeof MafiaIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/prototype/mafia' | '/mafia/'
+  fullPaths: '/' | '/mafia' | '/prototype/mafia'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/prototype/mafia' | '/mafia'
-  id: '__root__' | '/' | '/prototype/mafia' | '/mafia/'
+  to: '/' | '/mafia' | '/prototype/mafia'
+  id: '__root__' | '/' | '/mafia' | '/prototype/mafia'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  MafiaRoute: typeof MafiaRoute
   PrototypeMafiaRoute: typeof PrototypeMafiaRoute
-  MafiaIndexRoute: typeof MafiaIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -68,11 +68,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/mafia/': {
-      id: '/mafia/'
+    '/mafia': {
+      id: '/mafia'
       path: '/mafia'
-      fullPath: '/mafia/'
-      preLoaderRoute: typeof MafiaIndexRouteImport
+      fullPath: '/mafia'
+      preLoaderRoute: typeof MafiaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/prototype/mafia': {
@@ -87,8 +87,8 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  MafiaRoute: MafiaRoute,
   PrototypeMafiaRoute: PrototypeMafiaRoute,
-  MafiaIndexRoute: MafiaIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -5,13 +5,13 @@ import type { MafiaGameProjection } from '@/lib/game-session-api';
 import { useDeadlineCountdown } from '../-hooks/use-deadline-countdown';
 
 export function ControlRoom({
-  projection,
+  snapshot,
   isReconnecting,
 }: {
-  projection: MafiaGameProjection;
+  snapshot: MafiaGameProjection;
   isReconnecting: boolean;
 }) {
-  const deadline = useDeadlineCountdown(projection.public.phaseDeadline);
+  const deadline = useDeadlineCountdown(snapshot.public.phaseDeadline);
 
   return (
     <main className="min-h-dvh bg-[#e9e3d6] px-4 py-5 text-[#22221e] sm:px-8">
@@ -39,7 +39,7 @@ export function ControlRoom({
             <UsersIcon aria-hidden="true" /> Living participants
           </h2>
           <ul className="mt-4 flex flex-col gap-1">
-            {projection.public.participants.map((participant) => (
+            {snapshot.public.participants.map((participant) => (
               <li
                 key={participant.id}
                 className="flex items-center justify-between bg-[#ded6c8] px-2 py-2.5"
@@ -86,11 +86,11 @@ export function ControlRoom({
           <dl className="mt-5 flex flex-col gap-4">
             <div>
               <dt className="text-xs text-[#625e55]">Role</dt>
-              <dd className="mt-1 text-xl font-semibold">{projection.personal.role}</dd>
+              <dd className="mt-1 text-xl font-semibold">{snapshot.personal.role}</dd>
             </div>
             <div>
               <dt className="text-xs text-[#625e55]">Allegiance</dt>
-              <dd className="mt-1 text-lg font-semibold">{projection.personal.allegiance}</dd>
+              <dd className="mt-1 text-lg font-semibold">{snapshot.personal.allegiance}</dd>
             </div>
           </dl>
           <p className="mt-8 text-sm text-[#625e55]">

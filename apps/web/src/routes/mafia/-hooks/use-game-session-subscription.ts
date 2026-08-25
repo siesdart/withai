@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 
 import { isUnavailableGameSession, subscribeToGameSession } from '@/lib/game-session-api';
 
-import { gameSessionProjectionQueryKey } from './use-game-session-projection';
+import { gameSessionSnapshotQueryKey } from './use-game-session-snapshot';
 
 export function useGameSessionSubscription(sessionId: string | undefined) {
   const queryClient = useQueryClient();
@@ -28,12 +28,12 @@ export function useGameSessionSubscription(sessionId: string | undefined) {
               retryCount = 0;
               setIsReconnecting(false);
               void queryClient.invalidateQueries({
-                queryKey: gameSessionProjectionQueryKey(sessionId),
+                queryKey: gameSessionSnapshotQueryKey(sessionId),
               });
             },
             onProjection: (projection, eventId) => {
               lastEventId = eventId;
-              queryClient.setQueryData(gameSessionProjectionQueryKey(sessionId), projection);
+              queryClient.setQueryData(gameSessionSnapshotQueryKey(sessionId), projection);
             },
             signal: abortController.signal,
           });
@@ -43,7 +43,7 @@ export function useGameSessionSubscription(sessionId: string | undefined) {
           }
           if (isUnavailableGameSession(error)) {
             void queryClient.invalidateQueries({
-              queryKey: gameSessionProjectionQueryKey(sessionId),
+              queryKey: gameSessionSnapshotQueryKey(sessionId),
             });
             return;
           }

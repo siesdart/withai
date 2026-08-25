@@ -27,11 +27,6 @@ export type MafiaPersonalInformation = {
   allegiance: 'Mafia' | 'Citizen';
 };
 
-export type MafiaGameProjection = AuthorizedGameProjection<
-  MafiaPublicInformation,
-  MafiaPersonalInformation
->;
-
 const participantNames = [
   'You',
   'Mina',
@@ -72,6 +67,24 @@ function toPersonalInformation(participant: MafiaParticipant): MafiaPersonalInfo
   };
 }
 
+export class MafiaGameModule implements GameModule<
+  MafiaSessionInput,
+  MafiaPublicInformation,
+  MafiaPersonalInformation
+> {
+  create({
+    sessionId,
+    participantCount,
+    phaseDeadline,
+  }: MafiaSessionInput): GameModuleSession<MafiaPublicInformation, MafiaPersonalInformation> {
+    if (participantCount < 5 || participantCount > 10) {
+      throw new Error('A Mafia Game Session requires five to ten Participants.');
+    }
+
+    return new MafiaGameSession(sessionId, phaseDeadline, createParticipants(participantCount));
+  }
+}
+
 class MafiaGameSession implements GameModuleSession<
   MafiaPublicInformation,
   MafiaPersonalInformation
@@ -101,20 +114,7 @@ class MafiaGameSession implements GameModuleSession<
   }
 }
 
-export class MafiaGameModule implements GameModule<
-  MafiaSessionInput,
+export type MafiaGameProjection = AuthorizedGameProjection<
   MafiaPublicInformation,
   MafiaPersonalInformation
-> {
-  create({
-    sessionId,
-    participantCount,
-    phaseDeadline,
-  }: MafiaSessionInput): GameModuleSession<MafiaPublicInformation, MafiaPersonalInformation> {
-    if (participantCount < 5 || participantCount > 10) {
-      throw new Error('A Mafia Game Session requires five to ten Participants.');
-    }
-
-    return new MafiaGameSession(sessionId, phaseDeadline, createParticipants(participantCount));
-  }
-}
+>;

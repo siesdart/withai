@@ -1,11 +1,9 @@
-export type AuthorizedGameProjection<
+export type GameModule<
+  CreateInput,
   PublicInformation extends object,
   PersonalInformation extends object,
 > = {
-  eventId: number;
-  sessionId: string;
-  public: PublicInformation;
-  personal: PersonalInformation;
+  create(input: CreateInput): GameModuleSession<PublicInformation, PersonalInformation>;
 };
 
 export type GameModuleSession<
@@ -18,10 +16,12 @@ export type GameModuleSession<
   ): AuthorizedGameProjection<PublicInformation, PersonalInformation>;
 };
 
-export type GameModule<
-  CreateInput,
+export type AuthorizedGameProjection<
   PublicInformation extends object,
   PersonalInformation extends object,
 > = {
-  create(input: CreateInput): GameModuleSession<PublicInformation, PersonalInformation>;
+  eventId: number;
+  sessionId: string;
+  public: PublicInformation;
+  personal: PersonalInformation;
 };

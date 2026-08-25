@@ -24,7 +24,8 @@ import {
 import type { Request, Response } from 'express';
 import { map, type Observable } from 'rxjs';
 
-import { CreateMafiaSessionRequest, mafiaProjectionSchema } from './game-sessions.openapi';
+import { CreateMafiaSessionDto } from './dto/create-mafia-session.dto';
+import { MafiaGameSessionProjectionEntity } from './entities/mafia-game-session-projection.entity';
 import { GameSessionsService } from './game-sessions.service';
 
 @ApiTags('Game Sessions')
@@ -34,14 +35,14 @@ export class GameSessionsController {
 
   @Post('mafia')
   @ApiOperation({ summary: 'Create an anonymous Mafia Game Session' })
-  @ApiBody({ type: CreateMafiaSessionRequest })
+  @ApiBody({ type: CreateMafiaSessionDto })
   @ApiCreatedResponse({
     description: 'The initial authorized projection and a signed anonymous guest cookie.',
-    schema: mafiaProjectionSchema,
+    type: MafiaGameSessionProjectionEntity,
   })
   @ApiTooManyRequestsResponse({ description: 'The Guest Play Allowance is exhausted for today.' })
   createMafiaSession(
-    @Body() body: CreateMafiaSessionRequest,
+    @Body() body: CreateMafiaSessionDto,
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
   ) {
@@ -64,7 +65,7 @@ export class GameSessionsController {
   @Get(':sessionId/snapshot')
   @ApiOperation({ summary: 'Get the current authorized Game Session snapshot' })
   @ApiCookieAuth('withai_guest')
-  @ApiOkResponse({ schema: mafiaProjectionSchema })
+  @ApiOkResponse({ type: MafiaGameSessionProjectionEntity })
   @ApiForbiddenResponse({ description: 'The Game Session is unavailable to this guest.' })
   snapshot(@Param('sessionId') sessionId: string, @Req() request: Request) {
     return this.projectionFor(sessionId, request.headers.cookie);

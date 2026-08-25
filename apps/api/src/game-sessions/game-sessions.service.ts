@@ -1,32 +1,20 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
-import type { AuthorizedGameProjection, GameModuleSession } from '@repo/game-contract';
-import {
-  MafiaGameModule,
-  type MafiaPersonalInformation,
-  type MafiaPublicInformation,
-} from '@repo/mafia';
+import { MafiaGameModule } from '@repo/mafia';
 import { filter, type Observable, ReplaySubject } from 'rxjs';
+
+import type { MafiaGameSessionProjectionEntity } from './entities/mafia-game-session-projection.entity';
+import type { StoredGameSessionEntity } from './entities/stored-game-session.entity';
 
 const guestCookieName = 'withai_guest';
 const guestAllowance = 10;
 const dayDiscussionDurationMs = 2 * 60 * 1000;
 
-type MafiaProjection = AuthorizedGameProjection<MafiaPublicInformation, MafiaPersonalInformation>;
-
-type StoredGameSession = {
-  holderId: string;
-  humanParticipantId: string;
-  gameSession: GameModuleSession<MafiaPublicInformation, MafiaPersonalInformation>;
-  events: ReplaySubject<MafiaProjection>;
-  nextEventId: number;
-};
-
 @Injectable()
 export class GameSessionsService {
   private readonly mafiaModule = new MafiaGameModule();
-  private readonly sessions = new Map<string, StoredGameSession>();
+  private readonly sessions = new Map<string, StoredGameSessionEntity>();
   private readonly guestSessionCounts = new Map<string, number>();
   private readonly cookieSecret = this.guestCookieSecret();
 
@@ -48,11 +36,11 @@ export class GameSessionsService {
       participantCount,
       phaseDeadline: new Date(Date.now() + dayDiscussionDurationMs),
     });
-    const session: StoredGameSession = {
+    const session: StoredGameSessionEntity = {
       holderId,
       humanParticipantId: 'participant-1',
       gameSession,
-      events: new ReplaySubject<MafiaProjection>(100),
+      events: new ReplaySubject<MafiaGameSessionProjectionEntity>(100),
       nextEventId: 0,
     };
     this.sessions.set(sessionId, session);
@@ -60,7 +48,7 @@ export class GameSessionsService {
     return { holderId, projection: this.publishProjection(session) };
   }
 
-  getProjection(sessionId: string, cookie: string | undefined): MafiaProjection {
+  getProjection(sessionId: string, cookie: string | undefined): MafiaGameSessionProjectionEntity {
     const session = this.sessionForHolder(sessionId, cookie);
     return session.gameSession.projectionFor(session.humanParticipantId, session.nextEventId);
   }
@@ -69,7 +57,7 @@ export class GameSessionsService {
     sessionId: string,
     cookie: string | undefined,
     lastEventId: number | undefined,
-  ): Observable<MafiaProjection> {
+  ): Observable<MafiaGameSessionProjectionEntity> {
     return this.sessionForHolder(sessionId, cookie)
       .events.asObservable()
       .pipe(filter((projection) => lastEventId === undefined || projection.eventId > lastEventId));
@@ -139,7 +127,7 @@ export class GameSessionsService {
     return 'local-development-secret';
   }
 
-  private publishProjection(session: StoredGameSession) {
+  private publishProjection(session: StoredGameSessionEntity): MafiaGameSessionProjectionEntity {
     session.nextEventId += 1;
     const projection = session.gameSession.projectionFor(
       session.humanParticipantId,

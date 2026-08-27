@@ -1,13 +1,11 @@
-import { randomInt } from 'node:crypto';
-
-import type { AuthorizedGameProjection, GameModule, GameModuleSession } from '@repo/game-contract';
+import type { AuthorizedGameProjection, GameModuleSession } from '@repo/game-contract';
 import { err, ok, type Result } from 'neverthrow';
 import { filter, find, map, pipe } from 'remeda';
 import { match } from 'ts-pattern';
 
 import { mafiaGameConfig } from './config';
 import { resolveNomination, resolveVerdict } from './day-resolution';
-import { allegianceFor, createParticipants, toPersonalInformation } from './participants';
+import { allegianceFor, toPersonalInformation } from './participants';
 
 export { mafiaGameConfig } from './config';
 
@@ -80,13 +78,6 @@ export type MafiaDayDurations = {
   finalDefenceDurationMs: number;
   verdictDurationMs: number;
 };
-const defaultDayDurations: MafiaDayDurations = {
-  dayDiscussionDurationMs: mafiaGameConfig.dayDiscussionDurationMs,
-  nominationDurationMs: mafiaGameConfig.nominationDurationMs,
-  finalDefenceDurationMs: mafiaGameConfig.finalDefenceDurationMs,
-  verdictDurationMs: mafiaGameConfig.verdictDurationMs,
-};
-
 export class MafiaGameSession implements GameModuleSession<
   MafiaPublicInformation,
   MafiaPersonalInformation,

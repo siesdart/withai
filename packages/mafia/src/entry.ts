@@ -1,3 +1,4 @@
 export * from './config';
-export * from './mafia-game-session';
+export { MafiaGameSession } from './mafia-game-session';
 export * from './mafia-game-module';
+export type * from './types';

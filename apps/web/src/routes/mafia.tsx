@@ -4,9 +4,9 @@ import { useCallback } from 'react';
 
 import { createMafiaGameSession } from '@/features/mafia-session/api/api';
 import { isUnavailableGameSession } from '@/features/mafia-session/api/error';
+import { ControlRoom } from '@/features/mafia-session/components/control-room';
 import { ControlRoomError } from '@/features/mafia-session/components/control-room-error';
 import { ControlRoomLoading } from '@/features/mafia-session/components/control-room-loading';
-import { MafiaSessionPage } from '@/features/mafia-session/components/mafia-session-page';
 import { gameSessionSnapshotOptions } from '@/features/mafia-session/hooks/use-game-session-snapshot';
 import { useGameSessionStore } from '@/features/mafia-session/store/game-session';
 
@@ -35,7 +35,7 @@ export const Route = createFileRoute('/mafia')({
     }),
   component: () => {
     const { sessionId } = Route.useRouteContext();
-    return <MafiaSessionPage sessionId={sessionId} />;
+    return <ControlRoom sessionId={sessionId} />;
   },
   errorComponent: ({ error }) => {
     const router = useRouter();

@@ -11,7 +11,7 @@ import {
 import { Separator } from '@repo/ui/components/separator';
 import { RadioIcon } from 'lucide-react';
 
-import type { MafiaGameProjection } from '../api/api';
+import type { MafiaGameProjection } from '../../api/api';
 import { GameRecordMarker } from './game-record-marker';
 import { VoteStatus } from './vote-status';
 

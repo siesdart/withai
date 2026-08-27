@@ -1,4 +1,4 @@
-import type { MafiaGameProjection } from '../api/api';
+import type { MafiaGameProjection } from '../../api/api';
 
 export function PersonalInformation({
   personal,

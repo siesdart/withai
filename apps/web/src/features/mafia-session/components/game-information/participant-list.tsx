@@ -1,7 +1,7 @@
 import { Badge } from '@repo/ui/components/badge';
 import { cn } from '@repo/ui/lib/utils';
 
-import type { MafiaGameProjection } from '../api/api';
+import type { MafiaGameProjection } from '../../api/api';
 
 export function ParticipantList({
   participants,

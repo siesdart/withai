@@ -1,7 +1,7 @@
 /* oxlint-disable react-perf/jsx-no-new-function-as-prop -- each rendered Participant needs a bound Nomination intent. */
 import { Button } from '@repo/ui/components/button';
 
-import type { MafiaGameProjection } from '../api/api';
+import type { MafiaGameProjection } from '../../api/api';
 
 type NominationControlsProps = {
   disabled: boolean;

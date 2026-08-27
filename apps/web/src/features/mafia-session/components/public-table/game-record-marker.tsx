@@ -2,7 +2,7 @@ import { Marker, MarkerContent, MarkerIcon } from '@repo/ui/components/marker';
 import { ScrollTextIcon } from 'lucide-react';
 import { match } from 'ts-pattern';
 
-import type { MafiaGameProjection } from '../api/api';
+import type { MafiaGameProjection } from '../../api/api';
 
 type GameRecordMarkerProps = {
   outcome: Extract<

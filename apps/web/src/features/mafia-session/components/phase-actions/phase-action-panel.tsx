@@ -1,6 +1,6 @@
 import { match } from 'ts-pattern';
 
-import type { MafiaGameProjection } from '../api/api';
+import type { MafiaGameProjection } from '../../api/api';
 import { FinalDefenceForm } from './final-defence-form';
 import { NominationControls } from './nomination-controls';
 import { PublicSpeechComposer, type PublicSpeechControl } from './public-speech-composer';

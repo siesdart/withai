@@ -7,16 +7,16 @@ import {
 } from '@repo/ui/components/accordion';
 import { EyeOffIcon, UsersIcon } from 'lucide-react';
 
-import { useDayAction } from '../hooks/use-day-action';
-import { useDeadlineCountdown } from '../hooks/use-deadline-countdown';
-import { useGameSessionSnapshot } from '../hooks/use-game-session-snapshot';
-import { useGameSessionSubscription } from '../hooks/use-game-session-subscription';
-import { usePublicSpeech } from '../hooks/use-public-speech';
-import { GamePhaseStatus } from './game-phase-status';
-import { ParticipantList } from './participant-list';
-import { PersonalInformation } from './personal-information';
-import { PhaseActionPanel } from './phase-action-panel';
-import { PublicDiscussionPanel } from './public-discussion-panel';
+import { useDayAction } from '../../hooks/use-day-action';
+import { useDeadlineCountdown } from '../../hooks/use-deadline-countdown';
+import { useGameSessionSnapshot } from '../../hooks/use-game-session-snapshot';
+import { useGameSessionSubscription } from '../../hooks/use-game-session-subscription';
+import { usePublicSpeech } from '../../hooks/use-public-speech';
+import { GamePhaseStatus } from '../game-information/game-phase-status';
+import { ParticipantList } from '../game-information/participant-list';
+import { PersonalInformation } from '../game-information/personal-information';
+import { PhaseActionPanel } from '../phase-actions/phase-action-panel';
+import { PublicDiscussionPanel } from '../public-table/public-discussion-panel';
 
 export function ControlRoom({ sessionId }: { sessionId: string }) {
   const { snapshot } = useGameSessionSnapshot(sessionId);

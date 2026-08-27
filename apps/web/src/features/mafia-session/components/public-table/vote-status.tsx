@@ -1,7 +1,7 @@
 import { Badge } from '@repo/ui/components/badge';
 import { CheckIcon, VoteIcon } from 'lucide-react';
 
-import type { MafiaGameProjection } from '../api/api';
+import type { MafiaGameProjection } from '../../api/api';
 
 type VoteStatusProps = {
   participants: MafiaGameProjection['public']['participants'];

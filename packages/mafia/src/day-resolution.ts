@@ -1,3 +1,5 @@
+import { countBy, filter, map, pipe, sort } from 'remeda';
+
 export type NominationVoteCount = { participantId: string; voteCount: number };
 export type NominationResolution =
   | {
@@ -14,18 +16,20 @@ export type NominationResolution =
     };
 
 export function resolveNomination(votes: ReadonlyMap<string, string>): NominationResolution {
-  const counts = new Map<string, number>();
-  for (const target of votes.values()) counts.set(target, (counts.get(target) ?? 0) + 1);
-  const voteCounts = [...counts.entries()]
-    .map(([participantId, voteCount]) => ({ participantId, voteCount }))
-    .toSorted(
+  const voteCounts = pipe(
+    Object.entries(countBy([...votes.values()], (target) => target)),
+    map(([participantId, voteCount]) => ({ participantId, voteCount })),
+    sort(
       (left, right) =>
         right.voteCount - left.voteCount || left.participantId.localeCompare(right.participantId),
-    );
-  const highest = Math.max(0, ...counts.values());
-  const leaders = [...counts.entries()]
-    .filter(([, count]) => count === highest)
-    .map(([participantId]) => participantId);
+    ),
+  );
+  const highest = voteCounts[0]?.voteCount ?? 0;
+  const leaders = pipe(
+    voteCounts,
+    filter(({ voteCount }) => voteCount === highest),
+    map(({ participantId }) => participantId),
+  );
   if (leaders.length === 0) return { type: 'no-nomination', leadingVoteCount: 0, voteCounts };
   return leaders.length === 1
     ? { type: 'nominated', participantId: leaders[0], leadingVoteCount: highest, voteCounts }
@@ -43,8 +47,9 @@ export function resolveVerdict(
   votes: ReadonlyMap<string, 'eliminate' | 'spare'>,
   livingParticipantCount: number,
 ): VerdictResolution {
-  const eliminateVotes = [...votes.values()].filter((vote) => vote === 'eliminate').length;
-  const spareVotes = [...votes.values()].filter((vote) => vote === 'spare').length;
+  const voteCounts = countBy([...votes.values()], (vote) => vote);
+  const eliminateVotes = voteCounts.eliminate ?? 0;
+  const spareVotes = voteCounts.spare ?? 0;
   const requiredEliminateVotes = Math.floor(livingParticipantCount / 2) + 1;
   const type =
     eliminateVotes >= requiredEliminateVotes

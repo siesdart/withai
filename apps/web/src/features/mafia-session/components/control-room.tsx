@@ -1,3 +1,9 @@
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@repo/ui/components/accordion';
 import { Bubble, BubbleContent } from '@repo/ui/components/bubble';
 import { Button } from '@repo/ui/components/button';
 import {
@@ -16,6 +22,8 @@ import type { MafiaGameProjection } from '../api/api';
 import { useDeadlineCountdown } from '../hooks/use-deadline-countdown';
 import { usePublicChatAutoScroll } from '../hooks/use-public-chat-auto-scroll';
 import type { UsePublicSpeechResult } from '../hooks/use-public-speech';
+import { ParticipantList } from './participant-list';
+import { PersonalInformation } from './personal-information';
 
 export function ControlRoom({
   snapshot,
@@ -35,22 +43,56 @@ export function ControlRoom({
   );
 
   return (
-    <main className="min-h-dvh bg-[#e9e3d6] px-4 py-5 text-[#22221e] sm:px-8 lg:flex lg:h-dvh lg:flex-col lg:overflow-hidden">
-      <header className="mx-auto flex w-full max-w-7xl shrink-0 items-center justify-between border-b-2 border-[#22221e] pb-5">
-        <div>
+    <main className="flex h-dvh flex-col overflow-hidden bg-[#e9e3d6] px-4 py-3 text-[#22221e] sm:px-8 sm:py-5">
+      <header className="mx-auto flex w-full max-w-7xl shrink-0 items-center justify-between border-b-2 border-[#22221e] pb-3 sm:pb-5">
+        <div className="min-w-0">
           <p className="text-xs tracking-[0.24em] text-[#625e55] uppercase">WithAI / Mafia</p>
-          <h1 className="mt-1 text-2xl font-semibold">Day 1 / Public discussion</h1>
+          <h1 className="mt-1 text-xl font-semibold sm:text-2xl">Day 1 / Public discussion</h1>
         </div>
-        <div className="flex items-center gap-2 text-sm text-[#625e55]">
-          <TimerIcon aria-hidden="true" />
-          <span>Deadline in {deadline}</span>
-          {isReconnecting ? <span aria-live="polite">Reconnecting live updates…</span> : null}
+        <div className="ml-3 flex shrink-0 items-center gap-1.5 text-xs text-[#625e55] sm:gap-2 sm:text-sm">
+          <TimerIcon aria-hidden="true" className="size-4" />
+          <span className="whitespace-nowrap">Deadline in {deadline}</span>
+          {isReconnecting ? (
+            <span aria-live="polite" className="sr-only">
+              Reconnecting live updates…
+            </span>
+          ) : null}
         </div>
       </header>
 
-      <div className="mx-auto grid w-full max-w-7xl gap-5 py-6 lg:min-h-0 lg:flex-1 lg:grid-cols-[15rem_minmax(0,1fr)_18rem]">
+      <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col gap-3 py-3 lg:grid lg:grid-cols-[15rem_minmax(0,1fr)_18rem] lg:gap-5 lg:py-6">
+        <Accordion className="border border-[#22221e]/45 bg-[#f4efe7] px-3 lg:hidden">
+          <AccordionItem value="participants">
+            <AccordionTrigger className="py-3 no-underline hover:no-underline">
+              <span className="flex min-w-0 items-center gap-2 text-xs tracking-[0.18em] text-[#625e55] uppercase">
+                <UsersIcon aria-hidden="true" /> Living participants
+              </span>
+              <span className="mr-2 text-xs tracking-normal text-[#625e55] normal-case">
+                {snapshot.public.participants.filter((participant) => participant.alive).length}{' '}
+                alive
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="pb-3">
+              <ParticipantList participants={snapshot.public.participants} />
+            </AccordionContent>
+          </AccordionItem>
+          <AccordionItem value="private-information">
+            <AccordionTrigger className="py-3 no-underline hover:no-underline">
+              <span className="flex min-w-0 items-center gap-2 text-xs tracking-[0.18em] text-[#a43b31] uppercase">
+                <EyeOffIcon aria-hidden="true" /> Your private information
+              </span>
+              <span className="mr-2 text-xs tracking-normal text-[#625e55] normal-case">
+                {snapshot.personal.role}
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="pb-3">
+              <PersonalInformation personal={snapshot.personal} compact />
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+
         <section
-          className="border border-[#22221e]/45 bg-[#f4efe7] p-4 lg:min-h-0 lg:overflow-y-auto"
+          className="hidden border border-[#22221e]/45 bg-[#f4efe7] p-4 lg:block lg:min-h-0 lg:overflow-y-auto"
           aria-labelledby="participants-heading"
         >
           <h2
@@ -59,40 +101,28 @@ export function ControlRoom({
           >
             <UsersIcon aria-hidden="true" /> Living participants
           </h2>
-          <ul className="mt-4 flex flex-col gap-1">
-            {snapshot.public.participants.map((participant) => (
-              <li
-                key={participant.id}
-                className="flex items-center justify-between bg-[#ded6c8] px-2 py-2.5"
-              >
-                <span>{participant.name}</span>
-                <span className="text-xs text-[#625e55]">
-                  {participant.alive ? 'alive' : 'out'}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <ParticipantList participants={snapshot.public.participants} />
         </section>
 
         <section
-          className="flex border border-[#22221e]/45 bg-[#f4efe7] lg:min-h-0 lg:flex-col"
+          className="flex min-h-0 flex-1 flex-col border border-[#22221e]/45 bg-[#f4efe7] lg:min-h-0"
           aria-labelledby="public-information-heading"
         >
-          <div className="border-b border-[#22221e]/25 p-5">
+          <div className="shrink-0 border-b border-[#22221e]/25 p-3 sm:p-5">
             <h2
               id="public-information-heading"
               className="flex items-center gap-2 text-xs tracking-[0.18em] text-[#625e55] uppercase"
             >
               <RadioIcon aria-hidden="true" /> Public information
             </h2>
-            <p className="mt-2 text-sm text-[#625e55]">
+            <p className="mt-1.5 text-xs text-[#625e55] sm:mt-2 sm:text-sm">
               The server has opened discussion. Every living Participant has the same public view.
             </p>
           </div>
-          <div className="relative flex min-h-56 flex-col lg:min-h-0 lg:flex-1">
+          <div className="relative flex min-h-0 flex-1 flex-col">
             <div
               ref={scrollContainerRef}
-              className="flex min-h-56 flex-col p-5 text-sm lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
+              className="flex min-h-0 flex-1 flex-col overflow-y-auto p-3 text-sm sm:p-5"
             >
               {snapshot.public.chat.length === 0 ? (
                 <p className="mt-auto text-[#625e55]">
@@ -145,7 +175,10 @@ export function ControlRoom({
             ) : null}
           </div>
           <Separator />
-          <form className="p-5" onSubmit={publicSpeech.submit}>
+          <form
+            className="shrink-0 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-5"
+            onSubmit={publicSpeech.submit}
+          >
             <FieldGroup>
               <Field
                 data-invalid={Boolean(publicSpeech.error)}
@@ -157,8 +190,9 @@ export function ControlRoom({
                   aria-invalid={Boolean(publicSpeech.error)}
                   disabled={publicSpeech.isPending || publicSpeech.isThrottled}
                   maxLength={500}
+                  name="public-speech"
                   onChange={publicSpeech.onContentChange}
-                  placeholder="Share your read with the table."
+                  placeholder="Share your read with the table…"
                   value={publicSpeech.content}
                 />
                 {publicSpeech.error ? <FieldError>{publicSpeech.error}</FieldError> : null}
@@ -186,7 +220,7 @@ export function ControlRoom({
         </section>
 
         <aside
-          className="border-2 border-[#a43b31] bg-[#f4efe7] p-4 lg:min-h-0 lg:overflow-y-auto"
+          className="hidden border-2 border-[#a43b31] bg-[#f4efe7] p-4 lg:block lg:min-h-0 lg:overflow-y-auto"
           aria-labelledby="personal-information-heading"
         >
           <h2
@@ -195,19 +229,7 @@ export function ControlRoom({
           >
             <EyeOffIcon aria-hidden="true" /> Your private information
           </h2>
-          <dl className="mt-5 flex flex-col gap-4">
-            <div>
-              <dt className="text-xs text-[#625e55]">Role</dt>
-              <dd className="mt-1 text-xl font-semibold">{snapshot.personal.role}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-[#625e55]">Allegiance</dt>
-              <dd className="mt-1 text-lg font-semibold">{snapshot.personal.allegiance}</dd>
-            </div>
-          </dl>
-          <p className="mt-8 text-sm text-[#625e55]">
-            Only this browser identity can reopen this Game Session.
-          </p>
+          <PersonalInformation personal={snapshot.personal} />
         </aside>
       </div>
     </main>

@@ -1,9 +1,4 @@
-import type { GameModuleSession } from '@repo/game-contract';
-import type {
-  MafiaPersonalInformation,
-  MafiaProjectionError,
-  MafiaPublicInformation,
-} from '@repo/mafia';
+import type { MafiaGameSession } from '@repo/mafia';
 import type { Dayjs } from 'dayjs';
 import { type ReplaySubject } from 'rxjs';
 
@@ -12,13 +7,13 @@ import type { MafiaGameSessionProjectionEntity } from './mafia-game-session-proj
 export type StoredGameSessionEntity = {
   holderId: string;
   humanParticipantId: string;
-  gameSession: GameModuleSession<
-    MafiaPublicInformation,
-    MafiaPersonalInformation,
-    MafiaProjectionError
-  >;
+  gameSession: MafiaGameSession;
   events: ReplaySubject<MafiaGameSessionProjectionEntity>;
   nextEventId: number;
   lastAccessedAt: Dayjs;
   activeEventSubscribers: number;
+  publicSpeechIdempotencyKeys: Map<
+    string,
+    { content: string; projection: MafiaGameSessionProjectionEntity }
+  >;
 };

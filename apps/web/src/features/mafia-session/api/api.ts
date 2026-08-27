@@ -39,6 +39,21 @@ export function getGameSessionSnapshot(
   );
 }
 
+export function submitPublicSpeech(
+  sessionId: string,
+  content: string,
+  idempotencyKey: string,
+): ResultAsync<MafiaGameProjection, GameSessionApiError> {
+  return requestMafiaGameProjection(
+    gameSessionsApi
+      .post(`/game-sessions/${sessionId}/actions/public-speech`, {
+        json: { content },
+        headers: { 'Idempotency-Key': idempotencyKey },
+      })
+      .json(),
+  );
+}
+
 export type GameSessionSubscriptionOptions = {
   lastEventId: string | undefined;
   onConnected: () => void;

@@ -44,6 +44,7 @@ export function useGameSessionSubscription(sessionId: string | undefined) {
                 void queryClient.invalidateQueries(gameSessionSnapshotOptions(sessionId));
                 return false;
               })
+              .with({ type: 'action-rejected' }, () => false)
               .with({ type: 'invalid-event' }, () => true)
               .with({ type: 'request-failed' }, () => true)
               .exhaustive(),

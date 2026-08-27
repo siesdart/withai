@@ -1,16 +1,34 @@
-import { EyeOffIcon, RadioIcon, TimerIcon, UsersIcon } from 'lucide-react';
+import { Bubble, BubbleContent } from '@repo/ui/components/bubble';
+import { Button } from '@repo/ui/components/button';
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from '@repo/ui/components/field';
+import { Message, MessageContent, MessageGroup, MessageHeader } from '@repo/ui/components/message';
+import { Separator } from '@repo/ui/components/separator';
+import { Textarea } from '@repo/ui/components/textarea';
+import { EyeOffIcon, RadioIcon, SendIcon, TimerIcon, UsersIcon } from 'lucide-react';
 
 import type { MafiaGameProjection } from '../api/api';
 import { useDeadlineCountdown } from '../hooks/use-deadline-countdown';
+import type { UsePublicSpeechResult } from '../hooks/use-public-speech';
 
 export function ControlRoom({
   snapshot,
   isReconnecting,
+  publicSpeech,
 }: {
   snapshot: MafiaGameProjection;
   isReconnecting: boolean;
+  publicSpeech: UsePublicSpeechResult;
 }) {
   const deadline = useDeadlineCountdown(snapshot.public.phaseDeadline);
+  const participantNames = new Map(
+    snapshot.public.participants.map((participant) => [participant.id, participant.name]),
+  );
 
   return (
     <main className="min-h-dvh bg-[#e9e3d6] px-4 py-5 text-[#22221e] sm:px-8">
@@ -67,9 +85,75 @@ export function ControlRoom({
               The server has opened discussion. Every living Participant has the same public view.
             </p>
           </div>
-          <div className="flex min-h-72 items-end p-5 text-sm text-[#625e55]">
-            Public Chat will appear here as ordered server events arrive.
+          <div className="flex min-h-56 flex-col p-5 text-sm">
+            {snapshot.public.chat.length === 0 ? (
+              <p className="mt-auto text-[#625e55]">
+                The table is waiting for the first public statement.
+              </p>
+            ) : (
+              <MessageGroup>
+                {snapshot.public.chat.map((message) => (
+                  <Message
+                    key={message.id}
+                    align={
+                      message.participantId === snapshot.personal.participantId ? 'end' : 'start'
+                    }
+                  >
+                    <MessageContent>
+                      <MessageHeader>
+                        {participantNames.get(message.participantId) ?? 'Participant'}
+                      </MessageHeader>
+                      <Bubble
+                        align={
+                          message.participantId === snapshot.personal.participantId
+                            ? 'end'
+                            : 'start'
+                        }
+                        variant={
+                          message.participantId === snapshot.personal.participantId
+                            ? 'tinted'
+                            : 'muted'
+                        }
+                      >
+                        <BubbleContent>{message.content}</BubbleContent>
+                      </Bubble>
+                    </MessageContent>
+                  </Message>
+                ))}
+              </MessageGroup>
+            )}
           </div>
+          <Separator />
+          <form className="p-5" onSubmit={publicSpeech.submit}>
+            <FieldGroup>
+              <Field
+                data-invalid={Boolean(publicSpeech.error)}
+                data-disabled={publicSpeech.isPending}
+              >
+                <FieldLabel htmlFor="public-speech">Your public statement</FieldLabel>
+                <Textarea
+                  id="public-speech"
+                  aria-invalid={Boolean(publicSpeech.error)}
+                  disabled={publicSpeech.isPending}
+                  maxLength={500}
+                  onChange={publicSpeech.onContentChange}
+                  placeholder="Share your read with the table."
+                  value={publicSpeech.content}
+                />
+                {publicSpeech.error ? <FieldError>{publicSpeech.error}</FieldError> : null}
+                <FieldDescription>Living Participants can see this immediately.</FieldDescription>
+                <div className="flex justify-end">
+                  <Button
+                    disabled={publicSpeech.isPending || !publicSpeech.content.trim()}
+                    type="submit"
+                  >
+                    <SendIcon data-icon="inline-end" />
+                    {publicSpeech.isPending ? 'Sending' : 'Speak publicly'}
+                  </Button>
+                </div>
+              </Field>
+            </FieldGroup>
+          </form>
         </section>
 
         <aside

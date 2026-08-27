@@ -110,6 +110,94 @@ describe('Mafia Game Session API', () => {
     expect(eventBody).toContain('"phase":"day-discussion"');
   });
 
+  it('accepts a living Human Player public speech once and publishes deterministic Agent replies', async () => {
+    const created = await request(app.getHttpServer())
+      .post('/game-sessions/mafia')
+      .send({ participantCount: 5 })
+      .expect(201);
+    const guestCookie = firstSetCookie(created.headers['set-cookie']);
+    const sessionId = String(created.body.sessionId);
+
+    const speech = await request(app.getHttpServer())
+      .post(`/game-sessions/${sessionId}/actions/public-speech`)
+      .set('Cookie', guestCookie)
+      .set('Idempotency-Key', 'a-public-speech-idempotency-key')
+      .send({ content: "I want to hear everyone's read before we nominate." })
+      .expect(201);
+
+    expect(speech.body).toMatchObject({
+      eventId: 2,
+      public: {
+        phase: 'day-discussion',
+        chat: [
+          {
+            participantId: 'participant-1',
+            content: "I want to hear everyone's read before we nominate.",
+          },
+        ],
+      },
+    });
+
+    const retried = await request(app.getHttpServer())
+      .post(`/game-sessions/${sessionId}/actions/public-speech`)
+      .set('Cookie', guestCookie)
+      .set('Idempotency-Key', 'a-public-speech-idempotency-key')
+      .send({ content: "I want to hear everyone's read before we nominate." })
+      .expect(201);
+
+    expect(retried.body.eventId).toBe(2);
+
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 600);
+    });
+
+    const snapshot = await request(app.getHttpServer())
+      .get(`/game-sessions/${sessionId}/snapshot`)
+      .set('Cookie', guestCookie)
+      .expect(200);
+
+    expect(snapshot.body.public.chat).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ participantId: 'participant-1' }),
+        expect.objectContaining({ participantId: 'participant-2' }),
+      ]),
+    );
+    expect(JSON.stringify(snapshot.body)).not.toContain('"persona":');
+    expect(JSON.stringify(snapshot.body)).not.toContain('"agentReasoning":');
+
+    const address = app.getHttpServer().address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Expected the API test server to have a TCP address.');
+    }
+
+    const catchUpBody = await new Promise<string>((resolve, reject) => {
+      const eventRequest = get(
+        {
+          hostname: '127.0.0.1',
+          port: address.port,
+          path: `/game-sessions/${sessionId}/events`,
+          headers: { Cookie: guestCookie, 'Last-Event-ID': '1' },
+        },
+        (eventResponse) => {
+          let body = '';
+          eventResponse.setEncoding('utf8');
+          eventResponse.on('data', (chunk) => {
+            body += chunk;
+            if (body.includes('id: 6')) {
+              eventResponse.destroy();
+              resolve(body);
+            }
+          });
+          eventResponse.on('error', reject);
+        },
+      );
+      eventRequest.on('error', reject);
+    });
+
+    expect(catchUpBody.indexOf('id: 2')).toBeLessThan(catchUpBody.indexOf('id: 3'));
+    expect(catchUpBody.indexOf('id: 3')).toBeLessThan(catchUpBody.indexOf('id: 6'));
+  });
+
   it('enforces ten new sessions per UTC day for one guest identity', async () => {
     const first = await request(app.getHttpServer())
       .post('/game-sessions/mafia')

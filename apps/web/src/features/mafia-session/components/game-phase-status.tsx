@@ -39,41 +39,40 @@ export function GamePhaseStatus({ dayNumber, phase, deadline }: GamePhaseStatusP
   const deadlineLabel = deadline.isExpired ? 'Resolving result' : `Deadline in ${deadline.label}`;
 
   return (
-    <section className="border-b-2 border-[#22221e] pb-3 sm:pb-5" aria-labelledby="phase-title">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs tracking-[0.24em] text-[#625e55] uppercase">WithAI / Mafia</p>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            <h1 id="phase-title" className="text-xl font-semibold sm:text-2xl">
-              Day {dayNumber} / {copy.title}
-            </h1>
-            <Badge variant={phase === 'completed' ? 'secondary' : 'outline'}>
-              {phase === 'completed' ? 'Complete' : 'Live phase'}
-            </Badge>
-          </div>
-          <p className="mt-1 text-xs text-[#625e55] sm:text-sm">{copy.detail}</p>
-        </div>
-        {phase !== 'completed' ? (
-          <div
-            className="flex shrink-0 items-center gap-1.5 text-xs text-[#625e55] sm:gap-2 sm:text-sm"
-            aria-live="polite"
-          >
-            <TimerIcon
-              aria-hidden="true"
-              className={deadline.isUrgent ? 'size-4 text-[#a43b31]' : 'size-4'}
-            />
-            <span
-              className={
-                deadline.isUrgent
-                  ? 'font-semibold whitespace-nowrap text-[#a43b31]'
-                  : 'whitespace-nowrap'
-              }
-            >
-              {deadlineLabel}
-            </span>
-          </div>
-        ) : null}
+    <section
+      className="relative min-w-0 gap-3 border-b-2 border-[#22221e] pb-3 sm:pb-5"
+      aria-labelledby="phase-title"
+    >
+      <p className="text-xs tracking-[0.24em] text-[#625e55] uppercase">WithAI / Mafia</p>
+      <div className="mt-1 flex flex-wrap items-center gap-2">
+        <h1 id="phase-title" className="text-xl font-semibold sm:text-2xl">
+          Day {dayNumber} / {copy.title}
+        </h1>
+        <Badge variant={phase === 'completed' ? 'secondary' : 'outline'}>
+          {phase === 'completed' ? 'Complete' : 'Live phase'}
+        </Badge>
       </div>
+      <p className="mt-1 text-xs text-[#625e55] sm:text-sm">{copy.detail}</p>
+      {phase !== 'completed' ? (
+        <div
+          className="absolute top-0 right-0 flex shrink-0 items-center gap-1.5 text-xs text-[#625e55] sm:gap-2 sm:text-sm"
+          aria-live="polite"
+        >
+          <TimerIcon
+            aria-hidden="true"
+            className={deadline.isUrgent ? 'size-4 text-[#a43b31]' : 'size-4'}
+          />
+          <span
+            className={
+              deadline.isUrgent
+                ? 'font-semibold whitespace-nowrap text-[#a43b31]'
+                : 'whitespace-nowrap'
+            }
+          >
+            {deadlineLabel}
+          </span>
+        </div>
+      ) : null}
     </section>
   );
 }

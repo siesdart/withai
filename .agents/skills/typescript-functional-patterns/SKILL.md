@@ -70,7 +70,26 @@ effects.
 
 ### 3. Build transformations as typed data flow
 
-Use Remeda to express a sequence as a left-to-right pipeline:
+Use Remeda's direct data-first call for exactly one operation:
+
+```ts
+const summary = pick(user, ["id", "name"]);
+```
+
+The **single-stage rule** is strict: do not write `pipe(value, fn(args))` when
+`fn` is the only transformation. Use `pipe` only when there are at least two
+data transformations to read from left to right:
+
+```ts
+const names = pipe(users, filter(isActive), map(toName));
+```
+
+The only local exceptions are when the function has no usable data-first form,
+or when a unary function is deliberately being passed to another higher-order
+API. In those cases, keep the exception local and make the reason apparent.
+
+For multi-stage work, use Remeda to express a sequence as a left-to-right
+pipeline:
 
 - Start with the input and use data-last operators for subsequent stages.
 - Keep each stage a named, total transformation when the stage has domain
@@ -92,7 +111,8 @@ corresponding Remeda primitive.
 
 Completion criterion: the pipeline has a clear input-to-output story, no stage
 silently swallows invalid data, and its complexity is lower than the equivalent
-nested or mutation-heavy code.
+nested or mutation-heavy code. Every one-operation Remeda use is a direct
+data-first call unless an explicit exception applies.
 
 ### 4. Model and compose recoverable failures
 
@@ -182,6 +202,7 @@ Before declaring TypeScript work complete, check:
 - Are union decisions exhaustive where the domain is closed?
 - Are collection transformations readable as data flow rather than callback
   nesting or mutation?
+- Does every one-operation Remeda transformation avoid a one-stage `pipe`?
 - Are side effects at the edge and translated into domain-level results once?
 - Did any helper exist only to satisfy a library style, or did it earn its
   interface through domain meaning, reuse, or a test seam?

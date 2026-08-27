@@ -20,7 +20,7 @@ dependencies:
         - react-view-logic-boundaries
         - typescript-functional-patterns
     - shadcn/ui
-    - vercel/turborepo
+    - vercel/turborepo#v2.10.11
     - TanStack/router/packages/router-core
     - TanStack/ai/packages/ai
     - Leonxlnx/taste-skill

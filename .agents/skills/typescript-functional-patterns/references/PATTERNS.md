@@ -28,10 +28,17 @@ const toVisibleUser = (user: User): VisibleUser => ({
 const visibleUsers = pipe(users, filter(isActive), map(toVisibleUser));
 ```
 
-When the operation is one step, data-first form is often clearer:
+When the operation is one step, use the direct data-first form. A one-stage
+`pipe` is not the default style:
 
 ```ts
 const activeCount = countBy(users, (user) => user.active);
+```
+
+Use `pipe` once there are at least two transformations:
+
+```ts
+const activeNames = pipe(users, filter(isActive), map(toUserName));
 ```
 
 The exact operator signature varies by Remeda version; use the installed

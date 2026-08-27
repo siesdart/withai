@@ -139,7 +139,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     cookie: string | undefined,
   ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
     this.cleanupExpiredSessions();
-    return this.sessionForHolder(sessionId, cookie).andThen((session) =>
+    return this.activeSessionForHolder(sessionId, cookie).andThen((session) =>
       this.projectionFor(session),
     );
   }
@@ -150,7 +150,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     lastEventId: number | undefined,
   ): Result<Observable<MafiaGameSessionProjectionEntity>, GameSessionError> {
     this.cleanupExpiredSessions();
-    return this.sessionForHolder(sessionId, cookie).map((session) =>
+    return this.activeSessionForHolder(sessionId, cookie).map((session) =>
       defer(() => {
         session.activeEventSubscribers += 1;
         this.touch(session);
@@ -182,7 +182,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     content: string,
     idempotencyKey: string,
   ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
-    return this.sessionForHolder(sessionId, cookie).andThen((session) => {
+    return this.activeSessionForHolder(sessionId, cookie).andThen((session) => {
       const previous = session.publicSpeechIdempotencyKeys.get(idempotencyKey);
       if (previous) {
         return previous.content === content
@@ -289,7 +289,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       session: StoredGameSessionEntity,
     ) => ReturnType<StoredGameSessionEntity['gameSession']['submitNomination']>,
   ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
-    return this.sessionForHolder(sessionId, cookie).andThen((session) => {
+    return this.activeSessionForHolder(sessionId, cookie).andThen((session) => {
       const previous = session.dayActionIdempotencyKeys.get(idempotencyKey);
       if (previous) {
         return previous.fingerprint === fingerprint
@@ -489,6 +489,26 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
     this.touch(session);
     return ok(session);
+  }
+
+  private activeSessionForHolder(
+    sessionId: string,
+    cookie: string | undefined,
+  ): Result<StoredGameSessionEntity, GameSessionError> {
+    return this.sessionForHolder(sessionId, cookie).andThen((session) =>
+      this.recoverExpiredPhase(session).map(() => session),
+    );
+  }
+
+  private recoverExpiredPhase(session: StoredGameSessionEntity): Result<void, GameSessionError> {
+    return session.gameSession.advanceDayPhase(new Date()).andThen((result) => {
+      if (result.type === 'not-due') return ok<void, GameSessionError>(undefined);
+
+      this.submitAgentDayActions(session);
+      return this.publishProjection(session)
+        .andTee(() => this.schedulePhaseTransition(session))
+        .map(() => undefined);
+    });
   }
 
   private projectionFor(

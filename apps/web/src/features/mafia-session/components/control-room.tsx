@@ -1,3 +1,4 @@
+/* oxlint-disable react-perf/jsx-no-jsx-as-prop, react-perf/jsx-no-new-function-as-prop, react-perf/jsx-no-new-object-as-prop -- session-owned actions are adapted into a semantic child contract at this composition boundary. */
 import {
   Accordion,
   AccordionContent,
@@ -14,6 +15,7 @@ import { usePublicSpeech } from '../hooks/use-public-speech';
 import { GamePhaseStatus } from './game-phase-status';
 import { ParticipantList } from './participant-list';
 import { PersonalInformation } from './personal-information';
+import { PhaseActionPanel } from './phase-action-panel';
 import { PublicDiscussionPanel } from './public-discussion-panel';
 
 export function ControlRoom({ sessionId }: { sessionId: string }) {
@@ -22,6 +24,9 @@ export function ControlRoom({ sessionId }: { sessionId: string }) {
   const publicSpeech = usePublicSpeech(sessionId);
   const dayAction = useDayAction(sessionId);
   const deadline = useDeadlineCountdown(snapshot.public.phaseDeadline);
+  const currentParticipantAlive = snapshot.public.participants.some(
+    (participant) => participant.id === snapshot.personal.participantId && participant.alive,
+  );
   const revealedAllegiances = new Map(
     snapshot.public.timeline.flatMap((item) =>
       item.type === 'record' && item.outcome.type === 'allegiance-reveal'
@@ -94,16 +99,35 @@ export function ControlRoom({ sessionId }: { sessionId: string }) {
 
         <PublicDiscussionPanel
           currentParticipantId={snapshot.personal.participantId}
-          currentParticipantAlive={snapshot.public.participants.some(
-            (participant) =>
-              participant.id === snapshot.personal.participantId && participant.alive,
-          )}
+          currentParticipantAlive={currentParticipantAlive}
           isReconnecting={isReconnecting}
-          isPhaseExpired={deadline.isExpired}
-          personalVote={snapshot.personal.vote}
           publicInformation={snapshot.public}
-          publicSpeech={publicSpeech}
-          dayAction={dayAction}
+          controls={
+            <PhaseActionPanel
+              currentParticipantId={snapshot.personal.participantId}
+              currentParticipantAlive={currentParticipantAlive}
+              isPhaseExpired={deadline.isExpired}
+              isSubmittingAction={dayAction.isPending}
+              onNominate={(targetParticipantId) =>
+                dayAction.submit({ type: 'nomination', targetParticipantId })
+              }
+              onSubmitFinalDefence={(content) =>
+                dayAction.submit({ type: 'final-defence', content })
+              }
+              onSubmitVerdict={(vote) => dayAction.submit({ type: 'verdict', vote })}
+              personalVote={snapshot.personal.vote}
+              publicInformation={snapshot.public}
+              speech={{
+                content: publicSpeech.content,
+                error: publicSpeech.error,
+                isPending: publicSpeech.isPending,
+                isThrottled: publicSpeech.isThrottled,
+                onContentChange: publicSpeech.onContentChange,
+                retryAfterSeconds: publicSpeech.retryAfterSeconds,
+                submitSpeech: publicSpeech.submit,
+              }}
+            />
+          }
         />
 
         <aside

@@ -18,21 +18,30 @@ const outcomeCopy = (
   participantNames: GameRecordMarkerProps['participantNames'],
 ) =>
   match(outcome)
-    .with({ type: 'nomination-resolved' }, (value) =>
-      value.result === 'nominated'
-        ? `Day ${value.dayNumber}: ${participantNames.get(value.nominatedParticipantId ?? '') ?? 'A participant'} was nominated with ${value.leadingVoteCount} vote${value.leadingVoteCount === 1 ? '' : 's'}.`
-        : value.result === 'nomination-tie'
-          ? `Day ${value.dayNumber}: nomination ended in a tie at ${value.leadingVoteCount} vote${value.leadingVoteCount === 1 ? '' : 's'}.`
-          : `Day ${value.dayNumber}: no nomination was submitted.`,
+    .with(
+      { type: 'nomination-resolved', result: 'nominated' },
+      (value) =>
+        `Day ${value.dayNumber}: ${participantNames.get(value.nominatedParticipantId ?? '') ?? 'A participant'} was nominated with ${value.leadingVoteCount} vote${value.leadingVoteCount === 1 ? '' : 's'}.`,
+    )
+    .with(
+      { type: 'nomination-resolved', result: 'nomination-tie' },
+      (value) =>
+        `Day ${value.dayNumber}: nomination ended in a tie at ${value.leadingVoteCount} vote${value.leadingVoteCount === 1 ? '' : 's'}.`,
+    )
+    .with(
+      { type: 'nomination-resolved', result: 'no-nomination' },
+      (value) => `Day ${value.dayNumber}: no nomination was submitted.`,
     )
     .with({ type: 'verdict-resolved' }, (value) => {
       const name = participantNames.get(value.participantId) ?? 'The nominated participant';
-      const result =
-        value.result === 'eliminate'
-          ? 'was eliminated'
-          : value.result === 'verdict-tie'
-            ? 'was spared after a tied verdict'
-            : 'was spared because elimination did not reach a majority';
+      const result = match(value)
+        .with({ result: 'eliminate' }, () => 'was eliminated')
+        .with({ result: 'verdict-tie' }, () => 'was spared after a tied verdict')
+        .with(
+          { result: 'no-majority' },
+          () => 'was spared because elimination did not reach a majority',
+        )
+        .exhaustive();
       return `Day ${value.dayNumber}: ${name} ${result}.`;
     })
     .with({ type: 'day-changed' }, (value) => `Day ${value.dayNumber} began.`)

@@ -5,6 +5,10 @@ import { err, ok, type Result } from 'neverthrow';
 import { filter, find, map, pipe } from 'remeda';
 import { match } from 'ts-pattern';
 
+import { mafiaGameConfig } from './config';
+
+export { mafiaGameConfig } from './config';
+
 export type MafiaSessionInput = {
   sessionId: string;
   participantCount: number;
@@ -78,7 +82,7 @@ export type MafiaAgentSpeechContext = {
 };
 
 function assignRoles(participantCount: number): MafiaRole[] {
-  const mafiaCount = participantCount <= 6 ? 1 : 2;
+  const mafiaCount = participantCount <= mafiaGameConfig.mafiaRoleThreshold ? 1 : 2;
   return [
     ...Array<MafiaRole>(mafiaCount).fill('Mafia'),
     'Detective',
@@ -137,7 +141,10 @@ export class MafiaGameModule implements GameModule<
     participantCount,
     phaseDeadline,
   }: MafiaSessionInput): Result<MafiaGameSession, MafiaSessionInputError> {
-    if (participantCount < 5 || participantCount > 10) {
+    if (
+      participantCount < mafiaGameConfig.minParticipantCount ||
+      participantCount > mafiaGameConfig.maxParticipantCount
+    ) {
       return err({ type: 'invalid-participant-count', participantCount });
     }
 
@@ -179,7 +186,7 @@ export class MafiaGameSession implements GameModuleSession<
     if (now >= this.phaseDeadline) {
       return err({ type: 'expired-phase', phaseDeadline: this.phaseDeadline.toISOString() });
     }
-    if (!content.trim() || content.length > 500) {
+    if (!content.trim() || content.length > mafiaGameConfig.maxPublicSpeechLength) {
       return err({ type: 'invalid-public-speech' });
     }
 

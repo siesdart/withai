@@ -4,6 +4,7 @@ import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Inject } from '@nestjs/common';
 import {
   MafiaGameModule,
+  mafiaGameConfig,
   type MafiaProjectionError,
   type MafiaSessionInputError,
 } from '@repo/mafia';
@@ -16,13 +17,7 @@ import { match, P } from 'ts-pattern';
 import { agentSpeechGateway, type AgentSpeechGateway } from './agent-speech.gateway';
 import type { MafiaGameSessionProjectionEntity } from './entities/mafia-game-session-projection.entity';
 import type { StoredGameSessionEntity } from './entities/stored-game-session.entity';
-
-const guestCookieName = 'withai_guest';
-const guestAllowance = 10;
-const dayDiscussionDurationMs = 2 * 60 * 1000;
-const publicSpeechCooldownMs = 1000;
-const sessionIdleTtlHours = 24;
-const cleanupIntervalMs = 60 * 60 * 1000;
+import { gameSessionsConfig } from './game-sessions.config';
 
 export type GameSessionError =
   | { type: 'idempotency-conflict' }
@@ -57,7 +52,10 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
   constructor(@Inject(agentSpeechGateway) private readonly speechGateway: AgentSpeechGateway) {}
 
   onModuleInit() {
-    this.cleanupTimer = setInterval(() => this.cleanupExpiredSessions(), cleanupIntervalMs);
+    this.cleanupTimer = setInterval(
+      () => this.cleanupExpiredSessions(),
+      gameSessionsConfig.cleanupIntervalMs,
+    );
     this.cleanupTimer.unref();
   }
 
@@ -69,7 +67,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
   createMafiaSession(
     cookie: string | undefined,
-    participantCount = 5,
+    participantCount: number = mafiaGameConfig.defaultParticipantCount,
     idempotencyKey: string | undefined,
   ): Result<CreatedMafiaSession, GameSessionError> {
     this.cleanupExpiredSessions();
@@ -93,7 +91,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
     const countKey = `${this.utcDay()}:${holderId}`;
     const count = this.guestSessionCounts.get(countKey) ?? 0;
-    if (count >= guestAllowance) {
+    if (count >= gameSessionsConfig.guestAllowance) {
       return err({ type: 'guest-allowance-exhausted' });
     }
 
@@ -101,7 +99,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     const gameSessionResult = this.mafiaModule.create({
       sessionId,
       participantCount,
-      phaseDeadline: new Date(Date.now() + dayDiscussionDurationMs),
+      phaseDeadline: new Date(Date.now() + mafiaGameConfig.dayDiscussionDurationMs),
     });
     if (gameSessionResult.isErr()) {
       return err({ type: 'invalid-mafia-session-input', cause: gameSessionResult.error });
@@ -112,7 +110,9 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       holderId,
       humanParticipantId: 'participant-1',
       gameSession,
-      events: new ReplaySubject<MafiaGameSessionProjectionEntity>(100),
+      events: new ReplaySubject<MafiaGameSessionProjectionEntity>(
+        gameSessionsConfig.eventReplayBufferSize,
+      ),
       nextEventId: 0,
       nextPublicSpeechAt: undefined,
       lastAccessedAt: dayjs(),
@@ -217,7 +217,10 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       }
 
       return this.publishProjection(session).andTee((projection) => {
-        session.nextPublicSpeechAt = now.add(publicSpeechCooldownMs, 'millisecond');
+        session.nextPublicSpeechAt = now.add(
+          gameSessionsConfig.publicSpeechCooldownMs,
+          'millisecond',
+        );
         session.publicSpeechIdempotencyKeys.set(idempotencyKey, { content, projection });
         this.publishAgentReplies(session);
       });
@@ -225,7 +228,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
   }
 
   guestCookieName() {
-    return guestCookieName;
+    return gameSessionsConfig.guestCookieName;
   }
 
   signGuestId(holderId: string) {
@@ -236,8 +239,8 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     const value = pipe(
       cookie?.split(';') ?? [],
       map((part) => part.trim()),
-      find((part) => part.startsWith(`${guestCookieName}=`)),
-    )?.slice(guestCookieName.length + 1);
+      find((part) => part.startsWith(`${gameSessionsConfig.guestCookieName}=`)),
+    )?.slice(gameSessionsConfig.guestCookieName.length + 1);
     if (!value) {
       return undefined;
     }
@@ -369,7 +372,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     for (const [sessionId, session] of this.sessions) {
       if (
         session.activeEventSubscribers > 0 ||
-        now.diff(session.lastAccessedAt, 'hour', true) < sessionIdleTtlHours
+        now.diff(session.lastAccessedAt, 'hour', true) < gameSessionsConfig.sessionIdleTtlHours
       ) {
         continue;
       }

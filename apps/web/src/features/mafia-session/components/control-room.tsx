@@ -128,13 +128,13 @@ export function ControlRoom({
             <FieldGroup>
               <Field
                 data-invalid={Boolean(publicSpeech.error)}
-                data-disabled={publicSpeech.isPending}
+                data-disabled={publicSpeech.isPending || publicSpeech.isThrottled}
               >
                 <FieldLabel htmlFor="public-speech">Your public statement</FieldLabel>
                 <Textarea
                   id="public-speech"
                   aria-invalid={Boolean(publicSpeech.error)}
-                  disabled={publicSpeech.isPending}
+                  disabled={publicSpeech.isPending || publicSpeech.isThrottled}
                   maxLength={500}
                   onChange={publicSpeech.onContentChange}
                   placeholder="Share your read with the table."
@@ -144,11 +144,19 @@ export function ControlRoom({
                 <FieldDescription>Living Participants can see this immediately.</FieldDescription>
                 <div className="flex justify-end">
                   <Button
-                    disabled={publicSpeech.isPending || !publicSpeech.content.trim()}
+                    disabled={
+                      publicSpeech.isPending ||
+                      publicSpeech.isThrottled ||
+                      !publicSpeech.content.trim()
+                    }
                     type="submit"
                   >
                     <SendIcon data-icon="inline-end" />
-                    {publicSpeech.isPending ? 'Sending' : 'Speak publicly'}
+                    {publicSpeech.isPending
+                      ? 'Sending'
+                      : publicSpeech.isThrottled
+                        ? `Wait ${publicSpeech.retryAfterSeconds ?? 1}s`
+                        : 'Speak publicly'}
                   </Button>
                 </div>
               </Field>

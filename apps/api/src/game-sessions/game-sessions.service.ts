@@ -20,6 +20,7 @@ import type { StoredGameSessionEntity } from './entities/stored-game-session.ent
 const guestCookieName = 'withai_guest';
 const guestAllowance = 10;
 const dayDiscussionDurationMs = 2 * 60 * 1000;
+const publicSpeechCooldownMs = 1000;
 const sessionIdleTtlHours = 24;
 const cleanupIntervalMs = 60 * 60 * 1000;
 
@@ -31,6 +32,7 @@ export type GameSessionError =
   | { type: 'invalid-mafia-session-input'; cause: MafiaSessionInputError }
   | { type: 'invalid-mafia-projection'; cause: MafiaProjectionError }
   | { type: 'public-speech-idempotency-conflict' }
+  | { type: 'public-speech-rate-limited'; retryAfterMs: number }
   | { type: 'invalid-public-speech' }
   | { type: 'expired-phase'; phaseDeadline: string }
   | { type: 'dead-participant'; participantId: string };
@@ -112,6 +114,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       gameSession,
       events: new ReplaySubject<MafiaGameSessionProjectionEntity>(100),
       nextEventId: 0,
+      nextPublicSpeechAt: undefined,
       lastAccessedAt: dayjs(),
       activeEventSubscribers: 0,
       publicSpeechIdempotencyKeys: new Map(),
@@ -183,6 +186,14 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
             });
       }
 
+      const now = dayjs();
+      if (session.nextPublicSpeechAt?.isAfter(now)) {
+        return err<MafiaGameSessionProjectionEntity, GameSessionError>({
+          type: 'public-speech-rate-limited',
+          retryAfterMs: session.nextPublicSpeechAt.diff(now),
+        });
+      }
+
       const speechResult = session.gameSession.submitPublicSpeech(
         session.humanParticipantId,
         content,
@@ -206,6 +217,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       }
 
       return this.publishProjection(session).andTee((projection) => {
+        session.nextPublicSpeechAt = now.add(publicSpeechCooldownMs, 'millisecond');
         session.publicSpeechIdempotencyKeys.set(idempotencyKey, { content, projection });
         this.publishAgentReplies(session);
       });

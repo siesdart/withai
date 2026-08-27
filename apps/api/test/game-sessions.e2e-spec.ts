@@ -198,6 +198,51 @@ describe('Mafia Game Session API', () => {
     expect(catchUpBody.indexOf('id: 3')).toBeLessThan(catchUpBody.indexOf('id: 6'));
   });
 
+  it('throttles new public speech while allowing an idempotent retry', async () => {
+    const created = await request(app.getHttpServer())
+      .post('/game-sessions/mafia')
+      .send({ participantCount: 5 })
+      .expect(201);
+    const guestCookie = firstSetCookie(created.headers['set-cookie']);
+    const sessionId = String(created.body.sessionId);
+    const firstKey = 'first-public-speech-idempotency-key';
+
+    const first = await request(app.getHttpServer())
+      .post(`/game-sessions/${sessionId}/actions/public-speech`)
+      .set('Cookie', guestCookie)
+      .set('Idempotency-Key', firstKey)
+      .send({ content: 'I want more time to consider the evidence.' })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post(`/game-sessions/${sessionId}/actions/public-speech`)
+      .set('Cookie', guestCookie)
+      .set('Idempotency-Key', 'second-public-speech-idempotency-key')
+      .send({ content: 'I have changed my mind.' })
+      .expect('Retry-After', '1')
+      .expect(429);
+
+    const retried = await request(app.getHttpServer())
+      .post(`/game-sessions/${sessionId}/actions/public-speech`)
+      .set('Cookie', guestCookie)
+      .set('Idempotency-Key', firstKey)
+      .send({ content: 'I want more time to consider the evidence.' })
+      .expect(201);
+
+    expect(retried.body.eventId).toBe(first.body.eventId);
+
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 1100);
+    });
+
+    await request(app.getHttpServer())
+      .post(`/game-sessions/${sessionId}/actions/public-speech`)
+      .set('Cookie', guestCookie)
+      .set('Idempotency-Key', 'second-public-speech-idempotency-key')
+      .send({ content: 'I have changed my mind.' })
+      .expect(201);
+  });
+
   it('enforces ten new sessions per UTC day for one guest identity', async () => {
     const first = await request(app.getHttpServer())
       .post('/game-sessions/mafia')

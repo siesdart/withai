@@ -45,6 +45,7 @@ export function useGameSessionSubscription(sessionId: string | undefined) {
                 return false;
               })
               .with({ type: 'action-rejected' }, () => false)
+              .with({ type: 'rate-limited' }, () => false)
               .with({ type: 'invalid-event' }, () => true)
               .with({ type: 'request-failed' }, () => true)
               .exhaustive(),

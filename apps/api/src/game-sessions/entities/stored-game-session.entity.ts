@@ -10,6 +10,7 @@ export type StoredGameSessionEntity = {
   gameSession: MafiaGameSession;
   events: ReplaySubject<MafiaGameSessionProjectionEntity>;
   nextEventId: number;
+  nextPublicSpeechAt: Dayjs | undefined;
   lastAccessedAt: Dayjs;
   activeEventSubscribers: number;
   publicSpeechIdempotencyKeys: Map<

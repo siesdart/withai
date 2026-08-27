@@ -114,6 +114,15 @@ export class GameSessionsController {
   @ApiCreatedResponse({ type: MafiaGameSessionProjectionEntity })
   @ApiBadRequestResponse({ description: 'The public speech is invalid or no longer permitted.' })
   @ApiConflictResponse({ description: 'The idempotency key was reused with a different action.' })
+  @ApiTooManyRequestsResponse({
+    description: 'The Human Player must wait before submitting another public speech.',
+    headers: {
+      'Retry-After': {
+        description: 'Seconds until another public speech may be submitted.',
+        schema: { type: 'integer', minimum: 1 },
+      },
+    },
+  })
   @ApiForbiddenResponse({
     description: 'The Game Session does not exist or is unavailable to this guest.',
   })
@@ -121,6 +130,7 @@ export class GameSessionsController {
     @Param('sessionId') sessionId: string,
     @Body() body: CreatePublicSpeechDto,
     @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
   ) {
     if (!idempotencyKey || idempotencyKey.length < 16 || idempotencyKey.length > 200) {
@@ -132,6 +142,13 @@ export class GameSessionsController {
       .match(
         (projection) => projection,
         (error) => {
+          if (error.type === 'public-speech-rate-limited') {
+            response.setHeader('Retry-After', String(Math.ceil(error.retryAfterMs / 1000)));
+            throw new HttpException(
+              'Please wait before submitting another public speech.',
+              HttpStatus.TOO_MANY_REQUESTS,
+            );
+          }
           throw this.toHttpException(error);
         },
       );
@@ -225,6 +242,14 @@ export class GameSessionsController {
           new HttpException(
             'The Idempotency-Key was already used with a different action.',
             HttpStatus.CONFLICT,
+          ),
+      )
+      .with(
+        { type: 'public-speech-rate-limited' },
+        () =>
+          new HttpException(
+            'Please wait before submitting another public speech.',
+            HttpStatus.TOO_MANY_REQUESTS,
           ),
       )
       .with(

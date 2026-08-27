@@ -108,14 +108,55 @@ describe('MafiaGameModule', () => {
     });
     const tiedNominationProjection = session.projectionFor('participant-1', 3);
     if (tiedNominationProjection.isErr()) throw new Error('Expected a projection.');
-    expect(tiedNominationProjection.value.public.outcomes).toEqual(
+    expect(tiedNominationProjection.value.public.timeline).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          type: 'nomination-resolved',
-          voteCounts: expect.arrayContaining([
-            { participantId: 'participant-2', voteCount: 1 },
-            { participantId: 'participant-3', voteCount: 1 },
-          ]),
+          type: 'record',
+          outcome: expect.objectContaining({
+            type: 'day-changed',
+            dayNumber: 1,
+          }),
+        }),
+        expect.objectContaining({
+          type: 'record',
+          outcome: expect.objectContaining({
+            type: 'phase-changed',
+            dayNumber: 1,
+            phase: 'day-discussion',
+          }),
+        }),
+        expect.objectContaining({
+          type: 'record',
+          outcome: expect.objectContaining({
+            type: 'phase-changed',
+            dayNumber: 1,
+            phase: 'nomination',
+          }),
+        }),
+        expect.objectContaining({
+          type: 'record',
+          outcome: expect.objectContaining({
+            type: 'nomination-resolved',
+            voteCounts: expect.arrayContaining([
+              { participantId: 'participant-2', voteCount: 1 },
+              { participantId: 'participant-3', voteCount: 1 },
+            ]),
+          }),
+        }),
+        expect.objectContaining({
+          type: 'record',
+          outcome: expect.objectContaining({
+            type: 'day-changed',
+            dayNumber: 2,
+          }),
+        }),
+        expect.objectContaining({
+          type: 'record',
+          outcome: expect.objectContaining({
+            type: 'phase-changed',
+            dayNumber: 2,
+            phase: 'day-discussion',
+          }),
         }),
       ]),
     );
@@ -174,10 +215,20 @@ describe('MafiaGameModule', () => {
     const projectionResult = session.projectionFor('participant-1', 9);
     if (projectionResult.isErr()) throw new Error('Expected a projection.');
     const projection = projectionResult.value;
-    expect(projection.public.outcomes).toEqual(
+    expect(projection.public.timeline).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ type: 'allegiance-reveal', allegiance: 'Mafia' }),
-        expect.objectContaining({ type: 'victory', allegiance: 'Citizen' }),
+        expect.objectContaining({
+          type: 'record',
+          outcome: expect.objectContaining({ type: 'allegiance-reveal', allegiance: 'Mafia' }),
+        }),
+        expect.objectContaining({
+          type: 'record',
+          outcome: expect.objectContaining({ type: 'victory', allegiance: 'Citizen' }),
+        }),
+        expect.objectContaining({
+          type: 'record',
+          outcome: expect.objectContaining({ type: 'phase-changed', phase: 'completed' }),
+        }),
       ]),
     );
     expect(projection.public.completedVoteRecords).toEqual(
@@ -194,18 +245,6 @@ describe('MafiaGameModule', () => {
         }),
       ]),
     );
-    expect(projection.public.timeline).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          type: 'record',
-          outcome: expect.objectContaining({ type: 'allegiance-reveal', allegiance: 'Mafia' }),
-        }),
-        expect.objectContaining({
-          type: 'record',
-          outcome: expect.objectContaining({ type: 'victory', allegiance: 'Citizen' }),
-        }),
-      ]),
-    );
-    expect(JSON.stringify(projection.public.outcomes)).not.toContain('Detective');
+    expect(JSON.stringify(projection.public.timeline)).not.toContain('Detective');
   });
 });

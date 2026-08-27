@@ -29,18 +29,9 @@ function isMafiaGameProjection(value: unknown): value is MafiaGameProjection {
         typeof participant.name === 'string' &&
         typeof participant.alive === 'boolean',
     ) &&
-    Array.isArray(publicInformation.chat) &&
-    publicInformation.chat.every(
-      (message) =>
-        isRecord(message) &&
-        typeof message.id === 'string' &&
-        typeof message.participantId === 'string' &&
-        typeof message.content === 'string',
-    ) &&
     (typeof publicInformation.nominatedParticipantId === 'string' ||
       publicInformation.nominatedParticipantId === null ||
       publicInformation.nominatedParticipantId === undefined) &&
-    Array.isArray(publicInformation.outcomes) &&
     Array.isArray(publicInformation.timeline) &&
     (publicInformation.voteStatus === null ||
       publicInformation.voteStatus === undefined ||

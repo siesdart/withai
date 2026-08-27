@@ -5,7 +5,10 @@ import { match } from 'ts-pattern';
 import type { MafiaGameProjection } from '../api/api';
 
 type GameRecordMarkerProps = {
-  outcome: MafiaGameProjection['public']['outcomes'][number];
+  outcome: Extract<
+    MafiaGameProjection['public']['timeline'][number],
+    { type: 'record' }
+  >['outcome'];
   completedVoteRecords: MafiaGameProjection['public']['completedVoteRecords'];
   participantNames: Map<string, string>;
 };
@@ -30,8 +33,26 @@ const outcomeCopy = (
           : value.result === 'verdict-tie'
             ? 'was spared after a tied verdict'
             : 'was spared because elimination did not reach a majority';
-      return `Day ${value.dayNumber}: ${name} ${result}. Eliminate ${value.eliminateVotes}, spare ${value.spareVotes}.`;
+      return `Day ${value.dayNumber}: ${name} ${result}.`;
     })
+    .with({ type: 'day-changed' }, (value) => `Day ${value.dayNumber} began.`)
+    .with(
+      { type: 'phase-changed', phase: 'day-discussion' },
+      (value) => `Day ${value.dayNumber}: discussion phase started.`,
+    )
+    .with(
+      { type: 'phase-changed', phase: 'nomination' },
+      (value) => `Day ${value.dayNumber}: nomination phase started.`,
+    )
+    .with(
+      { type: 'phase-changed', phase: 'final-defence' },
+      (value) => `Day ${value.dayNumber}: final defence phase started.`,
+    )
+    .with(
+      { type: 'phase-changed', phase: 'verdict' },
+      (value) => `Day ${value.dayNumber}: verdict phase started.`,
+    )
+    .with({ type: 'phase-changed', phase: 'completed' }, () => 'The game is complete.')
     .with(
       { type: 'allegiance-reveal' },
       (value) =>
@@ -62,11 +83,16 @@ export function GameRecordMarker({
         <MarkerIcon>
           <ScrollTextIcon />
         </MarkerIcon>
-        <MarkerContent>
+        <MarkerContent className="max-w-[calc(100%-3rem)]">
           {outcomeCopy(outcome, participantNames)}
           {outcome.type === 'nomination-resolved' && outcome.voteCounts.length > 0 ? (
             <span className="block">
               Vote totals: {nominationVoteTotals(outcome, participantNames)}
+            </span>
+          ) : null}
+          {outcome.type === 'verdict-resolved' ? (
+            <span className="block">
+              Eliminate {outcome.eliminateVotes}, spare {outcome.spareVotes}.
             </span>
           ) : null}
         </MarkerContent>

@@ -23,9 +23,9 @@ export function ControlRoom({ sessionId }: { sessionId: string }) {
   const dayAction = useDayAction(sessionId);
   const deadline = useDeadlineCountdown(snapshot.public.phaseDeadline);
   const revealedAllegiances = new Map(
-    snapshot.public.outcomes.flatMap((outcome) =>
-      outcome.type === 'allegiance-reveal'
-        ? [[outcome.participantId, outcome.allegiance] as const]
+    snapshot.public.timeline.flatMap((item) =>
+      item.type === 'record' && item.outcome.type === 'allegiance-reveal'
+        ? [[item.outcome.participantId, item.outcome.allegiance] as const]
         : [],
     ),
   );

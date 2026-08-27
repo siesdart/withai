@@ -57,6 +57,8 @@ export function PublicDiscussionPanel({
     (participant) => participant.id === publicInformation.nominatedParticipantId,
   );
   const isActionDisabled = dayAction.isPending || isPhaseExpired || !currentParticipantAlive;
+  const shouldShowPlayerControls =
+    currentParticipantAlive && publicInformation.phase !== 'completed';
 
   return (
     <section
@@ -131,8 +133,8 @@ export function PublicDiscussionPanel({
           </MessageScrollerButton>
         </MessageScroller>
       </MessageScrollerProvider>
-      <Separator />
-      {publicInformation.voteStatus ? (
+      {shouldShowPlayerControls ? <Separator /> : null}
+      {shouldShowPlayerControls && publicInformation.voteStatus ? (
         <div className="shrink-0 px-3 sm:px-5">
           <VoteStatus
             participants={publicInformation.participants}
@@ -141,7 +143,7 @@ export function PublicDiscussionPanel({
           />
         </div>
       ) : null}
-      {publicInformation.phase === 'day-discussion' ? (
+      {shouldShowPlayerControls && publicInformation.phase === 'day-discussion' ? (
         <form
           className="shrink-0 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-5"
           onSubmit={publicSpeech.submit}
@@ -197,7 +199,7 @@ export function PublicDiscussionPanel({
           </FieldGroup>
         </form>
       ) : null}
-      {publicInformation.phase === 'nomination' ? (
+      {shouldShowPlayerControls && publicInformation.phase === 'nomination' ? (
         <div className="flex shrink-0 flex-col gap-3 p-3 sm:p-5">
           <div>
             <h3 className="text-base font-medium">Choose a nominee</h3>
@@ -234,7 +236,7 @@ export function PublicDiscussionPanel({
           </div>
         </div>
       ) : null}
-      {publicInformation.phase === 'final-defence' ? (
+      {shouldShowPlayerControls && publicInformation.phase === 'final-defence' ? (
         <div className="shrink-0 p-3 sm:p-5">
           <h3 className="text-base font-medium">Final defence</h3>
           <p className="mt-1 text-sm text-[#625e55]">
@@ -267,7 +269,7 @@ export function PublicDiscussionPanel({
           ) : null}
         </div>
       ) : null}
-      {publicInformation.phase === 'verdict' ? (
+      {shouldShowPlayerControls && publicInformation.phase === 'verdict' ? (
         <div className="flex shrink-0 flex-col gap-3 p-3 sm:p-5">
           <div>
             <h3 className="text-base font-medium">

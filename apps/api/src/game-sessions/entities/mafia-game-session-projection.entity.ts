@@ -2,9 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import type {
   MafiaGameProjection,
   MafiaPersonalInformation,
-  MafiaPublicChatMessage,
   MafiaPublicInformation,
-  MafiaPublicOutcome,
   MafiaPublicVoteStatus,
   MafiaCompletedVoteRecord,
   MafiaPublicTimelineItem,
@@ -34,27 +32,11 @@ export class MafiaPublicInformationEntity implements MafiaPublicInformation {
   @ApiProperty({ type: () => MafiaParticipantEntity, isArray: true })
   participants!: ReadonlyArray<MafiaParticipantEntity>;
 
-  @ApiProperty({
-    type: 'array',
-    items: {
-      type: 'object',
-      properties: {
-        id: { type: 'string' },
-        participantId: { type: 'string' },
-        content: { type: 'string' },
-      },
-    },
-  })
-  chat!: ReadonlyArray<MafiaPublicChatMessage>;
-
   @ApiProperty({ nullable: true, example: 'participant-2' })
   nominatedParticipantId!: string | undefined;
 
   @ApiProperty({ nullable: true, type: Object })
   voteStatus!: MafiaPublicVoteStatus | undefined;
-
-  @ApiProperty({ type: 'array', items: { type: 'object' } })
-  outcomes!: ReadonlyArray<MafiaPublicOutcome>;
 
   @ApiProperty({ type: 'array', items: { type: 'object' } })
   timeline!: ReadonlyArray<MafiaPublicTimelineItem>;

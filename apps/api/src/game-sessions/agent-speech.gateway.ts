@@ -12,8 +12,8 @@ export const agentSpeechGateway = Symbol('agent-speech-gateway');
 
 export class DeterministicAgentSpeechGateway implements AgentSpeechGateway {
   decide(context: MafiaAgentSpeechContext): AgentSpeechDecision {
-    const latestMessage = context.public.chat.at(-1);
-    if (!latestMessage || latestMessage.participantId === context.participant.id) {
+    const latestChat = context.public.timeline.findLast((item) => item.type === 'chat');
+    if (!latestChat || latestChat.message.participantId === context.participant.id) {
       return { type: 'remain-silent' };
     }
 

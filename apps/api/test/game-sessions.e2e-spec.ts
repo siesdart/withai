@@ -129,14 +129,19 @@ describe('Mafia Game Session API', () => {
       eventId: 2,
       public: {
         phase: 'day-discussion',
-        chat: [
+        timeline: [
           {
-            participantId: 'participant-1',
-            content: "I want to hear everyone's read before we nominate.",
+            type: 'chat',
+            message: {
+              participantId: 'participant-1',
+              content: "I want to hear everyone's read before we nominate.",
+            },
           },
         ],
       },
     });
+    expect(speech.body.public).not.toHaveProperty('chat');
+    expect(speech.body.public).not.toHaveProperty('outcomes');
 
     const retried = await request(app.getHttpServer())
       .post(`/game-sessions/${sessionId}/actions/public-speech`)
@@ -156,10 +161,16 @@ describe('Mafia Game Session API', () => {
       .set('Cookie', guestCookie)
       .expect(200);
 
-    expect(snapshot.body.public.chat).toEqual(
+    expect(snapshot.body.public.timeline).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ participantId: 'participant-1' }),
-        expect.objectContaining({ participantId: 'participant-2' }),
+        expect.objectContaining({
+          type: 'chat',
+          message: expect.objectContaining({ participantId: 'participant-1' }),
+        }),
+        expect.objectContaining({
+          type: 'chat',
+          message: expect.objectContaining({ participantId: 'participant-2' }),
+        }),
       ]),
     );
     expect(JSON.stringify(snapshot.body)).not.toContain('"persona":');

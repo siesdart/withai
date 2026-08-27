@@ -1,4 +1,4 @@
-import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
 
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Inject } from '@nestjs/common';
@@ -10,7 +10,7 @@ import {
 } from '@repo/mafia';
 import dayjs from 'dayjs';
 import { err, ok, type Result } from 'neverthrow';
-import { find, map, pipe } from 'remeda';
+import { filter as filterValues, find, map, pipe } from 'remeda';
 import { defer, filter, finalize, type Observable, ReplaySubject } from 'rxjs';
 import { match, P } from 'ts-pattern';
 
@@ -455,15 +455,24 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     if (projection.isErr()) return;
     const agentIds = session.gameSession.livingAgentParticipantIds(session.humanParticipantId);
     if (projection.value.public.phase === 'nomination') {
-      const targetParticipantId = agentIds[0];
-      if (!targetParticipantId) return;
+      const livingParticipantIds = pipe(
+        projection.value.public.participants,
+        filterValues(({ alive }) => alive),
+        map(({ id }) => id),
+      );
+      if (livingParticipantIds.length === 0) return;
       for (const participantId of agentIds) {
+        const targetParticipantId = livingParticipantIds[randomInt(livingParticipantIds.length)];
+        if (!targetParticipantId) continue;
         session.gameSession.submitNomination(participantId, targetParticipantId);
       }
     }
     if (projection.value.public.phase === 'verdict') {
       for (const participantId of agentIds) {
-        session.gameSession.submitVerdict(participantId, 'eliminate');
+        session.gameSession.submitVerdict(
+          participantId,
+          randomInt(2) === 0 ? 'eliminate' : 'spare',
+        );
       }
     }
   }

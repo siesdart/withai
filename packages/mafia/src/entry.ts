@@ -11,7 +11,6 @@ export type {
   MafiaPublicChatMessage,
   MafiaPublicInformation,
   MafiaPublicOutcome,
-  MafiaPublicSpeechError,
 } from './mafia-game-session';
 export type {
   MafiaAllegiance,

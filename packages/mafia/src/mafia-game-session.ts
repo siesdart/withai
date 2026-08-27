@@ -43,7 +43,6 @@ export type MafiaActionError =
   | { type: 'not-nominated-participant'; participantId: string }
   | { type: 'invalid-target'; participantId: string }
   | { type: 'invalid-public-speech' };
-export type MafiaPublicSpeechError = MafiaActionError;
 export type MafiaAgentSpeechContext = {
   participant: Pick<MafiaParticipant, 'id' | 'name'>;
   persona: string;

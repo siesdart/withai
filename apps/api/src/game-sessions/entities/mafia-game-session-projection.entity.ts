@@ -5,6 +5,9 @@ import type {
   MafiaPublicChatMessage,
   MafiaPublicInformation,
   MafiaPublicOutcome,
+  MafiaPublicVoteStatus,
+  MafiaCompletedVoteRecord,
+  MafiaPublicTimelineItem,
 } from '@repo/mafia';
 
 export class MafiaParticipantEntity {
@@ -19,6 +22,9 @@ export class MafiaParticipantEntity {
 }
 
 export class MafiaPublicInformationEntity implements MafiaPublicInformation {
+  @ApiProperty({ example: 1 })
+  dayNumber!: number;
+
   @ApiProperty({ enum: ['day-discussion', 'nomination', 'final-defence', 'verdict', 'completed'] })
   phase!: MafiaPublicInformation['phase'];
 
@@ -44,8 +50,17 @@ export class MafiaPublicInformationEntity implements MafiaPublicInformation {
   @ApiProperty({ nullable: true, example: 'participant-2' })
   nominatedParticipantId!: string | undefined;
 
+  @ApiProperty({ nullable: true, type: Object })
+  voteStatus!: MafiaPublicVoteStatus | undefined;
+
   @ApiProperty({ type: 'array', items: { type: 'object' } })
   outcomes!: ReadonlyArray<MafiaPublicOutcome>;
+
+  @ApiProperty({ type: 'array', items: { type: 'object' } })
+  timeline!: ReadonlyArray<MafiaPublicTimelineItem>;
+
+  @ApiProperty({ type: 'array', items: { type: 'object' } })
+  completedVoteRecords!: ReadonlyArray<MafiaCompletedVoteRecord>;
 }
 
 export class MafiaPersonalInformationEntity implements MafiaPersonalInformation {
@@ -57,6 +72,9 @@ export class MafiaPersonalInformationEntity implements MafiaPersonalInformation 
 
   @ApiProperty({ enum: ['Mafia', 'Citizen'] })
   allegiance!: MafiaPersonalInformation['allegiance'];
+
+  @ApiProperty({ nullable: true, type: Object })
+  vote!: MafiaPersonalInformation['vote'];
 }
 
 export class MafiaGameSessionProjectionEntity implements MafiaGameProjection {

@@ -19,6 +19,7 @@ function isMafiaGameProjection(value: unknown): value is MafiaGameProjection {
     ['day-discussion', 'nomination', 'final-defence', 'verdict', 'completed'].includes(
       String(publicInformation.phase),
     ) &&
+    typeof publicInformation.dayNumber === 'number' &&
     typeof publicInformation.phaseDeadline === 'string' &&
     Array.isArray(publicInformation.participants) &&
     publicInformation.participants.every(
@@ -40,6 +41,16 @@ function isMafiaGameProjection(value: unknown): value is MafiaGameProjection {
       publicInformation.nominatedParticipantId === null ||
       publicInformation.nominatedParticipantId === undefined) &&
     Array.isArray(publicInformation.outcomes) &&
+    Array.isArray(publicInformation.timeline) &&
+    (publicInformation.voteStatus === null ||
+      publicInformation.voteStatus === undefined ||
+      (isRecord(publicInformation.voteStatus) &&
+        ['nomination', 'verdict'].includes(String(publicInformation.voteStatus.phase)) &&
+        Array.isArray(publicInformation.voteStatus.submittedParticipantIds) &&
+        publicInformation.voteStatus.submittedParticipantIds.every(
+          (participantId) => typeof participantId === 'string',
+        ))) &&
+    Array.isArray(publicInformation.completedVoteRecords) &&
     typeof personalInformation.participantId === 'string' &&
     ['Mafia', 'Detective', 'Doctor', 'Citizen'].includes(String(personalInformation.role)) &&
     ['Mafia', 'Citizen'].includes(String(personalInformation.allegiance))

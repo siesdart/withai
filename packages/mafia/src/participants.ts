@@ -9,6 +9,10 @@ export type MafiaPersonalInformation = {
   participantId: string;
   role: MafiaRole;
   allegiance: MafiaAllegiance;
+  vote:
+    | { phase: 'nomination'; targetParticipantId: string }
+    | { phase: 'verdict'; vote: 'eliminate' | 'spare' }
+    | undefined;
 };
 export type RandomInt = (maxExclusive: number) => number;
 
@@ -63,5 +67,6 @@ export const toPersonalInformation = (participant: MafiaParticipant): MafiaPerso
   participantId: participant.id,
   role: participant.role,
   allegiance: allegianceFor(participant.role),
+  vote: undefined,
 });
 export { allegianceFor };

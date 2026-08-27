@@ -92,9 +92,33 @@ describe('MafiaGameModule', () => {
       'participant-3',
       new Date('2026-08-26T00:00:01.000Z'),
     );
+    const nominationProjection = session.projectionFor('participant-1', 2);
+    if (nominationProjection.isErr()) throw new Error('Expected a projection.');
+    expect(nominationProjection.value.personal.vote).toEqual({
+      phase: 'nomination',
+      targetParticipantId: 'participant-2',
+    });
+    expect(nominationProjection.value.public.voteStatus).toEqual({
+      phase: 'nomination',
+      submittedParticipantIds: ['participant-1', 'participant-2'],
+    });
+    expect(nominationProjection.value.public.completedVoteRecords).toEqual([]);
     expect(session.advanceDayPhase(new Date('2026-08-26T00:00:02.000Z'))).toMatchObject({
       value: { type: 'day-restarted', reason: 'nomination-tie' },
     });
+    const tiedNominationProjection = session.projectionFor('participant-1', 3);
+    if (tiedNominationProjection.isErr()) throw new Error('Expected a projection.');
+    expect(tiedNominationProjection.value.public.outcomes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'nomination-resolved',
+          voteCounts: expect.arrayContaining([
+            { participantId: 'participant-2', voteCount: 1 },
+            { participantId: 'participant-3', voteCount: 1 },
+          ]),
+        }),
+      ]),
+    );
 
     expect(session.advanceDayPhase(new Date('2026-08-26T00:00:03.000Z'))).toMatchObject({
       value: { type: 'phase-advanced', phase: 'nomination' },
@@ -154,6 +178,32 @@ describe('MafiaGameModule', () => {
       expect.arrayContaining([
         expect.objectContaining({ type: 'allegiance-reveal', allegiance: 'Mafia' }),
         expect.objectContaining({ type: 'victory', allegiance: 'Citizen' }),
+      ]),
+    );
+    expect(projection.public.completedVoteRecords).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ phase: 'nomination' }),
+        expect.objectContaining({ phase: 'verdict' }),
+      ]),
+    );
+    expect(projection.public.completedVoteRecords[0]?.votes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          participantId: 'participant-1',
+          targetParticipantId: 'participant-5',
+        }),
+      ]),
+    );
+    expect(projection.public.timeline).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'record',
+          outcome: expect.objectContaining({ type: 'allegiance-reveal', allegiance: 'Mafia' }),
+        }),
+        expect.objectContaining({
+          type: 'record',
+          outcome: expect.objectContaining({ type: 'victory', allegiance: 'Citizen' }),
+        }),
       ]),
     );
     expect(JSON.stringify(projection.public.outcomes)).not.toContain('Detective');

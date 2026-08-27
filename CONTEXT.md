@@ -21,11 +21,11 @@ A stable set of behavioral traits and conversational tendencies that guides an A
 _Avoid_: Prompt, character sheet
 
 **Private Information**:
-Information visible only to the Participant it belongs to, including that Participant's role and private reasoning.
+Information visible only to the Participant it belongs to, including that Participant's Role, private reasoning, and active Vote Choice.
 _Avoid_: Secret (when referring to a role itself)
 
 **Public Information**:
-Information every living Participant may use, including public chat messages, game phase, living Participants, and announced outcomes.
+Information visible to Participants during a Game Session, including public chat messages, game phase, living Participants, vote status, and announced outcomes. It never includes an in-progress Vote Choice.
 _Avoid_: Shared state
 
 **Allegiance Reveal**:
@@ -73,6 +73,38 @@ _Avoid_: Auto-reply
 **Final Defence**:
 The nominated Participant's final public statement before the elimination decision is resolved.
 _Avoid_: Last words
+
+**Nomination**:
+The Day vote in which each living Participant chooses one living Participant for Final Defence. A unique highest total produces a Nominee; a tie or no submission produces no Nominee.
+_Avoid_: Accusation, primary vote
+
+**Nominee**:
+The Participant selected by a resolved Nomination to give a Final Defence and receive a Verdict.
+_Avoid_: Defendant, accused
+
+**Verdict**:
+The Day vote to eliminate or spare the Nominee. Elimination requires a strict majority of living Participants; otherwise the Nominee remains in the Game Session.
+_Avoid_: Execution vote, final vote
+
+**Vote Choice**:
+A Participant's selected Nomination target or Verdict. It is Private Information until the Game Session is completed.
+_Avoid_: Ballot, selection
+
+**Vote Status**:
+The Public Information that a living Participant has submitted a vote in the active Nomination or Verdict, without revealing that Participant's Vote Choice.
+_Avoid_: Vote reveal, ballot status
+
+**Vote Amendment**:
+The replacement of a Participant's Vote Choice during its active Phase. Only the latest submitted Vote Choice is counted when the Phase resolves.
+_Avoid_: Revote
+
+**Vote Record**:
+The complete list of Vote Choices from resolved Nominations and Verdicts. It becomes Public Information only when the Game Session is completed.
+_Avoid_: Audit log, vote history
+
+**Eliminated Participant**:
+A Participant no longer eligible to take game actions. An Eliminated Participant remains a spectator of Public Information and announced outcomes.
+_Avoid_: Dead player, observer
 
 **Guest Play Allowance**:
 The daily number of Game Sessions a non-authenticated Human Player may create.

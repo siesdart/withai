@@ -28,5 +28,10 @@ export function useDeadlineCountdown(deadline: string) {
     };
   }, [isExpired]);
 
-  return formatDuration(deadline, now);
+  const remainingMs = Math.max(0, dayjs(deadline).diff(now));
+  return {
+    label: formatDuration(deadline, now),
+    isExpired,
+    isUrgent: remainingMs > 0 && remainingMs <= 30_000,
+  };
 }

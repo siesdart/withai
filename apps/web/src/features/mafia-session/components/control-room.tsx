@@ -4,13 +4,14 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@repo/ui/components/accordion';
-import { EyeOffIcon, TimerIcon, UsersIcon } from 'lucide-react';
+import { EyeOffIcon, UsersIcon } from 'lucide-react';
 
 import { useDayAction } from '../hooks/use-day-action';
 import { useDeadlineCountdown } from '../hooks/use-deadline-countdown';
 import { useGameSessionSnapshot } from '../hooks/use-game-session-snapshot';
 import { useGameSessionSubscription } from '../hooks/use-game-session-subscription';
 import { usePublicSpeech } from '../hooks/use-public-speech';
+import { GamePhaseStatus } from './game-phase-status';
 import { ParticipantList } from './participant-list';
 import { PersonalInformation } from './personal-information';
 import { PublicDiscussionPanel } from './public-discussion-panel';
@@ -21,18 +22,22 @@ export function ControlRoom({ sessionId }: { sessionId: string }) {
   const publicSpeech = usePublicSpeech(sessionId);
   const dayAction = useDayAction(sessionId);
   const deadline = useDeadlineCountdown(snapshot.public.phaseDeadline);
+  const revealedAllegiances = new Map(
+    snapshot.public.outcomes.flatMap((outcome) =>
+      outcome.type === 'allegiance-reveal'
+        ? [[outcome.participantId, outcome.allegiance] as const]
+        : [],
+    ),
+  );
 
   return (
     <main className="flex h-dvh flex-col overflow-hidden bg-[#e9e3d6] px-4 py-3 text-[#22221e] sm:px-8 sm:py-5">
-      <header className="mx-auto flex w-full max-w-7xl shrink-0 items-center justify-between border-b-2 border-[#22221e] pb-3 sm:pb-5">
-        <div className="min-w-0">
-          <p className="text-xs tracking-[0.24em] text-[#625e55] uppercase">WithAI / Mafia</p>
-          <h1 className="mt-1 text-xl font-semibold sm:text-2xl">Day 1 / Public discussion</h1>
-        </div>
-        <div className="ml-3 flex shrink-0 items-center gap-1.5 text-xs text-[#625e55] sm:gap-2 sm:text-sm">
-          <TimerIcon aria-hidden="true" className="size-4" />
-          <span className="whitespace-nowrap">Deadline in {deadline}</span>
-        </div>
+      <header className="mx-auto w-full max-w-7xl shrink-0">
+        <GamePhaseStatus
+          dayNumber={snapshot.public.dayNumber}
+          phase={snapshot.public.phase}
+          deadline={deadline}
+        />
       </header>
 
       <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col gap-3 py-3 lg:grid lg:grid-cols-[15rem_minmax(0,1fr)_18rem] lg:gap-5 lg:py-6">
@@ -48,7 +53,11 @@ export function ControlRoom({ sessionId }: { sessionId: string }) {
               </span>
             </AccordionTrigger>
             <AccordionContent className="pb-3">
-              <ParticipantList participants={snapshot.public.participants} />
+              <ParticipantList
+                participants={snapshot.public.participants}
+                currentParticipantId={snapshot.personal.participantId}
+                revealedAllegiances={revealedAllegiances}
+              />
             </AccordionContent>
           </AccordionItem>
           <AccordionItem value="private-information">
@@ -76,12 +85,22 @@ export function ControlRoom({ sessionId }: { sessionId: string }) {
           >
             <UsersIcon aria-hidden="true" /> Living participants
           </h2>
-          <ParticipantList participants={snapshot.public.participants} />
+          <ParticipantList
+            participants={snapshot.public.participants}
+            currentParticipantId={snapshot.personal.participantId}
+            revealedAllegiances={revealedAllegiances}
+          />
         </section>
 
         <PublicDiscussionPanel
           currentParticipantId={snapshot.personal.participantId}
+          currentParticipantAlive={snapshot.public.participants.some(
+            (participant) =>
+              participant.id === snapshot.personal.participantId && participant.alive,
+          )}
           isReconnecting={isReconnecting}
+          isPhaseExpired={deadline.isExpired}
+          personalVote={snapshot.personal.vote}
           publicInformation={snapshot.public}
           publicSpeech={publicSpeech}
           dayAction={dayAction}

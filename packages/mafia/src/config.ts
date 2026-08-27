@@ -9,3 +9,10 @@ export const mafiaGameConfig = {
   finalDefenceDurationMs: 45 * 1000,
   verdictDurationMs: 45 * 1000,
 } as const;
+
+export type MafiaDayDurations = {
+  dayDiscussionDurationMs: number;
+  nominationDurationMs: number;
+  finalDefenceDurationMs: number;
+  verdictDurationMs: number;
+};

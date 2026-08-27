@@ -1,13 +1,16 @@
 import { map } from 'remeda';
 
 import { mafiaGameConfig } from './config';
-import type {
-  MafiaAllegiance,
-  MafiaParticipant,
-  MafiaPersonalInformation,
-  MafiaRole,
-  RandomInt,
-} from './mafia-game-session';
+
+export type MafiaRole = 'Mafia' | 'Detective' | 'Doctor' | 'Citizen';
+export type MafiaAllegiance = 'Mafia' | 'Citizen';
+export type MafiaParticipant = { id: string; name: string; alive: boolean; role: MafiaRole };
+export type MafiaPersonalInformation = {
+  participantId: string;
+  role: MafiaRole;
+  allegiance: MafiaAllegiance;
+};
+export type RandomInt = (maxExclusive: number) => number;
 
 const participantNames = [
   'You',

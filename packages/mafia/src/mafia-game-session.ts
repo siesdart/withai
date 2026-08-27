@@ -3,26 +3,24 @@ import { err, ok, type Result } from 'neverthrow';
 import { filter, find, map, pipe } from 'remeda';
 import { match } from 'ts-pattern';
 
-import { mafiaGameConfig } from './config';
+import { mafiaGameConfig, type MafiaDayDurations } from './config';
 import { resolveNomination, resolveVerdict } from './day-resolution';
-import { allegianceFor, toPersonalInformation } from './participants';
+import {
+  allegianceFor,
+  toPersonalInformation,
+  type MafiaAllegiance,
+  type MafiaParticipant,
+  type MafiaPersonalInformation,
+} from './participants';
 
 export { mafiaGameConfig } from './config';
 
-export type MafiaSessionInput = {
-  sessionId: string;
-  participantCount: number;
-  phaseDeadline: Date;
-};
-export type MafiaRole = 'Mafia' | 'Detective' | 'Doctor' | 'Citizen';
 export type MafiaPhase =
   | 'day-discussion'
   | 'nomination'
   | 'final-defence'
   | 'verdict'
   | 'completed';
-export type MafiaParticipant = { id: string; name: string; alive: boolean; role: MafiaRole };
-export type MafiaAllegiance = 'Mafia' | 'Citizen';
 export type MafiaPublicChatMessage = { id: string; participantId: string; content: string };
 export type MafiaPublicOutcome =
   | { id: string; type: 'nomination-tie' | 'no-nomination' | 'verdict-tie' | 'no-majority' }
@@ -35,17 +33,6 @@ export type MafiaPublicInformation = {
   chat: ReadonlyArray<MafiaPublicChatMessage>;
   nominatedParticipantId: string | undefined;
   outcomes: ReadonlyArray<MafiaPublicOutcome>;
-};
-export type MafiaPersonalInformation = {
-  participantId: string;
-  role: MafiaRole;
-  allegiance: MafiaAllegiance;
-};
-
-export type RandomInt = (maxExclusive: number) => number;
-export type MafiaSessionInputError = {
-  type: 'invalid-participant-count';
-  participantCount: number;
 };
 export type MafiaProjectionError = { type: 'unknown-participant'; participantId: string };
 export type MafiaActionError =
@@ -72,12 +59,6 @@ export type MafiaDayPhaseResult =
     }
   | { type: 'participant-eliminated'; participantId: string }
   | { type: 'game-completed'; winner: MafiaAllegiance };
-export type MafiaDayDurations = {
-  dayDiscussionDurationMs: number;
-  nominationDurationMs: number;
-  finalDefenceDurationMs: number;
-  verdictDurationMs: number;
-};
 export class MafiaGameSession implements GameModuleSession<
   MafiaPublicInformation,
   MafiaPersonalInformation,

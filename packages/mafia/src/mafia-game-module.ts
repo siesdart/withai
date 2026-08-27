@@ -4,17 +4,23 @@ import type { GameModule } from '@repo/game-contract';
 import { err, ok, type Result } from 'neverthrow';
 
 import { mafiaGameConfig } from './config';
+import type { MafiaDayDurations } from './config';
 import {
   MafiaGameSession,
-  type MafiaDayDurations,
-  type MafiaPersonalInformation,
   type MafiaProjectionError,
   type MafiaPublicInformation,
-  type MafiaSessionInput,
-  type MafiaSessionInputError,
-  type RandomInt,
 } from './mafia-game-session';
-import { createParticipants } from './participants';
+import { createParticipants, type MafiaPersonalInformation, type RandomInt } from './participants';
+
+export type MafiaSessionInput = {
+  sessionId: string;
+  participantCount: number;
+  phaseDeadline: Date;
+};
+export type MafiaSessionInputError = {
+  type: 'invalid-participant-count';
+  participantCount: number;
+};
 
 const defaultDayDurations: MafiaDayDurations = {
   dayDiscussionDurationMs: mafiaGameConfig.dayDiscussionDurationMs,

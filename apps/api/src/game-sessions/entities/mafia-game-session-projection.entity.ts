@@ -4,6 +4,7 @@ import type {
   MafiaPersonalInformation,
   MafiaPublicChatMessage,
   MafiaPublicInformation,
+  MafiaPublicOutcome,
 } from '@repo/mafia';
 
 export class MafiaParticipantEntity {
@@ -18,8 +19,8 @@ export class MafiaParticipantEntity {
 }
 
 export class MafiaPublicInformationEntity implements MafiaPublicInformation {
-  @ApiProperty({ example: 'day-discussion' })
-  phase!: 'day-discussion';
+  @ApiProperty({ enum: ['day-discussion', 'nomination', 'final-defence', 'verdict', 'completed'] })
+  phase!: MafiaPublicInformation['phase'];
 
   @ApiProperty({ format: 'date-time' })
   phaseDeadline!: string;
@@ -39,6 +40,12 @@ export class MafiaPublicInformationEntity implements MafiaPublicInformation {
     },
   })
   chat!: ReadonlyArray<MafiaPublicChatMessage>;
+
+  @ApiProperty({ nullable: true, example: 'participant-2' })
+  nominatedParticipantId!: string | undefined;
+
+  @ApiProperty({ type: 'array', items: { type: 'object' } })
+  outcomes!: ReadonlyArray<MafiaPublicOutcome>;
 }
 
 export class MafiaPersonalInformationEntity implements MafiaPersonalInformation {

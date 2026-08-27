@@ -54,6 +54,51 @@ export function submitPublicSpeech(
   );
 }
 
+export function submitNomination(
+  sessionId: string,
+  targetParticipantId: string,
+  idempotencyKey: string,
+): ResultAsync<MafiaGameProjection, GameSessionApiError> {
+  return requestMafiaGameProjection(
+    gameSessionsApi
+      .post(`/game-sessions/${sessionId}/actions/nomination`, {
+        json: { targetParticipantId },
+        headers: { 'Idempotency-Key': idempotencyKey },
+      })
+      .json(),
+  );
+}
+
+export function submitVerdict(
+  sessionId: string,
+  vote: 'eliminate' | 'spare',
+  idempotencyKey: string,
+): ResultAsync<MafiaGameProjection, GameSessionApiError> {
+  return requestMafiaGameProjection(
+    gameSessionsApi
+      .post(`/game-sessions/${sessionId}/actions/verdict`, {
+        json: { vote },
+        headers: { 'Idempotency-Key': idempotencyKey },
+      })
+      .json(),
+  );
+}
+
+export function submitFinalDefence(
+  sessionId: string,
+  content: string,
+  idempotencyKey: string,
+): ResultAsync<MafiaGameProjection, GameSessionApiError> {
+  return requestMafiaGameProjection(
+    gameSessionsApi
+      .post(`/game-sessions/${sessionId}/actions/final-defence`, {
+        json: { content },
+        headers: { 'Idempotency-Key': idempotencyKey },
+      })
+      .json(),
+  );
+}
+
 export type GameSessionSubscriptionOptions = {
   lastEventId: string | undefined;
   onConnected: () => void;

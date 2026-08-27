@@ -3,7 +3,12 @@ import { MafiaGameModule } from '@repo/mafia';
 
 describe('MafiaGameModule', () => {
   it('returns typed errors for invalid inputs and unknown participants', () => {
-    const gameModule = new MafiaGameModule(() => 0);
+    const gameModule = new MafiaGameModule(() => 0, {
+      dayDiscussionDurationMs: 1,
+      nominationDurationMs: 1,
+      finalDefenceDurationMs: 1,
+      verdictDurationMs: 1,
+    });
     const invalidSession = gameModule.create({
       sessionId: 'session-1',
       participantCount: 4,
@@ -54,5 +59,103 @@ describe('MafiaGameModule', () => {
     expect(projection.public.participants).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ role: expect.anything() })]),
     );
+  });
+
+  it('resolves a tied nomination without eliminating and requires a strict verdict majority', () => {
+    const gameModule = new MafiaGameModule(() => 0, {
+      dayDiscussionDurationMs: 1,
+      nominationDurationMs: 1,
+      finalDefenceDurationMs: 1,
+      verdictDurationMs: 1,
+    });
+    const sessionResult = gameModule.create({
+      sessionId: 'session-1',
+      participantCount: 5,
+      phaseDeadline: new Date('2026-08-26T00:00:00.000Z'),
+    });
+    expect(sessionResult.isOk()).toBe(true);
+    if (sessionResult.isErr()) {
+      throw new Error('Expected a valid Mafia Game Session.');
+    }
+
+    const session = sessionResult.value;
+    expect(session.advanceDayPhase(new Date('2026-08-26T00:00:01.000Z'))).toMatchObject({
+      value: { type: 'phase-advanced', phase: 'nomination' },
+    });
+    session.submitNomination(
+      'participant-1',
+      'participant-2',
+      new Date('2026-08-26T00:00:01.000Z'),
+    );
+    session.submitNomination(
+      'participant-2',
+      'participant-3',
+      new Date('2026-08-26T00:00:01.000Z'),
+    );
+    expect(session.advanceDayPhase(new Date('2026-08-26T00:00:02.000Z'))).toMatchObject({
+      value: { type: 'day-restarted', reason: 'nomination-tie' },
+    });
+
+    expect(session.advanceDayPhase(new Date('2026-08-26T00:00:03.000Z'))).toMatchObject({
+      value: { type: 'phase-advanced', phase: 'nomination' },
+    });
+    session.submitNomination(
+      'participant-1',
+      'participant-2',
+      new Date('2026-08-26T00:00:03.000Z'),
+    );
+    expect(session.advanceDayPhase(new Date('2026-08-26T00:00:04.000Z'))).toMatchObject({
+      value: { type: 'phase-advanced', phase: 'final-defence' },
+    });
+    expect(session.advanceDayPhase(new Date('2026-08-26T00:00:05.000Z'))).toMatchObject({
+      value: { type: 'phase-advanced', phase: 'verdict' },
+    });
+    session.submitVerdict('participant-1', 'eliminate', new Date('2026-08-26T00:00:05.000Z'));
+    session.submitVerdict('participant-3', 'eliminate', new Date('2026-08-26T00:00:05.000Z'));
+    expect(session.advanceDayPhase(new Date('2026-08-26T00:00:06.000Z'))).toMatchObject({
+      value: { type: 'day-restarted', reason: 'no-majority' },
+    });
+  });
+
+  it('reveals only Allegiance and completes when the last Mafia is eliminated', () => {
+    const gameModule = new MafiaGameModule(() => 0, {
+      dayDiscussionDurationMs: 1,
+      nominationDurationMs: 1,
+      finalDefenceDurationMs: 1,
+      verdictDurationMs: 1,
+    });
+    const sessionResult = gameModule.create({
+      sessionId: 'session-2',
+      participantCount: 5,
+      phaseDeadline: new Date('2026-08-26T00:00:00.000Z'),
+    });
+    if (sessionResult.isErr()) throw new Error('Expected a valid Mafia Game Session.');
+    const session = sessionResult.value;
+    session.advanceDayPhase(new Date('2026-08-26T00:00:01.000Z'));
+    for (const participantId of ['participant-1', 'participant-2', 'participant-3']) {
+      session.submitNomination(
+        participantId,
+        'participant-5',
+        new Date('2026-08-26T00:00:01.000Z'),
+      );
+    }
+    session.advanceDayPhase(new Date('2026-08-26T00:00:02.000Z'));
+    session.advanceDayPhase(new Date('2026-08-26T00:00:03.000Z'));
+    for (const participantId of ['participant-1', 'participant-2', 'participant-3']) {
+      session.submitVerdict(participantId, 'eliminate', new Date('2026-08-26T00:00:03.000Z'));
+    }
+    expect(session.advanceDayPhase(new Date('2026-08-26T00:00:04.000Z'))).toMatchObject({
+      value: { type: 'game-completed', winner: 'Citizen' },
+    });
+    const projectionResult = session.projectionFor('participant-1', 9);
+    if (projectionResult.isErr()) throw new Error('Expected a projection.');
+    const projection = projectionResult.value;
+    expect(projection.public.outcomes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'allegiance-reveal', allegiance: 'Mafia' }),
+        expect.objectContaining({ type: 'victory', allegiance: 'Citizen' }),
+      ]),
+    );
+    expect(JSON.stringify(projection.public.outcomes)).not.toContain('Detective');
   });
 });

@@ -17,4 +17,9 @@ export type StoredGameSessionEntity = {
     string,
     { content: string; projection: MafiaGameSessionProjectionEntity }
   >;
+  dayActionIdempotencyKeys: Map<
+    string,
+    { fingerprint: string; projection: MafiaGameSessionProjectionEntity }
+  >;
+  phaseTimer: NodeJS.Timeout | undefined;
 };

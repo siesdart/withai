@@ -6,6 +6,7 @@ import {
 } from '@repo/ui/components/accordion';
 import { EyeOffIcon, TimerIcon, UsersIcon } from 'lucide-react';
 
+import { useDayAction } from '../hooks/use-day-action';
 import { useDeadlineCountdown } from '../hooks/use-deadline-countdown';
 import { useGameSessionSnapshot } from '../hooks/use-game-session-snapshot';
 import { useGameSessionSubscription } from '../hooks/use-game-session-subscription';
@@ -18,6 +19,7 @@ export function ControlRoom({ sessionId }: { sessionId: string }) {
   const { snapshot } = useGameSessionSnapshot(sessionId);
   const { isReconnecting } = useGameSessionSubscription(sessionId);
   const publicSpeech = usePublicSpeech(sessionId);
+  const dayAction = useDayAction(sessionId);
   const deadline = useDeadlineCountdown(snapshot.public.phaseDeadline);
 
   return (
@@ -82,6 +84,7 @@ export function ControlRoom({ sessionId }: { sessionId: string }) {
           isReconnecting={isReconnecting}
           publicInformation={snapshot.public}
           publicSpeech={publicSpeech}
+          dayAction={dayAction}
         />
 
         <aside

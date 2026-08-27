@@ -5,4 +5,7 @@ export const mafiaGameConfig = {
   mafiaRoleThreshold: 6,
   maxPublicSpeechLength: 500,
   dayDiscussionDurationMs: 2 * 60 * 1000,
+  nominationDurationMs: 60 * 1000,
+  finalDefenceDurationMs: 45 * 1000,
+  verdictDurationMs: 45 * 1000,
 } as const;

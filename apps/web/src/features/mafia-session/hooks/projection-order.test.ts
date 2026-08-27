@@ -12,6 +12,8 @@ function projection(eventId: number): MafiaGameProjection {
       phaseDeadline: '2026-08-27T00:02:00.000Z',
       participants: [],
       chat: [],
+      nominatedParticipantId: undefined,
+      outcomes: [],
     },
     personal: {
       participantId: 'participant-1',

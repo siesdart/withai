@@ -16,7 +16,9 @@ function isMafiaGameProjection(value: unknown): value is MafiaGameProjection {
   return (
     typeof value.eventId === 'number' &&
     typeof value.sessionId === 'string' &&
-    publicInformation.phase === 'day-discussion' &&
+    ['day-discussion', 'nomination', 'final-defence', 'verdict', 'completed'].includes(
+      String(publicInformation.phase),
+    ) &&
     typeof publicInformation.phaseDeadline === 'string' &&
     Array.isArray(publicInformation.participants) &&
     publicInformation.participants.every(
@@ -34,6 +36,10 @@ function isMafiaGameProjection(value: unknown): value is MafiaGameProjection {
         typeof message.participantId === 'string' &&
         typeof message.content === 'string',
     ) &&
+    (typeof publicInformation.nominatedParticipantId === 'string' ||
+      publicInformation.nominatedParticipantId === null ||
+      publicInformation.nominatedParticipantId === undefined) &&
+    Array.isArray(publicInformation.outcomes) &&
     typeof personalInformation.participantId === 'string' &&
     ['Mafia', 'Detective', 'Doctor', 'Citizen'].includes(String(personalInformation.role)) &&
     ['Mafia', 'Citizen'].includes(String(personalInformation.allegiance))

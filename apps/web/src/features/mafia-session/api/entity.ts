@@ -26,6 +26,14 @@ function isMafiaGameProjection(value: unknown): value is MafiaGameProjection {
         typeof participant.name === 'string' &&
         typeof participant.alive === 'boolean',
     ) &&
+    Array.isArray(publicInformation.chat) &&
+    publicInformation.chat.every(
+      (message) =>
+        isRecord(message) &&
+        typeof message.id === 'string' &&
+        typeof message.participantId === 'string' &&
+        typeof message.content === 'string',
+    ) &&
     typeof personalInformation.participantId === 'string' &&
     ['Mafia', 'Detective', 'Doctor', 'Citizen'].includes(String(personalInformation.role)) &&
     ['Mafia', 'Citizen'].includes(String(personalInformation.allegiance))

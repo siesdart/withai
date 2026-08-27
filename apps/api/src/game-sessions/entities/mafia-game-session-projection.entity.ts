@@ -2,6 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import type {
   MafiaGameProjection,
   MafiaPersonalInformation,
+  MafiaPublicChatMessage,
   MafiaPublicInformation,
 } from '@repo/mafia';
 
@@ -25,6 +26,19 @@ export class MafiaPublicInformationEntity implements MafiaPublicInformation {
 
   @ApiProperty({ type: () => MafiaParticipantEntity, isArray: true })
   participants!: ReadonlyArray<MafiaParticipantEntity>;
+
+  @ApiProperty({
+    type: 'array',
+    items: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        participantId: { type: 'string' },
+        content: { type: 'string' },
+      },
+    },
+  })
+  chat!: ReadonlyArray<MafiaPublicChatMessage>;
 }
 
 export class MafiaPersonalInformationEntity implements MafiaPersonalInformation {

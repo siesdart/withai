@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc -b && vite build",
     "dev": "vite",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run"
   },
   "dependencies": {
     "@repo/mafia": "workspace:*",
@@ -38,6 +39,7 @@
     "babel-plugin-react-compiler": "^1.0.0",
     "globals": "^17",
     "typescript": "~6",
-    "vite": "^8"
+    "vite": "^8",
+    "vitest": "^4.1.11"
   }
 }

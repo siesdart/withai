@@ -33,6 +33,7 @@ import { map, type Observable } from 'rxjs';
 import { match } from 'ts-pattern';
 
 import { CreateMafiaSessionDto } from './dto/create-mafia-session.dto';
+import { CreatePublicSpeechDto } from './dto/create-public-speech.dto';
 import { MafiaGameSessionProjectionEntity } from './entities/mafia-game-session-projection.entity';
 import { type GameSessionError, GameSessionsService } from './game-sessions.service';
 
@@ -99,6 +100,58 @@ export class GameSessionsController {
   })
   snapshot(@Param('sessionId') sessionId: string, @Req() request: Request) {
     return this.projectionFor(sessionId, request.headers.cookie);
+  }
+
+  @Post(':sessionId/actions/public-speech')
+  @ApiOperation({ summary: 'Submit Public Chat speech for the Human Player' })
+  @ApiCookieAuth('withai_guest')
+  @ApiBody({ type: CreatePublicSpeechDto })
+  @ApiHeader({
+    name: 'Idempotency-Key',
+    required: true,
+    description: 'A client-generated key that makes a public action retry safe.',
+  })
+  @ApiCreatedResponse({ type: MafiaGameSessionProjectionEntity })
+  @ApiBadRequestResponse({ description: 'The public speech is invalid or no longer permitted.' })
+  @ApiConflictResponse({ description: 'The idempotency key was reused with a different action.' })
+  @ApiTooManyRequestsResponse({
+    description: 'The Human Player must wait before submitting another public speech.',
+    headers: {
+      'Retry-After': {
+        description: 'Seconds until another public speech may be submitted.',
+        schema: { type: 'integer', minimum: 1 },
+      },
+    },
+  })
+  @ApiForbiddenResponse({
+    description: 'The Game Session does not exist or is unavailable to this guest.',
+  })
+  submitPublicSpeech(
+    @Param('sessionId') sessionId: string,
+    @Body() body: CreatePublicSpeechDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+  ) {
+    if (!idempotencyKey || idempotencyKey.length < 16 || idempotencyKey.length > 200) {
+      throw new BadRequestException('The Idempotency-Key header is invalid.');
+    }
+
+    return this.gameSessionsService
+      .submitPublicSpeech(sessionId, request.headers.cookie, body.content, idempotencyKey)
+      .match(
+        (projection) => projection,
+        (error) => {
+          if (error.type === 'public-speech-rate-limited') {
+            response.setHeader('Retry-After', String(Math.ceil(error.retryAfterMs / 1000)));
+            throw new HttpException(
+              'Please wait before submitting another public speech.',
+              HttpStatus.TOO_MANY_REQUESTS,
+            );
+          }
+          throw this.toHttpException(error);
+        },
+      );
   }
 
   @Sse(':sessionId/events')
@@ -182,6 +235,34 @@ export class GameSessionsController {
         { type: 'invalid-mafia-projection' },
         () =>
           new HttpException('The Game Session is unavailable.', HttpStatus.INTERNAL_SERVER_ERROR),
+      )
+      .with(
+        { type: 'public-speech-idempotency-conflict' },
+        () =>
+          new HttpException(
+            'The Idempotency-Key was already used with a different action.',
+            HttpStatus.CONFLICT,
+          ),
+      )
+      .with(
+        { type: 'public-speech-rate-limited' },
+        () =>
+          new HttpException(
+            'Please wait before submitting another public speech.',
+            HttpStatus.TOO_MANY_REQUESTS,
+          ),
+      )
+      .with(
+        { type: 'invalid-public-speech' },
+        () => new BadRequestException('This public action is not permitted.'),
+      )
+      .with(
+        { type: 'expired-phase' },
+        () => new BadRequestException('The current Phase has expired.'),
+      )
+      .with(
+        { type: 'dead-participant' },
+        () => new BadRequestException('Eliminated Participants cannot take public actions.'),
       )
       .exhaustive();
   }

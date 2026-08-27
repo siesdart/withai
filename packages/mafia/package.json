@@ -6,6 +6,10 @@
     ".": {
       "types": "./dist/entry.d.ts",
       "default": "./dist/entry.js"
+    },
+    "./config": {
+      "types": "./dist/config.d.ts",
+      "default": "./dist/config.js"
     }
   },
   "scripts": {

@@ -31,6 +31,7 @@ export type GameSessionError =
   | { type: 'invalid-public-speech' }
   | { type: 'invalid-day-action' }
   | { type: 'day-action-idempotency-conflict' }
+  | { type: 'day-action-rate-limited'; retryAfterMs: number }
   | { type: 'expired-phase'; phaseDeadline: string }
   | { type: 'dead-participant'; participantId: string };
 
@@ -117,11 +118,13 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       ),
       nextEventId: 0,
       nextPublicSpeechAt: undefined,
+      nextFinalDefenceAt: undefined,
       lastAccessedAt: dayjs(),
       activeEventSubscribers: 0,
       publicSpeechIdempotencyKeys: new Map(),
       dayActionIdempotencyKeys: new Map(),
       phaseTimer: undefined,
+      agentFinalDefenceTimer: undefined,
     };
     this.sessions.set(sessionId, session);
     if (scopedIdempotencyKey) {
@@ -271,13 +274,41 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     content: string,
     idempotencyKey: string,
   ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
-    return this.submitDayAction(
-      sessionId,
-      cookie,
-      `final-defence:${content}`,
-      idempotencyKey,
-      (session) => session.gameSession.submitFinalDefence(session.humanParticipantId, content),
-    );
+    return this.activeSessionForHolder(sessionId, cookie).andThen((session) => {
+      const fingerprint = `final-defence:${content}`;
+      const previous = session.dayActionIdempotencyKeys.get(idempotencyKey);
+      if (previous) {
+        return previous.fingerprint === fingerprint
+          ? ok(previous.projection)
+          : err<MafiaGameSessionProjectionEntity, GameSessionError>({
+              type: 'day-action-idempotency-conflict',
+            });
+      }
+
+      const now = dayjs();
+      if (session.nextFinalDefenceAt?.isAfter(now)) {
+        return err<MafiaGameSessionProjectionEntity, GameSessionError>({
+          type: 'day-action-rate-limited',
+          retryAfterMs: session.nextFinalDefenceAt.diff(now),
+        });
+      }
+
+      const action = session.gameSession.submitFinalDefence(session.humanParticipantId, content);
+      if (action.isErr()) {
+        return err<MafiaGameSessionProjectionEntity, GameSessionError>({
+          type: 'invalid-day-action',
+        });
+      }
+
+      return this.publishProjection(session).map((projection) => {
+        session.nextFinalDefenceAt = now.add(
+          gameSessionsConfig.publicSpeechCooldownMs,
+          'millisecond',
+        );
+        session.dayActionIdempotencyKeys.set(idempotencyKey, { fingerprint, projection });
+        return projection;
+      });
+    });
   }
 
   private submitDayAction(
@@ -475,6 +506,49 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         );
       }
     }
+    if (projection.value.public.phase === 'final-defence') {
+      const nominatedParticipantId = projection.value.public.nominatedParticipantId;
+      if (!nominatedParticipantId || nominatedParticipantId === session.humanParticipantId) return;
+      session.gameSession.agentSpeechContextFor(nominatedParticipantId).match(
+        (context) => {
+          const decision = this.speechGateway.decideFinalDefence(context);
+          session.gameSession.submitFinalDefence(nominatedParticipantId, decision.opening).match(
+            () =>
+              this.scheduleAgentFinalDefenceFollowUp(
+                session,
+                nominatedParticipantId,
+                decision.followUp,
+                projection.value.public.phaseDeadline,
+              ),
+            () => undefined,
+          );
+        },
+        () => undefined,
+      );
+    }
+  }
+
+  private scheduleAgentFinalDefenceFollowUp(
+    session: StoredGameSessionEntity,
+    participantId: string,
+    content: string,
+    phaseDeadline: string,
+  ) {
+    if (session.agentFinalDefenceTimer) {
+      clearTimeout(session.agentFinalDefenceTimer);
+    }
+    const delayMs = Math.max(0, Math.floor((Date.parse(phaseDeadline) - Date.now()) / 2));
+    session.agentFinalDefenceTimer = setTimeout(() => {
+      session.gameSession.submitFinalDefence(participantId, content).match(
+        () =>
+          this.publishProjection(session).match(
+            () => undefined,
+            () => undefined,
+          ),
+        () => undefined,
+      );
+    }, delayMs);
+    session.agentFinalDefenceTimer.unref();
   }
 
   private sessionForHolder(
@@ -539,6 +613,9 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       session.events.complete();
       if (session.phaseTimer) {
         clearTimeout(session.phaseTimer);
+      }
+      if (session.agentFinalDefenceTimer) {
+        clearTimeout(session.agentFinalDefenceTimer);
       }
       this.sessions.delete(sessionId);
       for (const [key, record] of this.idempotencyKeys) {

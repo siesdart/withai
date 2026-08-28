@@ -9,7 +9,10 @@ describe('GameSessionsService', () => {
 
   it('recovers an expired phase when its timer was missed before a snapshot is read', () => {
     jest.useFakeTimers({ now: new Date('2026-08-27T17:11:51.000Z') });
-    const service = new GameSessionsService({ decide: () => ({ type: 'remain-silent' }) });
+    const service = new GameSessionsService({
+      decide: () => ({ type: 'remain-silent' }),
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+    });
     const created = service.createMafiaSession(undefined, 5, undefined);
 
     expect(created.isOk()).toBe(true);

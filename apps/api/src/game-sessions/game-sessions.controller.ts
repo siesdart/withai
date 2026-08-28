@@ -189,6 +189,7 @@ export class GameSessionsController {
   @ApiBadRequestResponse({
     description: 'The Human Player is not eligible to make a Final Defence.',
   })
+  @ApiTooManyRequestsResponse({ description: 'The Final Defence speech cooldown is active.' })
   @ApiConflictResponse({ description: 'The idempotency key was reused with a different action.' })
   submitFinalDefence(
     @Param('sessionId') sessionId: string,
@@ -342,6 +343,14 @@ export class GameSessionsController {
           new HttpException(
             'The Idempotency-Key was already used with a different action.',
             HttpStatus.CONFLICT,
+          ),
+      )
+      .with(
+        { type: 'day-action-rate-limited' },
+        () =>
+          new HttpException(
+            'Please wait before submitting another Final Defence statement.',
+            HttpStatus.TOO_MANY_REQUESTS,
           ),
       )
       .with(

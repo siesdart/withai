@@ -71,8 +71,12 @@ An Agent's private decision to respond or remain silent after a Public Chat even
 _Avoid_: Auto-reply
 
 **Final Defence**:
-The nominated Participant's final public statement before the elimination decision is resolved.
+The nominated Participant's time-limited public defence during the Day, before the elimination decision is resolved.
 _Avoid_: Last words
+
+**Agent Final Defence**:
+The required opening public statement made by an Agent who is the Nominee during a Final Defence.
+_Avoid_: Auto-reply
 
 **Nomination**:
 The Day vote in which each living Participant chooses one living Participant for Final Defence. A unique highest total produces a Nominee; a tie or no submission produces no Nominee.
@@ -87,8 +91,12 @@ The Day vote to eliminate or spare the Nominee. Elimination requires a strict ma
 _Avoid_: Execution vote, final vote
 
 **Vote Choice**:
-A Participant's selected Nomination target or Verdict. It is Private Information until the Game Session is completed.
+A Participant's selected Nomination target or Verdict. Its connection to the selecting Participant is Private Information until the Game Session is completed.
 _Avoid_: Ballot, selection
+
+**Aggregate Vote Tally**:
+The publicly announced count for each available Vote Choice after a Nomination or Verdict resolves. It never identifies which Participant selected a choice.
+_Avoid_: Vote reveal, ballot status
 
 **Vote Status**:
 The Public Information that a living Participant has submitted a vote in the active Nomination or Verdict, without revealing that Participant's Vote Choice.

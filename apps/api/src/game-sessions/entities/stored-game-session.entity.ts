@@ -11,6 +11,7 @@ export type StoredGameSessionEntity = {
   events: ReplaySubject<MafiaGameSessionProjectionEntity>;
   nextEventId: number;
   nextPublicSpeechAt: Dayjs | undefined;
+  nextFinalDefenceAt: Dayjs | undefined;
   lastAccessedAt: Dayjs;
   activeEventSubscribers: number;
   publicSpeechIdempotencyKeys: Map<
@@ -22,4 +23,5 @@ export type StoredGameSessionEntity = {
     { fingerprint: string; projection: MafiaGameSessionProjectionEntity }
   >;
   phaseTimer: NodeJS.Timeout | undefined;
+  agentFinalDefenceTimer: NodeJS.Timeout | undefined;
 };

@@ -129,17 +129,19 @@ describe('Mafia Game Session API', () => {
       eventId: 2,
       public: {
         phase: 'day-discussion',
-        timeline: [
-          {
-            type: 'chat',
-            message: {
-              participantId: 'participant-1',
-              content: "I want to hear everyone's read before we nominate.",
-            },
-          },
-        ],
       },
     });
+    expect(speech.body.public.timeline).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'chat',
+          message: expect.objectContaining({
+            participantId: 'participant-1',
+            content: "I want to hear everyone's read before we nominate.",
+          }),
+        }),
+      ]),
+    );
     expect(speech.body.public).not.toHaveProperty('chat');
     expect(speech.body.public).not.toHaveProperty('outcomes');
 

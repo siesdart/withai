@@ -29,20 +29,29 @@ export function VerdictControls({
         </p>
       </div>
       <div className="flex gap-2">
-        <Button disabled={disabled} onClick={() => onSubmitVerdict('eliminate')} type="button">
-          {personalVote?.phase === 'verdict' && personalVote.vote === 'eliminate'
-            ? 'Eliminate (your vote)'
-            : 'Eliminate'}
+        <Button
+          disabled={disabled}
+          onClick={() => onSubmitVerdict('eliminate')}
+          type="button"
+          variant={
+            personalVote?.phase === 'verdict' && personalVote.vote === 'eliminate'
+              ? 'default'
+              : 'outline'
+          }
+        >
+          Eliminate
         </Button>
         <Button
           disabled={disabled}
           onClick={() => onSubmitVerdict('spare')}
           type="button"
-          variant="outline"
+          variant={
+            personalVote?.phase === 'verdict' && personalVote.vote === 'spare'
+              ? 'default'
+              : 'outline'
+          }
         >
-          {personalVote?.phase === 'verdict' && personalVote.vote === 'spare'
-            ? 'Spare (your vote)'
-            : 'Spare'}
+          Spare
         </Button>
       </div>
     </div>

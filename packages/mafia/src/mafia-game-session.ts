@@ -176,21 +176,23 @@ export class MafiaGameSession implements GameModuleSession<
       .with('verdict', () => ok(this.resolveVerdict(now)))
       .exhaustive();
   }
-  adjustPhaseTime(adjustmentSeconds: 10 | -10, now = new Date()): Result<void, MafiaActionError> {
+  adjustPhaseTime(
+    participantId: string,
+    adjustmentSeconds: 10 | -10,
+    now = new Date(),
+  ): Result<void, MafiaActionError> {
     if (this.phase === 'completed') return err({ type: 'invalid-phase', phase: this.phase });
-    if (now >= this.phaseDeadline) {
-      return err({ type: 'expired-phase', phaseDeadline: this.phaseDeadline.toISOString() });
-    }
-
-    this.phaseDeadline = new Date(this.phaseDeadline.getTime() + adjustmentSeconds * 1000);
-    this.recordOutcome({
-      id: this.nextOutcomeId(),
-      type: 'phase-time-adjusted',
-      dayNumber: this.dayNumber,
-      phase: this.phase,
-      adjustmentSeconds,
+    const phase = this.phase;
+    return this.livingParticipant(participantId, now).map(() => {
+      this.phaseDeadline = new Date(this.phaseDeadline.getTime() + adjustmentSeconds * 1000);
+      this.recordOutcome({
+        id: this.nextOutcomeId(),
+        type: 'phase-time-adjusted',
+        dayNumber: this.dayNumber,
+        phase,
+        adjustmentSeconds,
+      });
     });
-    return ok(undefined);
   }
   agentSpeechContextFor(
     participantId: string,

@@ -45,6 +45,7 @@ export function ControlRoom({ sessionId }: { sessionId: string }) {
           phaseDeadline={snapshot.public.phaseDeadline}
           deadline={deadline}
           sessionId={sessionId}
+          currentParticipantAlive={currentParticipantAlive}
         />
       </header>
 

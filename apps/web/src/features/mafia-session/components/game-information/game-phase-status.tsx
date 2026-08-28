@@ -10,6 +10,7 @@ type GamePhaseStatusProps = {
   phase: MafiaGameProjection['public']['phase'];
   phaseDeadline: string;
   sessionId: string;
+  currentParticipantAlive: boolean;
   deadline: { label: string; isExpired: boolean; isUrgent: boolean };
 };
 
@@ -43,6 +44,7 @@ export function GamePhaseStatus({
   phaseDeadline,
   deadline,
   sessionId,
+  currentParticipantAlive,
 }: GamePhaseStatusProps) {
   const copy = phaseCopy(phase);
   const deadlineLabel = deadline.isExpired ? 'Resolving result' : `Deadline in ${deadline.label}`;
@@ -79,7 +81,9 @@ export function GamePhaseStatus({
               {deadlineLabel}
             </span>
           </div>
-          <PhaseTimeControls phase={phase} phaseDeadline={phaseDeadline} sessionId={sessionId} />
+          {currentParticipantAlive ? (
+            <PhaseTimeControls phase={phase} phaseDeadline={phaseDeadline} sessionId={sessionId} />
+          ) : null}
         </div>
       ) : null}
     </section>

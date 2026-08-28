@@ -55,7 +55,7 @@ A rules-defined period of a Game Session that determines which actions and publi
 _Avoid_: Turn (unless referring to one Participant's action opportunity)
 
 **Phase Time Adjustment**:
-A Human Player's change of the active Phase's remaining duration by a fixed amount. Each accepted adjustment is recorded as Public Information, is applied to the Phase deadline, and may cause the Phase to resolve immediately.
+A living Human Player's change of the active Phase's remaining duration by a fixed amount. Each accepted adjustment is recorded as Public Information, is applied to the Phase deadline, and may cause the Phase to resolve immediately. An Eliminated Human Player cannot make a Phase Time Adjustment.
 _Avoid_: Pause, skip
 
 **Day**:

@@ -314,7 +314,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     idempotencyKey: string,
   ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
     return this.activeSessionForHolder(sessionId, cookie).andThen((session) => {
-      const fingerprint = String(adjustmentSeconds);
+      const fingerprint = `${adjustmentSeconds}:${expectedPhase}:${expectedPhaseDeadline}`;
       const lookup = lookupIdempotency(
         session.phaseTimeAdjustmentIdempotencyKeys,
         idempotencyKey,
@@ -361,11 +361,29 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         });
       }
 
-      const adjustment = session.gameSession.adjustPhaseTime(adjustmentSeconds, now.toDate());
+      const adjustment = session.gameSession.adjustPhaseTime(
+        session.humanParticipantId,
+        adjustmentSeconds,
+        now.toDate(),
+      );
       if (adjustment.isErr()) {
-        return err<MafiaGameSessionProjectionEntity, GameSessionError>({
-          type: 'invalid-phase-time-adjustment',
-        });
+        return err<MafiaGameSessionProjectionEntity, GameSessionError>(
+          match(adjustment.error)
+            .with({ type: 'dead-participant', participantId: P.select() }, (participantId) => ({
+              type: 'dead-participant' as const,
+              participantId,
+            }))
+            .with(
+              { type: 'unknown-participant' },
+              { type: 'expired-phase' },
+              { type: 'invalid-phase' },
+              { type: 'not-nominated-participant' },
+              { type: 'invalid-target' },
+              { type: 'invalid-public-speech' },
+              () => ({ type: 'invalid-phase-time-adjustment' as const }),
+            )
+            .exhaustive(),
+        );
       }
 
       const phaseResult = session.gameSession.advanceDayPhase(now.toDate());

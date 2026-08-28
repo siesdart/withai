@@ -75,6 +75,16 @@ describe('GameSessionsService', () => {
         'first-phase-time-adjustment-key',
       ),
     ).toEqual(first);
+    expect(
+      service.adjustPhaseTime(
+        created.value.projection.sessionId,
+        cookie,
+        10,
+        adjustedPhase,
+        adjustedPhaseDeadline,
+        'first-phase-time-adjustment-key',
+      ),
+    ).toEqual({ error: { type: 'phase-time-adjustment-idempotency-conflict' } });
   });
 
   it('rejects a Phase Time Adjustment for a stale Phase deadline', () => {

@@ -160,11 +160,14 @@ export class MafiaGameSession implements GameModuleSession<
     });
   }
   advanceDayPhase(now = new Date()): Result<MafiaDayPhaseResult, never> {
-    if (now < this.phaseDeadline || this.phase === 'completed') return ok({ type: 'not-due' });
-    if (this.phase === 'day-discussion') return ok(this.advanceTo('nomination', now));
-    if (this.phase === 'nomination') return ok(this.resolveNomination(now));
-    if (this.phase === 'final-defence') return ok(this.advanceTo('verdict', now));
-    return ok(this.resolveVerdict(now));
+    if (now < this.phaseDeadline) return ok<MafiaDayPhaseResult>({ type: 'not-due' });
+    return match(this.phase)
+      .with('completed', () => ok<MafiaDayPhaseResult>({ type: 'not-due' }))
+      .with('day-discussion', () => ok(this.advanceTo('nomination', now)))
+      .with('nomination', () => ok(this.resolveNomination(now)))
+      .with('final-defence', () => ok(this.advanceTo('verdict', now)))
+      .with('verdict', () => ok(this.resolveVerdict(now)))
+      .exhaustive();
   }
   agentSpeechContextFor(
     participantId: string,
@@ -251,7 +254,7 @@ export class MafiaGameSession implements GameModuleSession<
       id: `vote-record-${this.completedVoteRecords.length + 1}`,
       dayNumber: this.dayNumber,
       phase: 'nomination',
-      votes: [...this.nominations].map(([participantId, targetParticipantId]) => ({
+      votes: map([...this.nominations], ([participantId, targetParticipantId]) => ({
         participantId,
         targetParticipantId,
       })),
@@ -280,7 +283,7 @@ export class MafiaGameSession implements GameModuleSession<
         id: `vote-record-${this.completedVoteRecords.length + 1}`,
         dayNumber: this.dayNumber,
         phase: 'verdict',
-        votes: [...this.verdicts].map(([participantId, vote]) => ({ participantId, vote })),
+        votes: map([...this.verdicts], ([participantId, vote]) => ({ participantId, vote })),
       });
       this.recordOutcome({
         id: this.nextOutcomeId(),
@@ -357,24 +360,32 @@ export class MafiaGameSession implements GameModuleSession<
     };
   }
   private personalVoteFor(participantId: string): MafiaPersonalInformation['vote'] {
-    if (this.phase === 'nomination') {
-      const targetParticipantId = this.nominations.get(participantId);
-      return targetParticipantId ? { phase: 'nomination', targetParticipantId } : undefined;
-    }
-    if (this.phase === 'verdict') {
-      const vote = this.verdicts.get(participantId);
-      return vote ? { phase: 'verdict', vote } : undefined;
-    }
-    return undefined;
+    return match(this.phase)
+      .with('nomination', () => {
+        const targetParticipantId = this.nominations.get(participantId);
+        return targetParticipantId
+          ? { phase: 'nomination' as const, targetParticipantId }
+          : undefined;
+      })
+      .with('verdict', () => {
+        const vote = this.verdicts.get(participantId);
+        return vote ? { phase: 'verdict' as const, vote } : undefined;
+      })
+      .with('day-discussion', 'final-defence', 'completed', () => undefined)
+      .exhaustive();
   }
   private voteStatus(): MafiaPublicVoteStatus | undefined {
-    if (this.phase === 'nomination') {
-      return { phase: 'nomination', submittedParticipantIds: [...this.nominations.keys()] };
-    }
-    if (this.phase === 'verdict') {
-      return { phase: 'verdict', submittedParticipantIds: [...this.verdicts.keys()] };
-    }
-    return undefined;
+    return match(this.phase)
+      .with('nomination', () => ({
+        phase: 'nomination' as const,
+        submittedParticipantIds: [...this.nominations.keys()],
+      }))
+      .with('verdict', () => ({
+        phase: 'verdict' as const,
+        submittedParticipantIds: [...this.verdicts.keys()],
+      }))
+      .with('day-discussion', 'final-defence', 'completed', () => undefined)
+      .exhaustive();
   }
   private recordOutcome(outcome: MafiaPublicOutcome) {
     this.timeline.push({ id: `timeline-${this.timeline.length + 1}`, type: 'record', outcome });

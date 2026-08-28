@@ -1,3 +1,4 @@
+import { find } from 'remeda';
 import { match } from 'ts-pattern';
 
 import type { MafiaGameProjection } from '../../api/api';
@@ -50,7 +51,8 @@ export function PhaseActionPanel({
   }
 
   const actionDisabled = dayAction.isPending || dayAction.isCoolingDown || isPhaseExpired;
-  const nominatedParticipant = publicInformation.participants.find(
+  const nominatedParticipant = find(
+    publicInformation.participants,
     (participant) => participant.id === publicInformation.nominatedParticipantId,
   );
 

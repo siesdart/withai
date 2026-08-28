@@ -1,5 +1,6 @@
 import { Badge } from '@repo/ui/components/badge';
 import { CheckIcon, VoteIcon } from 'lucide-react';
+import { filter, map } from 'remeda';
 
 import type { MafiaGameProjection } from '../../api/api';
 
@@ -12,8 +13,8 @@ type VoteStatusProps = {
 export function VoteStatus({ participants, voteStatus, currentParticipantId }: VoteStatusProps) {
   if (!voteStatus) return null;
   const submittedParticipantIds = new Set(voteStatus.submittedParticipantIds);
-  const voters = participants.filter((participant) => participant.alive);
-  const submittedCount = voters.filter((participant) =>
+  const voters = filter(participants, (participant) => participant.alive);
+  const submittedCount = filter(voters, (participant) =>
     submittedParticipantIds.has(participant.id),
   ).length;
 
@@ -28,7 +29,7 @@ export function VoteStatus({ participants, voteStatus, currentParticipantId }: V
         </Badge>
       </div>
       <ul className="mt-2 grid grid-cols-2 gap-1 sm:grid-cols-3">
-        {voters.map((participant) => {
+        {map(voters, (participant) => {
           const hasSubmitted = submittedParticipantIds.has(participant.id);
           const isYou = participant.id === currentParticipantId;
           return (

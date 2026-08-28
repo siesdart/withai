@@ -1,5 +1,6 @@
 import { Marker, MarkerContent, MarkerIcon } from '@repo/ui/components/marker';
 import { ScrollTextIcon } from 'lucide-react';
+import { map } from 'remeda';
 import { match } from 'ts-pattern';
 
 import type { MafiaGameProjection } from '../../api/api';
@@ -74,12 +75,11 @@ const nominationVoteTotals = (
   outcome: Extract<GameRecordMarkerProps['outcome'], { type: 'nomination-resolved' }>,
   participantNames: GameRecordMarkerProps['participantNames'],
 ) =>
-  outcome.voteCounts
-    .map(
-      ({ participantId, voteCount }) =>
-        `${participantNames.get(participantId) ?? 'Participant'} ${voteCount}`,
-    )
-    .join(', ');
+  map(
+    outcome.voteCounts,
+    ({ participantId, voteCount }) =>
+      `${participantNames.get(participantId) ?? 'Participant'} ${voteCount}`,
+  ).join(', ');
 
 export function GameRecordMarker({
   outcome,
@@ -110,14 +110,14 @@ export function GameRecordMarker({
         <details className="mt-2 text-xs text-[#625e55]">
           <summary className="cursor-pointer font-medium">View every vote</summary>
           <div className="mt-2 flex flex-col gap-3">
-            {completedVoteRecords.map((record) => (
+            {map(completedVoteRecords, (record) => (
               <section key={record.id} className="border border-[#22221e]/25 p-2">
                 <p className="font-medium">
                   Day {record.dayNumber} /{' '}
                   {record.phase === 'nomination' ? 'Nomination' : 'Verdict'}
                 </p>
                 <ul className="mt-1 flex flex-col gap-1">
-                  {record.votes.map((vote) => (
+                  {map(record.votes, (vote) => (
                     <li key={vote.participantId}>
                       {participantNames.get(vote.participantId) ?? 'Participant'}:{' '}
                       {'targetParticipantId' in vote

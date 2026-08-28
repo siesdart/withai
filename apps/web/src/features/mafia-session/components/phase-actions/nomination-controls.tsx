@@ -1,5 +1,6 @@
 /* oxlint-disable react-perf/jsx-no-new-function-as-prop -- each rendered Participant needs a bound Nomination intent. */
 import { Button } from '@repo/ui/components/button';
+import { filter, map, pipe } from 'remeda';
 
 import type { MafiaGameProjection } from '../../api/api';
 
@@ -17,7 +18,7 @@ export function NominationControls({
   onNominate,
 }: NominationControlsProps) {
   const participantNames = new Map(
-    participants.map((participant) => [participant.id, participant.name]),
+    map(participants, (participant) => [participant.id, participant.name]),
   );
 
   return (
@@ -31,9 +32,10 @@ export function NominationControls({
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
-        {participants
-          .filter((participant) => participant.alive)
-          .map((participant) => (
+        {pipe(
+          participants,
+          filter((participant) => participant.alive),
+          map((participant) => (
             <Button
               key={participant.id}
               disabled={disabled}
@@ -48,7 +50,8 @@ export function NominationControls({
             >
               Nominate {participant.name}
             </Button>
-          ))}
+          )),
+        )}
       </div>
     </div>
   );

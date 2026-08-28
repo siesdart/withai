@@ -85,21 +85,26 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         scopedIdempotencyKey,
         String(participantCount),
       );
-      if (lookup.type === 'conflict') {
-        return err({ type: 'idempotency-conflict' });
-      }
-      if (lookup.type === 'replayed') {
-        const existingSession = this.sessions.get(lookup.result);
-        if (existingSession) {
+      const idempotencyResult = match(lookup)
+        .with({ type: 'conflict' }, () =>
+          err<CreatedMafiaSession, GameSessionError>({ type: 'idempotency-conflict' }),
+        )
+        .with({ type: 'replayed' }, ({ result }) => {
+          const existingSession = this.sessions.get(result);
+          if (!existingSession) {
+            this.idempotencyKeys.delete(scopedIdempotencyKey);
+            return undefined;
+          }
+
           this.touch(existingSession);
           return this.projectionFor(existingSession).map((projection) => ({
             holderId,
             projection,
           }));
-        }
-
-        this.idempotencyKeys.delete(scopedIdempotencyKey);
-      }
+        })
+        .with({ type: 'new-request' }, () => undefined)
+        .exhaustive();
+      if (idempotencyResult) return idempotencyResult;
     }
 
     const countKey = `${this.utcDay()}:${holderId}`;
@@ -206,14 +211,18 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         idempotencyKey,
         content,
       );
-      if (lookup.type === 'replayed') {
-        return ok<MafiaGameSessionProjectionEntity, GameSessionError>(lookup.result);
-      }
-      if (lookup.type === 'conflict') {
-        return err<MafiaGameSessionProjectionEntity, GameSessionError>({
-          type: 'public-speech-idempotency-conflict',
-        });
-      }
+      const idempotencyResult = match(lookup)
+        .with({ type: 'replayed' }, ({ result }) =>
+          ok<MafiaGameSessionProjectionEntity, GameSessionError>(result),
+        )
+        .with({ type: 'conflict' }, () =>
+          err<MafiaGameSessionProjectionEntity, GameSessionError>({
+            type: 'public-speech-idempotency-conflict',
+          }),
+        )
+        .with({ type: 'new-request' }, () => undefined)
+        .exhaustive();
+      if (idempotencyResult) return idempotencyResult;
 
       const now = dayjs();
       const retryAfterMs = cooldownRetryAfterMs(session.nextPublicSpeechAt, now);
@@ -302,14 +311,18 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         idempotencyKey,
         fingerprint,
       );
-      if (lookup.type === 'replayed') {
-        return ok(lookup.result);
-      }
-      if (lookup.type === 'conflict') {
-        return err<MafiaGameSessionProjectionEntity, GameSessionError>({
-          type: 'day-action-idempotency-conflict',
-        });
-      }
+      const idempotencyResult = match(lookup)
+        .with({ type: 'replayed' }, ({ result }) =>
+          ok<MafiaGameSessionProjectionEntity, GameSessionError>(result),
+        )
+        .with({ type: 'conflict' }, () =>
+          err<MafiaGameSessionProjectionEntity, GameSessionError>({
+            type: 'day-action-idempotency-conflict',
+          }),
+        )
+        .with({ type: 'new-request' }, () => undefined)
+        .exhaustive();
+      if (idempotencyResult) return idempotencyResult;
 
       const now = dayjs();
       const retryAfterMs = cooldownRetryAfterMs(session.nextFinalDefenceAt, now);
@@ -358,14 +371,18 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         idempotencyKey,
         fingerprint,
       );
-      if (lookup.type === 'replayed') {
-        return ok(lookup.result);
-      }
-      if (lookup.type === 'conflict') {
-        return err<MafiaGameSessionProjectionEntity, GameSessionError>({
-          type: 'day-action-idempotency-conflict',
-        });
-      }
+      const idempotencyResult = match(lookup)
+        .with({ type: 'replayed' }, ({ result }) =>
+          ok<MafiaGameSessionProjectionEntity, GameSessionError>(result),
+        )
+        .with({ type: 'conflict' }, () =>
+          err<MafiaGameSessionProjectionEntity, GameSessionError>({
+            type: 'day-action-idempotency-conflict',
+          }),
+        )
+        .with({ type: 'new-request' }, () => undefined)
+        .exhaustive();
+      if (idempotencyResult) return idempotencyResult;
       const action = submit(session);
       if (action.isErr()) {
         return err<MafiaGameSessionProjectionEntity, GameSessionError>({

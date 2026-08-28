@@ -177,6 +177,9 @@ importers:
       react-dom:
         specifier: ^19.2.6
         version: 19.2.8(react@19.2.8)
+      remeda:
+        specifier: ^2.43.0
+        version: 2.43.0
       ts-pattern:
         specifier: ^5.9.0
         version: 5.9.0

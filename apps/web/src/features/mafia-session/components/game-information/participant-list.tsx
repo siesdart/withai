@@ -1,5 +1,6 @@
 import { Badge } from '@repo/ui/components/badge';
 import { cn } from '@repo/ui/lib/utils';
+import { map } from 'remeda';
 
 import type { MafiaGameProjection } from '../../api/api';
 
@@ -14,7 +15,7 @@ export function ParticipantList({
 }) {
   return (
     <ul className="mt-4 flex flex-col gap-1">
-      {participants.map((participant) => (
+      {map(participants, (participant) => (
         <li
           key={participant.id}
           className="flex min-w-0 items-center justify-between gap-3 bg-[#ded6c8] px-2 py-2.5"

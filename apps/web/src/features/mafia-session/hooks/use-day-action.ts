@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { match } from 'ts-pattern';
 
 import { submitFinalDefence, submitNomination, submitVerdict } from '../api/api';
 import { isGameSessionApiError } from '../api/error';
@@ -26,12 +27,17 @@ export function useDayAction(sessionId: string): UseDayActionResult {
   const cooldown = useCooldown();
   const mutation = useMutation({
     mutationFn: async (action: DayActionDraft) => {
-      const result =
-        action.type === 'nomination'
-          ? await submitNomination(sessionId, action.targetParticipantId, action.idempotencyKey)
-          : action.type === 'verdict'
-            ? await submitVerdict(sessionId, action.vote, action.idempotencyKey)
-            : await submitFinalDefence(sessionId, action.content, action.idempotencyKey);
+      const result = await match(action)
+        .with({ type: 'nomination' }, (draft) =>
+          submitNomination(sessionId, draft.targetParticipantId, draft.idempotencyKey),
+        )
+        .with({ type: 'verdict' }, (draft) =>
+          submitVerdict(sessionId, draft.vote, draft.idempotencyKey),
+        )
+        .with({ type: 'final-defence' }, (draft) =>
+          submitFinalDefence(sessionId, draft.content, draft.idempotencyKey),
+        )
+        .exhaustive();
       return result.match(
         (projection) => projection,
         (error) => {
@@ -70,13 +76,22 @@ function dayActionErrorMessage(error: unknown) {
     return 'Your action was not accepted. The server state is authoritative.';
   }
 
-  if (error.type === 'rate-limited') {
-    return 'Please wait before submitting another final defence.';
-  }
-
-  if (error.type === 'action-rejected' && error.status === 409) {
-    return 'This action was already submitted with a different request.';
-  }
-
-  return 'This action is no longer permitted; the current Phase may have expired.';
+  return match(error)
+    .with({ type: 'rate-limited' }, () => 'Please wait before submitting another final defence.')
+    .with(
+      { type: 'action-rejected', status: 409 },
+      () => 'This action was already submitted with a different request.',
+    )
+    .with(
+      { type: 'action-rejected' },
+      () => 'This action is no longer permitted; the current Phase may have expired.',
+    )
+    .with(
+      { type: 'unavailable' },
+      { type: 'aborted' },
+      { type: 'invalid-event' },
+      { type: 'request-failed' },
+      () => 'Your action was not accepted. The server state is authoritative.',
+    )
+    .exhaustive();
 }

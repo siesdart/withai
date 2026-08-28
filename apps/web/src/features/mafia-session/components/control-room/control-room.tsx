@@ -6,6 +6,7 @@ import {
   AccordionTrigger,
 } from '@repo/ui/components/accordion';
 import { EyeOffIcon, UsersIcon } from 'lucide-react';
+import { filter, flatMap } from 'remeda';
 
 import { useDayAction } from '../../hooks/use-day-action';
 import { useDeadlineCountdown } from '../../hooks/use-deadline-countdown';
@@ -28,7 +29,7 @@ export function ControlRoom({ sessionId }: { sessionId: string }) {
     (participant) => participant.id === snapshot.personal.participantId && participant.alive,
   );
   const revealedAllegiances = new Map(
-    snapshot.public.timeline.flatMap((item) =>
+    flatMap(snapshot.public.timeline, (item) =>
       item.type === 'record' && item.outcome.type === 'allegiance-reveal'
         ? [[item.outcome.participantId, item.outcome.allegiance] as const]
         : [],
@@ -53,7 +54,7 @@ export function ControlRoom({ sessionId }: { sessionId: string }) {
                 <UsersIcon aria-hidden="true" /> Living participants
               </span>
               <span className="mr-2 text-xs tracking-normal text-[#625e55] normal-case">
-                {snapshot.public.participants.filter((participant) => participant.alive).length}{' '}
+                {filter(snapshot.public.participants, (participant) => participant.alive).length}{' '}
                 alive
               </span>
             </AccordionTrigger>

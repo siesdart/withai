@@ -102,5 +102,12 @@ function actionErrorMessage(error: unknown) {
       { type: 'action-rejected' },
       () => 'This public action is no longer permitted; the current Phase may have expired.',
     )
-    .otherwise(() => 'Your speech was not accepted. The server state is authoritative.');
+    .with(
+      { type: 'unavailable' },
+      { type: 'aborted' },
+      { type: 'invalid-event' },
+      { type: 'request-failed' },
+      () => 'Your speech was not accepted. The server state is authoritative.',
+    )
+    .exhaustive();
 }

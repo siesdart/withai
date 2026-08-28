@@ -23,6 +23,7 @@
     "parse-sse": "^0.1.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
+    "remeda": "^2.43.0",
     "ts-pattern": "^5.9.0",
     "valibot": "^1.4.2",
     "zustand": "^5.0.15"

@@ -10,6 +10,7 @@ import {
 } from '@repo/ui/components/message-scroller';
 import { Separator } from '@repo/ui/components/separator';
 import { RadioIcon } from 'lucide-react';
+import { map } from 'remeda';
 
 import type { MafiaGameProjection } from '../../api/api';
 import { GameRecordMarker } from './game-record-marker';
@@ -31,7 +32,7 @@ export function PublicDiscussionPanel({
   controls,
 }: PublicDiscussionPanelProps) {
   const participantNames = new Map(
-    publicInformation.participants.map((participant) => [participant.id, participant.name]),
+    map(publicInformation.participants, (participant) => [participant.id, participant.name]),
   );
   const shouldShowPlayerControls =
     currentParticipantAlive && publicInformation.phase !== 'completed';
@@ -64,7 +65,7 @@ export function PublicDiscussionPanel({
                 </p>
               ) : (
                 <MessageGroup>
-                  {publicInformation.timeline.map((item) => {
+                  {map(publicInformation.timeline, (item) => {
                     if (item.type === 'record') {
                       return (
                         <MessageScrollerItem key={item.id} messageId={item.id}>

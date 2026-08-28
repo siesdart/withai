@@ -1,61 +1,24 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-import { nextPublicSpeechDraft, type PublicSpeechDraft } from './public-speech-draft';
+import { createDraftSlice } from './draft-slice';
+import type { GameSessionStore } from './game-session.types';
+import { createSessionSlice } from './session-slice';
 
-type GameSessionState = {
-  sessionId: string | undefined;
-  creationKey: string | undefined;
-  publicSpeechDraft: PublicSpeechDraft | undefined;
-  setSessionId: (sessionId: string) => void;
-  ensureCreationKey: () => string;
-  setPublicSpeechContent: (content: string) => void;
-  clearPublicSpeechDraft: (idempotencyKey: string) => void;
-  clearSession: () => void;
-};
-
-export const useGameSessionStore = create<GameSessionState>()(
+export const useGameSessionStore = create<GameSessionStore>()(
   persist(
-    (set, get) => ({
-      sessionId: undefined,
-      creationKey: undefined,
-      publicSpeechDraft: undefined,
-      setSessionId: (sessionId) => {
-        set({ sessionId, creationKey: undefined, publicSpeechDraft: undefined });
-      },
-      ensureCreationKey: () => {
-        const existingKey = get().creationKey;
-        if (existingKey) {
-          return existingKey;
-        }
-
-        const creationKey = crypto.randomUUID();
-        set({ creationKey });
-        return creationKey;
-      },
-      setPublicSpeechContent: (content) => {
-        set(({ publicSpeechDraft }) => ({
-          publicSpeechDraft: nextPublicSpeechDraft(content, publicSpeechDraft),
-        }));
-      },
-      clearPublicSpeechDraft: (idempotencyKey) => {
-        set(({ publicSpeechDraft }) =>
-          publicSpeechDraft?.idempotencyKey === idempotencyKey
-            ? { publicSpeechDraft: undefined }
-            : {},
-        );
-      },
-      clearSession: () => {
-        set({ sessionId: undefined, creationKey: undefined, publicSpeechDraft: undefined });
-      },
+    (...args) => ({
+      ...createSessionSlice(...args),
+      ...createDraftSlice(...args),
     }),
     {
       name: 'withai-mafia-game-session',
       storage: createJSONStorage(() => sessionStorage),
-      partialize: ({ sessionId, creationKey, publicSpeechDraft }) => ({
+      partialize: ({ sessionId, creationKey, publicSpeechDraft, dayActionDraft }) => ({
         sessionId,
         creationKey,
         publicSpeechDraft,
+        dayActionDraft,
       }),
     },
   ),

@@ -4,9 +4,9 @@ import { useCallback } from 'react';
 
 import { createMafiaGameSession } from '@/features/mafia-session/api/api';
 import { isUnavailableGameSession } from '@/features/mafia-session/api/error';
-import { ControlRoom } from '@/features/mafia-session/components/control-room';
-import { ControlRoomError } from '@/features/mafia-session/components/control-room-error';
-import { ControlRoomLoading } from '@/features/mafia-session/components/control-room-loading';
+import { ControlRoom } from '@/features/mafia-session/components/control-room/control-room';
+import { ControlRoomError } from '@/features/mafia-session/components/control-room/control-room-error';
+import { ControlRoomLoading } from '@/features/mafia-session/components/control-room/control-room-loading';
 import { gameSessionSnapshotOptions } from '@/features/mafia-session/hooks/use-game-session-snapshot';
 import { useGameSessionStore } from '@/features/mafia-session/store/game-session';
 

@@ -69,6 +69,25 @@ describe('Mafia Game Session API', () => {
     );
   });
 
+  it('validates optional and required Idempotency-Key parameters', async () => {
+    await request(app.getHttpServer())
+      .post('/game-sessions/mafia')
+      .set('Idempotency-Key', 'too-short')
+      .send({ participantCount: 5 })
+      .expect(400);
+
+    const created = await request(app.getHttpServer())
+      .post('/game-sessions/mafia')
+      .send({ participantCount: 5 })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post(`/game-sessions/${created.body.sessionId}/actions/public-speech`)
+      .set('Cookie', firstSetCookie(created.headers['set-cookie']))
+      .send({ content: 'I want to hear from the other participants.' })
+      .expect(400);
+  });
+
   it('serves an ordered initial snapshot over SSE to the session holder', async () => {
     const created = await request(app.getHttpServer())
       .post('/game-sessions/mafia')
@@ -129,14 +148,21 @@ describe('Mafia Game Session API', () => {
       eventId: 2,
       public: {
         phase: 'day-discussion',
-        chat: [
-          {
-            participantId: 'participant-1',
-            content: "I want to hear everyone's read before we nominate.",
-          },
-        ],
       },
     });
+    expect(speech.body.public.timeline).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'chat',
+          message: expect.objectContaining({
+            participantId: 'participant-1',
+            content: "I want to hear everyone's read before we nominate.",
+          }),
+        }),
+      ]),
+    );
+    expect(speech.body.public).not.toHaveProperty('chat');
+    expect(speech.body.public).not.toHaveProperty('outcomes');
 
     const retried = await request(app.getHttpServer())
       .post(`/game-sessions/${sessionId}/actions/public-speech`)
@@ -156,10 +182,16 @@ describe('Mafia Game Session API', () => {
       .set('Cookie', guestCookie)
       .expect(200);
 
-    expect(snapshot.body.public.chat).toEqual(
+    expect(snapshot.body.public.timeline).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ participantId: 'participant-1' }),
-        expect.objectContaining({ participantId: 'participant-2' }),
+        expect.objectContaining({
+          type: 'chat',
+          message: expect.objectContaining({ participantId: 'participant-1' }),
+        }),
+        expect.objectContaining({
+          type: 'chat',
+          message: expect.objectContaining({ participantId: 'participant-2' }),
+        }),
       ]),
     );
     expect(JSON.stringify(snapshot.body)).not.toContain('"persona":');

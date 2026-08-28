@@ -16,7 +16,10 @@ function isMafiaGameProjection(value: unknown): value is MafiaGameProjection {
   return (
     typeof value.eventId === 'number' &&
     typeof value.sessionId === 'string' &&
-    publicInformation.phase === 'day-discussion' &&
+    ['day-discussion', 'nomination', 'final-defence', 'verdict', 'completed'].includes(
+      String(publicInformation.phase),
+    ) &&
+    typeof publicInformation.dayNumber === 'number' &&
     typeof publicInformation.phaseDeadline === 'string' &&
     Array.isArray(publicInformation.participants) &&
     publicInformation.participants.every(
@@ -26,14 +29,19 @@ function isMafiaGameProjection(value: unknown): value is MafiaGameProjection {
         typeof participant.name === 'string' &&
         typeof participant.alive === 'boolean',
     ) &&
-    Array.isArray(publicInformation.chat) &&
-    publicInformation.chat.every(
-      (message) =>
-        isRecord(message) &&
-        typeof message.id === 'string' &&
-        typeof message.participantId === 'string' &&
-        typeof message.content === 'string',
-    ) &&
+    (typeof publicInformation.nominatedParticipantId === 'string' ||
+      publicInformation.nominatedParticipantId === null ||
+      publicInformation.nominatedParticipantId === undefined) &&
+    Array.isArray(publicInformation.timeline) &&
+    (publicInformation.voteStatus === null ||
+      publicInformation.voteStatus === undefined ||
+      (isRecord(publicInformation.voteStatus) &&
+        ['nomination', 'verdict'].includes(String(publicInformation.voteStatus.phase)) &&
+        Array.isArray(publicInformation.voteStatus.submittedParticipantIds) &&
+        publicInformation.voteStatus.submittedParticipantIds.every(
+          (participantId) => typeof participantId === 'string',
+        ))) &&
+    Array.isArray(publicInformation.completedVoteRecords) &&
     typeof personalInformation.participantId === 'string' &&
     ['Mafia', 'Detective', 'Doctor', 'Citizen'].includes(String(personalInformation.role)) &&
     ['Mafia', 'Citizen'].includes(String(personalInformation.allegiance))

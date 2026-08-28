@@ -18,6 +18,7 @@
 - Before any shadcn/ui work, find and read the relevant doc in `/shadcn`.
 - Before working on the UI, check if there are appropriate components in shadcn/ui, and if so, install and use those components first.
 - When installing new shadcn/ui components, do so to the `ui` package.
+- Avoid modifying the installed shadcn/ui component file itself. Prioritize overwriting it via props in the places where the component is used.
 
 ## Zustand
 

@@ -8,15 +8,20 @@ function projection(eventId: number): MafiaGameProjection {
     eventId,
     sessionId: 'session-1',
     public: {
+      dayNumber: 1,
       phase: 'day-discussion',
       phaseDeadline: '2026-08-27T00:02:00.000Z',
       participants: [],
-      chat: [],
+      nominatedParticipantId: undefined,
+      voteStatus: undefined,
+      timeline: [],
+      completedVoteRecords: [],
     },
     personal: {
       participantId: 'participant-1',
       role: 'Citizen',
       allegiance: 'Citizen',
+      vote: undefined,
     },
   };
 }

@@ -5,7 +5,6 @@ import {
   ForbiddenException,
   Get,
   Header,
-  Headers,
   HttpException,
   HttpStatus,
   Param,
@@ -32,10 +31,17 @@ import type { Request, Response } from 'express';
 import { map, type Observable } from 'rxjs';
 import { match } from 'ts-pattern';
 
+import { retryAfterSeconds } from './cooldown/cooldown';
 import { CreateMafiaSessionDto } from './dto/create-mafia-session.dto';
+import { CreateNominationDto } from './dto/create-nomination.dto';
 import { CreatePublicSpeechDto } from './dto/create-public-speech.dto';
+import { CreateVerdictDto } from './dto/create-verdict.dto';
 import { MafiaGameSessionProjectionEntity } from './entities/mafia-game-session-projection.entity';
 import { type GameSessionError, GameSessionsService } from './game-sessions.service';
+import {
+  OptionalIdempotencyKey,
+  RequiredIdempotencyKey,
+} from './idempotency/idempotency-key.decorator';
 
 @ApiTags('Game Sessions')
 @Controller('game-sessions')
@@ -65,11 +71,8 @@ export class GameSessionsController {
     @Body() body: CreateMafiaSessionDto,
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
-    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @OptionalIdempotencyKey() idempotencyKey: string | undefined,
   ) {
-    if (idempotencyKey && (idempotencyKey.length < 16 || idempotencyKey.length > 200)) {
-      throw new BadRequestException('The Idempotency-Key header is invalid.');
-    }
     return this.gameSessionsService
       .createMafiaSession(request.headers.cookie, body.participantCount, idempotencyKey)
       .match(
@@ -131,19 +134,15 @@ export class GameSessionsController {
     @Body() body: CreatePublicSpeechDto,
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
-    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @RequiredIdempotencyKey() idempotencyKey: string,
   ) {
-    if (!idempotencyKey || idempotencyKey.length < 16 || idempotencyKey.length > 200) {
-      throw new BadRequestException('The Idempotency-Key header is invalid.');
-    }
-
     return this.gameSessionsService
       .submitPublicSpeech(sessionId, request.headers.cookie, body.content, idempotencyKey)
       .match(
         (projection) => projection,
         (error) => {
           if (error.type === 'public-speech-rate-limited') {
-            response.setHeader('Retry-After', String(Math.ceil(error.retryAfterMs / 1000)));
+            response.setHeader('Retry-After', String(retryAfterSeconds(error.retryAfterMs)));
             throw new HttpException(
               'Please wait before submitting another public speech.',
               HttpStatus.TOO_MANY_REQUESTS,
@@ -152,6 +151,92 @@ export class GameSessionsController {
           throw this.toHttpException(error);
         },
       );
+  }
+
+  @Post(':sessionId/actions/nomination')
+  @ApiOperation({ summary: 'Nominate a living Participant for Final Defence' })
+  @ApiCookieAuth('withai_guest')
+  @ApiBody({ type: CreateNominationDto })
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  @ApiCreatedResponse({ type: MafiaGameSessionProjectionEntity })
+  @ApiBadRequestResponse({ description: 'The nomination is not permitted in the current Phase.' })
+  @ApiConflictResponse({ description: 'The idempotency key was reused with a different action.' })
+  submitNomination(
+    @Param('sessionId') sessionId: string,
+    @Body() body: CreateNominationDto,
+    @Req() request: Request,
+    @RequiredIdempotencyKey() idempotencyKey: string,
+  ) {
+    return this.dayActionProjection(() =>
+      this.gameSessionsService.submitNomination(
+        sessionId,
+        request.headers.cookie,
+        body.targetParticipantId,
+        idempotencyKey,
+      ),
+    );
+  }
+
+  @Post(':sessionId/actions/final-defence')
+  @ApiOperation({ summary: 'Submit the nominated Human Player Final Defence' })
+  @ApiCookieAuth('withai_guest')
+  @ApiBody({ type: CreatePublicSpeechDto })
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  @ApiCreatedResponse({ type: MafiaGameSessionProjectionEntity })
+  @ApiBadRequestResponse({
+    description: 'The Human Player is not eligible to make a Final Defence.',
+  })
+  @ApiTooManyRequestsResponse({
+    description: 'The Final Defence speech cooldown is active.',
+    headers: {
+      'Retry-After': {
+        description: 'Seconds until another Final Defence statement may be submitted.',
+        schema: { type: 'integer', minimum: 1 },
+      },
+    },
+  })
+  @ApiConflictResponse({ description: 'The idempotency key was reused with a different action.' })
+  submitFinalDefence(
+    @Param('sessionId') sessionId: string,
+    @Body() body: CreatePublicSpeechDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+    @RequiredIdempotencyKey() idempotencyKey: string,
+  ) {
+    return this.dayActionProjection(
+      () =>
+        this.gameSessionsService.submitFinalDefence(
+          sessionId,
+          request.headers.cookie,
+          body.content,
+          idempotencyKey,
+        ),
+      response,
+    );
+  }
+
+  @Post(':sessionId/actions/verdict')
+  @ApiOperation({ summary: 'Submit the Human Player verdict vote' })
+  @ApiCookieAuth('withai_guest')
+  @ApiBody({ type: CreateVerdictDto })
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  @ApiCreatedResponse({ type: MafiaGameSessionProjectionEntity })
+  @ApiBadRequestResponse({ description: 'The verdict is not permitted in the current Phase.' })
+  @ApiConflictResponse({ description: 'The idempotency key was reused with a different action.' })
+  submitVerdict(
+    @Param('sessionId') sessionId: string,
+    @Body() body: CreateVerdictDto,
+    @Req() request: Request,
+    @RequiredIdempotencyKey() idempotencyKey: string,
+  ) {
+    return this.dayActionProjection(() =>
+      this.gameSessionsService.submitVerdict(
+        sessionId,
+        request.headers.cookie,
+        body.vote,
+        idempotencyKey,
+      ),
+    );
   }
 
   @Sse(':sessionId/events')
@@ -257,6 +342,26 @@ export class GameSessionsController {
         () => new BadRequestException('This public action is not permitted.'),
       )
       .with(
+        { type: 'invalid-day-action' },
+        () => new BadRequestException('This Day action is not permitted in the current Phase.'),
+      )
+      .with(
+        { type: 'day-action-idempotency-conflict' },
+        () =>
+          new HttpException(
+            'The Idempotency-Key was already used with a different action.',
+            HttpStatus.CONFLICT,
+          ),
+      )
+      .with(
+        { type: 'day-action-rate-limited' },
+        () =>
+          new HttpException(
+            'Please wait before submitting another Final Defence statement.',
+            HttpStatus.TOO_MANY_REQUESTS,
+          ),
+      )
+      .with(
         { type: 'expired-phase' },
         () => new BadRequestException('The current Phase has expired.'),
       )
@@ -274,5 +379,20 @@ export class GameSessionsController {
 
     const eventId = Number.parseInt(value, 10);
     return Number.isSafeInteger(eventId) && eventId >= 0 ? eventId : undefined;
+  }
+
+  private dayActionProjection(
+    action: () => ReturnType<GameSessionsService['submitNomination']>,
+    response?: Response,
+  ) {
+    return action().match(
+      (projection) => projection,
+      (error) => {
+        if (error.type === 'day-action-rate-limited' && response) {
+          response.setHeader('Retry-After', String(retryAfterSeconds(error.retryAfterMs)));
+        }
+        throw this.toHttpException(error);
+      },
+    );
   }
 }

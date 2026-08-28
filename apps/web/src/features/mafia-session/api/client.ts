@@ -8,7 +8,7 @@ import { type GameSessionApiError, toGameSessionApiError } from './error';
 
 export type { MafiaGameProjection };
 
-const gameSessionsApi = ky.create({ credentials: 'include' });
+const gameSessionsApi = ky.create({ baseUrl: '/game-sessions/', credentials: 'include' });
 
 export type MafiaGameSessionSubscriptionOptions = {
   lastEventId: string | undefined;
@@ -29,7 +29,7 @@ export class MafiaGameSessionClient {
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
     return MafiaGameSessionClient.#request(
       gameSessionsApi
-        .post('game-sessions/mafia', {
+        .post('mafia', {
           json: { participantCount: 5 },
           headers: { 'Idempotency-Key': idempotencyKey },
         })
@@ -39,7 +39,7 @@ export class MafiaGameSessionClient {
 
   getSnapshot(): ResultAsync<MafiaGameProjection, GameSessionApiError> {
     return MafiaGameSessionClient.#request(
-      gameSessionsApi.get(`game-sessions/${this.#sessionId}/snapshot`).json(),
+      gameSessionsApi.get(`${this.#sessionId}/snapshot`).json(),
     );
   }
 
@@ -49,7 +49,7 @@ export class MafiaGameSessionClient {
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
     return MafiaGameSessionClient.#request(
       gameSessionsApi
-        .post(`game-sessions/${this.#sessionId}/actions/public-speech`, {
+        .post(`${this.#sessionId}/actions/public-speech`, {
           json: { content },
           headers: { 'Idempotency-Key': idempotencyKey },
         })
@@ -63,7 +63,7 @@ export class MafiaGameSessionClient {
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
     return MafiaGameSessionClient.#request(
       gameSessionsApi
-        .post(`game-sessions/${this.#sessionId}/actions/nomination`, {
+        .post(`${this.#sessionId}/actions/nomination`, {
           json: { targetParticipantId },
           headers: { 'Idempotency-Key': idempotencyKey },
         })
@@ -77,7 +77,7 @@ export class MafiaGameSessionClient {
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
     return MafiaGameSessionClient.#request(
       gameSessionsApi
-        .post(`game-sessions/${this.#sessionId}/actions/verdict`, {
+        .post(`${this.#sessionId}/actions/verdict`, {
           json: { vote },
           headers: { 'Idempotency-Key': idempotencyKey },
         })
@@ -91,7 +91,7 @@ export class MafiaGameSessionClient {
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
     return MafiaGameSessionClient.#request(
       gameSessionsApi
-        .post(`game-sessions/${this.#sessionId}/actions/final-defence`, {
+        .post(`${this.#sessionId}/actions/final-defence`, {
           json: { content },
           headers: { 'Idempotency-Key': idempotencyKey },
         })
@@ -107,7 +107,7 @@ export class MafiaGameSessionClient {
   }: MafiaGameSessionSubscriptionOptions): ResultAsync<void, GameSessionApiError> {
     return ResultAsync.fromPromise(
       (async () => {
-        const response = await gameSessionsApi.get(`game-sessions/${this.#sessionId}/events`, {
+        const response = await gameSessionsApi.get(`${this.#sessionId}/events`, {
           headers: {
             Accept: 'text/event-stream',
             ...(lastEventId ? { 'Last-Event-ID': lastEventId } : {}),

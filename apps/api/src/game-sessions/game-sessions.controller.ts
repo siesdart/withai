@@ -34,6 +34,7 @@ import { match } from 'ts-pattern';
 import { retryAfterSeconds } from './cooldown/cooldown';
 import { CreateMafiaSessionDto } from './dto/create-mafia-session.dto';
 import { CreateNominationDto } from './dto/create-nomination.dto';
+import { CreatePhaseTimeAdjustmentDto } from './dto/create-phase-time-adjustment.dto';
 import { CreatePublicSpeechDto } from './dto/create-public-speech.dto';
 import { CreateVerdictDto } from './dto/create-verdict.dto';
 import { MafiaGameSessionProjectionEntity } from './entities/mafia-game-session-projection.entity';
@@ -239,6 +240,50 @@ export class GameSessionsController {
     );
   }
 
+  @Post(':sessionId/actions/phase-time-adjustment')
+  @ApiOperation({ summary: 'Adjust the active Phase deadline for the Human Player' })
+  @ApiCookieAuth('withai_guest')
+  @ApiBody({ type: CreatePhaseTimeAdjustmentDto })
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  @ApiCreatedResponse({ type: MafiaGameSessionProjectionEntity })
+  @ApiBadRequestResponse({ description: 'The active Phase cannot be adjusted.' })
+  @ApiConflictResponse({ description: 'The idempotency key was reused with a different action.' })
+  @ApiTooManyRequestsResponse({
+    description: 'The Human Player must wait before adjusting the Phase time again.',
+    headers: {
+      'Retry-After': {
+        description: 'Seconds until another Phase Time Adjustment may be submitted.',
+        schema: { type: 'integer', minimum: 1 },
+      },
+    },
+  })
+  @ApiForbiddenResponse({
+    description: 'The Game Session does not exist or is unavailable to this guest.',
+  })
+  adjustPhaseTime(
+    @Param('sessionId') sessionId: string,
+    @Body() body: CreatePhaseTimeAdjustmentDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+    @RequiredIdempotencyKey() idempotencyKey: string,
+  ) {
+    return this.gameSessionsService
+      .adjustPhaseTime(sessionId, request.headers.cookie, body.adjustmentSeconds, idempotencyKey)
+      .match(
+        (projection) => projection,
+        (error) => {
+          if (error.type === 'phase-time-adjustment-rate-limited') {
+            response.setHeader('Retry-After', String(retryAfterSeconds(error.retryAfterMs)));
+            throw new HttpException(
+              'Please wait before adjusting the Phase time again.',
+              HttpStatus.TOO_MANY_REQUESTS,
+            );
+          }
+          throw this.toHttpException(error);
+        },
+      );
+  }
+
   @Sse(':sessionId/events')
   @Header('Cache-Control', 'no-cache')
   @ApiOperation({ summary: 'Subscribe to ordered Game Session SSE events' })
@@ -360,6 +405,26 @@ export class GameSessionsController {
             'Please wait before submitting another Final Defence statement.',
             HttpStatus.TOO_MANY_REQUESTS,
           ),
+      )
+      .with(
+        { type: 'phase-time-adjustment-idempotency-conflict' },
+        () =>
+          new HttpException(
+            'The Idempotency-Key was already used with a different action.',
+            HttpStatus.CONFLICT,
+          ),
+      )
+      .with(
+        { type: 'phase-time-adjustment-rate-limited' },
+        () =>
+          new HttpException(
+            'Please wait before adjusting the Phase time again.',
+            HttpStatus.TOO_MANY_REQUESTS,
+          ),
+      )
+      .with(
+        { type: 'invalid-phase-time-adjustment' },
+        () => new BadRequestException('The active Phase cannot be adjusted.'),
       )
       .with(
         { type: 'expired-phase' },

@@ -3,10 +3,12 @@ import { TimerIcon } from 'lucide-react';
 import { match } from 'ts-pattern';
 
 import type { MafiaGameProjection } from '../../api/client';
+import { PhaseTimeControls } from './phase-time-controls';
 
 type GamePhaseStatusProps = {
   dayNumber: number;
   phase: MafiaGameProjection['public']['phase'];
+  sessionId: string;
   deadline: { label: string; isExpired: boolean; isUrgent: boolean };
 };
 
@@ -34,7 +36,7 @@ const phaseCopy = (phase: GamePhaseStatusProps['phase']) =>
     }))
     .exhaustive();
 
-export function GamePhaseStatus({ dayNumber, phase, deadline }: GamePhaseStatusProps) {
+export function GamePhaseStatus({ dayNumber, phase, deadline, sessionId }: GamePhaseStatusProps) {
   const copy = phaseCopy(phase);
   const deadlineLabel = deadline.isExpired ? 'Resolving result' : `Deadline in ${deadline.label}`;
 
@@ -71,6 +73,7 @@ export function GamePhaseStatus({ dayNumber, phase, deadline }: GamePhaseStatusP
           >
             {deadlineLabel}
           </span>
+          <PhaseTimeControls sessionId={sessionId} />
         </div>
       ) : null}
     </section>

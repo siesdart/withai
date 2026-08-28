@@ -54,6 +54,10 @@ _Avoid_: Team, faction
 A rules-defined period of a Game Session that determines which actions and public information are available.
 _Avoid_: Turn (unless referring to one Participant's action opportunity)
 
+**Phase Time Adjustment**:
+A Human Player's change of the active Phase's remaining duration by a fixed amount. Each accepted adjustment is recorded as Public Information, is applied to the Phase deadline, and may cause the Phase to resolve immediately.
+_Avoid_: Pause, skip
+
 **Day**:
 The public Phase comprising timed discussion, nomination, final defence, and the resulting elimination decision.
 _Avoid_: Round

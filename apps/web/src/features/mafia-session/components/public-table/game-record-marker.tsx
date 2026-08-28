@@ -47,6 +47,11 @@ const outcomeCopy = (
     })
     .with({ type: 'day-changed' }, (value) => `Day ${value.dayNumber} began.`)
     .with(
+      { type: 'phase-time-adjusted' },
+      (value) =>
+        `Day ${value.dayNumber}: ${value.adjustmentSeconds > 0 ? 'added' : 'removed'} 10 seconds from the ${phaseLabel(value.phase)} timer.`,
+    )
+    .with(
       { type: 'phase-changed', phase: 'day-discussion' },
       (value) => `Day ${value.dayNumber}: discussion phase started.`,
     )
@@ -69,6 +74,14 @@ const outcomeCopy = (
         `${participantNames.get(value.participantId) ?? 'Participant'} was ${value.allegiance}.`,
     )
     .with({ type: 'victory' }, (value) => `${value.allegiance} team wins.`)
+    .exhaustive();
+
+const phaseLabel = (phase: Exclude<MafiaGameProjection['public']['phase'], 'completed'>) =>
+  match(phase)
+    .with('day-discussion', () => 'discussion')
+    .with('nomination', () => 'nomination')
+    .with('final-defence', () => 'final defence')
+    .with('verdict', () => 'verdict')
     .exhaustive();
 
 const nominationVoteTotals = (

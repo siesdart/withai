@@ -29,4 +29,41 @@ describe('GameSessionsService', () => {
       },
     });
   });
+
+  it('throttles Phase Time Adjustments while allowing an idempotent retry', () => {
+    jest.useFakeTimers({ now: new Date('2026-08-27T17:11:51.000Z') });
+    const service = new GameSessionsService({
+      decide: () => ({ type: 'remain-silent' }),
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+    });
+    const created = service.createMafiaSession(undefined, 5, undefined);
+    if (created.isErr()) throw new Error('Expected a session.');
+
+    const cookie = `withai_guest=${service.signGuestId(created.value.holderId)}`;
+    const first = service.adjustPhaseTime(
+      created.value.projection.sessionId,
+      cookie,
+      10,
+      'first-phase-time-adjustment-key',
+    );
+    expect(first.isOk()).toBe(true);
+    if (first.isErr()) throw new Error('Expected a Phase Time Adjustment.');
+
+    expect(
+      service.adjustPhaseTime(
+        created.value.projection.sessionId,
+        cookie,
+        -10,
+        'second-phase-time-adjustment-key',
+      ),
+    ).toEqual({ error: { type: 'phase-time-adjustment-rate-limited', retryAfterMs: 1000 } });
+    expect(
+      service.adjustPhaseTime(
+        created.value.projection.sessionId,
+        cookie,
+        10,
+        'first-phase-time-adjustment-key',
+      ),
+    ).toEqual(first);
+  });
 });

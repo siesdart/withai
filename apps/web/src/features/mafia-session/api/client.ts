@@ -99,6 +99,20 @@ export class MafiaGameSessionClient {
     );
   }
 
+  adjustPhaseTime(
+    adjustmentSeconds: 10 | -10,
+    idempotencyKey: string,
+  ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
+    return MafiaGameSessionClient.#request(
+      gameSessionsApi
+        .post(`${this.#sessionId}/actions/phase-time-adjustment`, {
+          json: { adjustmentSeconds },
+          headers: { 'Idempotency-Key': idempotencyKey },
+        })
+        .json(),
+    );
+  }
+
   subscribe({
     lastEventId,
     onConnected,

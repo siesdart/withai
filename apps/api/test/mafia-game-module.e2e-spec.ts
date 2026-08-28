@@ -1,5 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 import { MafiaGameModule } from '@repo/mafia';
+import { filter, map, pipe } from 'remeda';
 
 describe('MafiaGameModule', () => {
   it('returns typed errors for invalid inputs and unknown participants', () => {
@@ -32,6 +33,38 @@ describe('MafiaGameModule', () => {
     expect(validSession.value.projectionFor('unknown-participant', 1)).toMatchObject({
       error: { type: 'unknown-participant', participantId: 'unknown-participant' },
     });
+  });
+
+  it('records a Phase Time Adjustment before immediately resolving an expired phase', () => {
+    const gameModule = new MafiaGameModule(() => 0, {
+      dayDiscussionDurationMs: 60_000,
+      nominationDurationMs: 60_000,
+      finalDefenceDurationMs: 60_000,
+      verdictDurationMs: 60_000,
+    });
+    const sessionResult = gameModule.create({
+      sessionId: 'session-time-adjustment',
+      participantCount: 5,
+      phaseDeadline: new Date('2026-08-26T00:01:00.000Z'),
+    });
+    if (sessionResult.isErr()) throw new Error('Expected a valid Mafia Game Session.');
+
+    const session = sessionResult.value;
+    const now = new Date('2026-08-26T00:00:55.000Z');
+    expect(session.adjustPhaseTime(-10, now)).toEqual({ value: undefined });
+    expect(session.advanceDayPhase(now)).toEqual({
+      value: { type: 'phase-advanced', phase: 'nomination' },
+    });
+
+    const projectionResult = session.projectionFor('participant-1', 2);
+    if (projectionResult.isErr()) throw new Error('Expected a projection.');
+    const outcomes = pipe(
+      projectionResult.value.public.timeline,
+      filter((item) => item.type === 'record'),
+      map((item) => item.outcome.type),
+    );
+    expect(outcomes.slice(-2)).toEqual(['phase-time-adjusted', 'phase-changed']);
+    expect(projectionResult.value.public.phase).toBe('nomination');
   });
 
   it('assigns shuffled roles to participant seats using an injected random source', () => {

@@ -38,6 +38,9 @@ export type GameSessionError =
   | { type: 'invalid-day-action' }
   | { type: 'day-action-idempotency-conflict' }
   | { type: 'day-action-rate-limited'; retryAfterMs: number }
+  | { type: 'phase-time-adjustment-idempotency-conflict' }
+  | { type: 'phase-time-adjustment-rate-limited'; retryAfterMs: number }
+  | { type: 'invalid-phase-time-adjustment' }
   | { type: 'expired-phase'; phaseDeadline: string }
   | { type: 'dead-participant'; participantId: string };
 
@@ -134,10 +137,12 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       nextEventId: 0,
       nextPublicSpeechAt: undefined,
       nextFinalDefenceAt: undefined,
+      nextPhaseTimeAdjustmentAt: undefined,
       lastAccessedAt: dayjs(),
       activeEventSubscribers: 0,
       publicSpeechIdempotencyKeys: new Map(),
       dayActionIdempotencyKeys: new Map(),
+      phaseTimeAdjustmentIdempotencyKeys: new Map(),
       phaseTimer: undefined,
       agentFinalDefenceTimer: undefined,
     };
@@ -296,6 +301,72 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     return this.submitDayAction(sessionId, cookie, `verdict:${vote}`, idempotencyKey, (session) =>
       session.gameSession.submitVerdict(session.humanParticipantId, vote),
     );
+  }
+
+  adjustPhaseTime(
+    sessionId: string,
+    cookie: string | undefined,
+    adjustmentSeconds: 10 | -10,
+    idempotencyKey: string,
+  ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
+    return this.activeSessionForHolder(sessionId, cookie).andThen((session) => {
+      const fingerprint = String(adjustmentSeconds);
+      const lookup = lookupIdempotency(
+        session.phaseTimeAdjustmentIdempotencyKeys,
+        idempotencyKey,
+        fingerprint,
+      );
+      const idempotencyResult = match(lookup)
+        .with({ type: 'replayed' }, ({ result }) =>
+          ok<MafiaGameSessionProjectionEntity, GameSessionError>(result),
+        )
+        .with({ type: 'conflict' }, () =>
+          err<MafiaGameSessionProjectionEntity, GameSessionError>({
+            type: 'phase-time-adjustment-idempotency-conflict',
+          }),
+        )
+        .with({ type: 'new-request' }, () => undefined)
+        .exhaustive();
+      if (idempotencyResult) return idempotencyResult;
+
+      const now = dayjs();
+      const retryAfterMs = cooldownRetryAfterMs(session.nextPhaseTimeAdjustmentAt, now);
+      if (retryAfterMs) {
+        return err<MafiaGameSessionProjectionEntity, GameSessionError>({
+          type: 'phase-time-adjustment-rate-limited',
+          retryAfterMs,
+        });
+      }
+
+      const adjustment = session.gameSession.adjustPhaseTime(adjustmentSeconds, now.toDate());
+      if (adjustment.isErr()) {
+        return err<MafiaGameSessionProjectionEntity, GameSessionError>({
+          type: 'invalid-phase-time-adjustment',
+        });
+      }
+
+      const phaseResult = session.gameSession.advanceDayPhase(now.toDate());
+      phaseResult.match(
+        (result) => {
+          if (result.type !== 'not-due') this.submitAgentDayActions(session);
+        },
+        () => undefined,
+      );
+
+      return this.publishProjection(session).andTee((projection) => {
+        session.nextPhaseTimeAdjustmentAt = now.add(
+          gameSessionsConfig.humanActionCooldownMs,
+          'millisecond',
+        );
+        recordIdempotency(
+          session.phaseTimeAdjustmentIdempotencyKeys,
+          idempotencyKey,
+          fingerprint,
+          projection,
+        );
+        this.schedulePhaseTransition(session);
+      });
+    });
   }
 
   submitFinalDefence(

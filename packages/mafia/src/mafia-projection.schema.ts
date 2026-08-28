@@ -40,6 +40,13 @@ const PublicOutcomeSchema = v.variant('type', [
   v.object({ id: v.string(), type: v.literal('day-changed'), dayNumber: v.number() }),
   v.object({
     id: v.string(),
+    type: v.literal('phase-time-adjusted'),
+    dayNumber: v.number(),
+    phase: v.picklist(['day-discussion', 'nomination', 'final-defence', 'verdict'] as const),
+    adjustmentSeconds: v.picklist([10, -10] as const),
+  }),
+  v.object({
+    id: v.string(),
     type: v.literal('phase-changed'),
     dayNumber: v.number(),
     phase: MafiaPhaseSchema,

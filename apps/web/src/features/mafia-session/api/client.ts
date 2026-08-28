@@ -101,12 +101,14 @@ export class MafiaGameSessionClient {
 
   adjustPhaseTime(
     adjustmentSeconds: 10 | -10,
+    expectedPhase: Exclude<MafiaGameProjection['public']['phase'], 'completed'>,
+    expectedPhaseDeadline: string,
     idempotencyKey: string,
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
     return MafiaGameSessionClient.#request(
       gameSessionsApi
         .post(`${this.#sessionId}/actions/phase-time-adjustment`, {
-          json: { adjustmentSeconds },
+          json: { adjustmentSeconds, expectedPhase, expectedPhaseDeadline },
           headers: { 'Idempotency-Key': idempotencyKey },
         })
         .json(),

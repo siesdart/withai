@@ -268,7 +268,14 @@ export class GameSessionsController {
     @RequiredIdempotencyKey() idempotencyKey: string,
   ) {
     return this.gameSessionsService
-      .adjustPhaseTime(sessionId, request.headers.cookie, body.adjustmentSeconds, idempotencyKey)
+      .adjustPhaseTime(
+        sessionId,
+        request.headers.cookie,
+        body.adjustmentSeconds,
+        body.expectedPhase,
+        body.expectedPhaseDeadline,
+        idempotencyKey,
+      )
       .match(
         (projection) => projection,
         (error) => {
@@ -425,6 +432,14 @@ export class GameSessionsController {
       .with(
         { type: 'invalid-phase-time-adjustment' },
         () => new BadRequestException('The active Phase cannot be adjusted.'),
+      )
+      .with(
+        { type: 'stale-phase-time-adjustment' },
+        () =>
+          new HttpException(
+            'The Phase changed before the adjustment could be applied.',
+            HttpStatus.CONFLICT,
+          ),
       )
       .with(
         { type: 'expired-phase' },

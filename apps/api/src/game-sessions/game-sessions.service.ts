@@ -5,6 +5,7 @@ import { Inject } from '@nestjs/common';
 import {
   MafiaGameModule,
   mafiaGameConfig,
+  type MafiaPhase,
   type MafiaProjectionError,
   type MafiaSessionInputError,
 } from '@repo/mafia';
@@ -41,6 +42,7 @@ export type GameSessionError =
   | { type: 'phase-time-adjustment-idempotency-conflict' }
   | { type: 'phase-time-adjustment-rate-limited'; retryAfterMs: number }
   | { type: 'invalid-phase-time-adjustment' }
+  | { type: 'stale-phase-time-adjustment' }
   | { type: 'expired-phase'; phaseDeadline: string }
   | { type: 'dead-participant'; participantId: string };
 
@@ -307,6 +309,8 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     sessionId: string,
     cookie: string | undefined,
     adjustmentSeconds: 10 | -10,
+    expectedPhase: Exclude<MafiaPhase, 'completed'>,
+    expectedPhaseDeadline: string,
     idempotencyKey: string,
   ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
     return this.activeSessionForHolder(sessionId, cookie).andThen((session) => {
@@ -328,6 +332,25 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         .with({ type: 'new-request' }, () => undefined)
         .exhaustive();
       if (idempotencyResult) return idempotencyResult;
+
+      const currentProjection = session.gameSession.projectionFor(
+        session.humanParticipantId,
+        session.nextEventId,
+      );
+      if (currentProjection.isErr()) {
+        return err<MafiaGameSessionProjectionEntity, GameSessionError>({
+          type: 'invalid-mafia-projection',
+          cause: currentProjection.error,
+        });
+      }
+      if (
+        currentProjection.value.public.phase !== expectedPhase ||
+        currentProjection.value.public.phaseDeadline !== expectedPhaseDeadline
+      ) {
+        return err<MafiaGameSessionProjectionEntity, GameSessionError>({
+          type: 'stale-phase-time-adjustment',
+        });
+      }
 
       const now = dayjs();
       const retryAfterMs = cooldownRetryAfterMs(session.nextPhaseTimeAdjustmentAt, now);

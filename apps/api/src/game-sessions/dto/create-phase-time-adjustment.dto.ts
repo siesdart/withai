@@ -1,5 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsIn } from 'class-validator';
+import type { MafiaPhase } from '@repo/mafia';
+import { IsDateString, IsIn } from 'class-validator';
+
+type ActiveMafiaPhase = Exclude<MafiaPhase, 'completed'>;
 
 export class CreatePhaseTimeAdjustmentDto {
   @ApiProperty({
@@ -9,4 +12,19 @@ export class CreatePhaseTimeAdjustmentDto {
   })
   @IsIn([10, -10])
   adjustmentSeconds!: 10 | -10;
+
+  @ApiProperty({
+    description: 'The active Phase displayed when the Human Player requested the adjustment.',
+    enum: ['day-discussion', 'nomination', 'final-defence', 'verdict'],
+    example: 'day-discussion',
+  })
+  @IsIn(['day-discussion', 'nomination', 'final-defence', 'verdict'])
+  expectedPhase!: ActiveMafiaPhase;
+
+  @ApiProperty({
+    description: 'The Phase deadline displayed when the Human Player requested the adjustment.',
+    format: 'date-time',
+  })
+  @IsDateString()
+  expectedPhaseDeadline!: string;
 }

@@ -1,10 +1,17 @@
 import { Button } from '@repo/ui/components/button';
 import { MinusIcon, PlusIcon } from 'lucide-react';
 
+import type { MafiaGameProjection } from '../../api/client';
 import { usePhaseTimeAdjustment } from '../../hooks/use-phase-time-adjustment';
 
-export function PhaseTimeControls({ sessionId }: { sessionId: string }) {
-  const phaseTimeAdjustment = usePhaseTimeAdjustment(sessionId);
+type PhaseTimeControlsProps = {
+  sessionId: string;
+  phase: Exclude<MafiaGameProjection['public']['phase'], 'completed'>;
+  phaseDeadline: string;
+};
+
+export function PhaseTimeControls({ sessionId, phase, phaseDeadline }: PhaseTimeControlsProps) {
+  const phaseTimeAdjustment = usePhaseTimeAdjustment(sessionId, phase, phaseDeadline);
   const disabled = phaseTimeAdjustment.isPending || phaseTimeAdjustment.isCoolingDown;
   const cooldownLabel = phaseTimeAdjustment.retryAfterSeconds
     ? ` Available again in ${phaseTimeAdjustment.retryAfterSeconds} seconds.`

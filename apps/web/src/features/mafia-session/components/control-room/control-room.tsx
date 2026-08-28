@@ -42,6 +42,7 @@ export function ControlRoom({ sessionId }: { sessionId: string }) {
         <GamePhaseStatus
           dayNumber={snapshot.public.dayNumber}
           phase={snapshot.public.phase}
+          phaseDeadline={snapshot.public.phaseDeadline}
           deadline={deadline}
           sessionId={sessionId}
         />

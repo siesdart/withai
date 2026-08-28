@@ -36,6 +36,7 @@
 ## Valibot: ALWAYS read docs before coding
 
 - Before any Valibot work, find and read the relevant doc in `/valibot`.
+- Always use Valibot instead of Zod.
 
 ## Nest.js
 

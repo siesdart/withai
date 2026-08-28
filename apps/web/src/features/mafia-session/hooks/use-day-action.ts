@@ -1,12 +1,12 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { match } from 'ts-pattern';
 
 import { MafiaGameSessionClient } from '../api/client';
 import { isGameSessionApiError } from '../api/error';
 import { type DayAction, type DayActionDraft } from '../store/drafts/day-action-draft';
 import { useGameSessionStore } from '../store/game-session';
+import { gameSessionMutationOptions } from './game-session-mutation-options';
 import { useCooldown } from './use-cooldown';
-import { gameSessionSnapshotOptions } from './use-game-session-snapshot';
 
 export type UseDayActionResult = {
   error: string | undefined;
@@ -21,40 +21,28 @@ type DayActionSubmitOptions = {
 };
 
 export function useDayAction(sessionId: string): UseDayActionResult {
-  const queryClient = useQueryClient();
   const ensureDayActionDraft = useGameSessionStore((state) => state.ensureDayActionDraft);
   const clearDayActionDraft = useGameSessionStore((state) => state.clearDayActionDraft);
   const cooldown = useCooldown();
   const client = new MafiaGameSessionClient(sessionId);
-  const mutation = useMutation({
-    mutationFn: async (action: DayActionDraft) => {
-      const result = await match(action)
-        .with({ type: 'nomination' }, (draft) =>
-          client.submitNomination(draft.targetParticipantId, draft.idempotencyKey),
-        )
-        .with({ type: 'verdict' }, (draft) =>
-          client.submitVerdict(draft.vote, draft.idempotencyKey),
-        )
-        .with({ type: 'final-defence' }, (draft) =>
-          client.submitFinalDefence(draft.content, draft.idempotencyKey),
-        )
-        .exhaustive();
-      return result.match(
-        (projection) => projection,
-        (error) => {
-          throw error;
-        },
-      );
-    },
-    onSuccess: (projection) => {
-      queryClient.setQueryData(gameSessionSnapshotOptions(sessionId).queryKey, projection);
-    },
-    onError: (error) => {
-      if (isGameSessionApiError(error) && error.type === 'rate-limited') {
-        cooldown.startCooldown(error.retryAfterMs);
-      }
-    },
-  });
+  const mutation = useMutation(
+    gameSessionMutationOptions({
+      sessionId,
+      mutationFn: (action: DayActionDraft) =>
+        match(action)
+          .with({ type: 'nomination' }, (draft) =>
+            client.submitNomination(draft.targetParticipantId, draft.idempotencyKey),
+          )
+          .with({ type: 'verdict' }, (draft) =>
+            client.submitVerdict(draft.vote, draft.idempotencyKey),
+          )
+          .with({ type: 'final-defence' }, (draft) =>
+            client.submitFinalDefence(draft.content, draft.idempotencyKey),
+          )
+          .exhaustive(),
+      onRateLimited: cooldown.startCooldown,
+    }),
+  );
   return {
     submit: (action: DayAction, options?: DayActionSubmitOptions) => {
       const draft = ensureDayActionDraft(action);

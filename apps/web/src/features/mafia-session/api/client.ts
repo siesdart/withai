@@ -27,14 +27,7 @@ export class MafiaGameSessionClient {
   static createSession(
     idempotencyKey: string,
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
-    return MafiaGameSessionClient.#request(
-      gameSessionsApi
-        .post('mafia', {
-          json: { participantCount: 5 },
-          headers: { 'Idempotency-Key': idempotencyKey },
-        })
-        .json(),
-    );
+    return MafiaGameSessionClient.#postProjection('mafia', { participantCount: 5 }, idempotencyKey);
   }
 
   getSnapshot(): ResultAsync<MafiaGameProjection, GameSessionApiError> {
@@ -47,13 +40,10 @@ export class MafiaGameSessionClient {
     content: string,
     idempotencyKey: string,
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
-    return MafiaGameSessionClient.#request(
-      gameSessionsApi
-        .post(`${this.#sessionId}/actions/public-speech`, {
-          json: { content },
-          headers: { 'Idempotency-Key': idempotencyKey },
-        })
-        .json(),
+    return MafiaGameSessionClient.#postProjection(
+      `${this.#sessionId}/actions/public-speech`,
+      { content },
+      idempotencyKey,
     );
   }
 
@@ -61,13 +51,10 @@ export class MafiaGameSessionClient {
     targetParticipantId: string,
     idempotencyKey: string,
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
-    return MafiaGameSessionClient.#request(
-      gameSessionsApi
-        .post(`${this.#sessionId}/actions/nomination`, {
-          json: { targetParticipantId },
-          headers: { 'Idempotency-Key': idempotencyKey },
-        })
-        .json(),
+    return MafiaGameSessionClient.#postProjection(
+      `${this.#sessionId}/actions/nomination`,
+      { targetParticipantId },
+      idempotencyKey,
     );
   }
 
@@ -75,13 +62,10 @@ export class MafiaGameSessionClient {
     vote: 'eliminate' | 'spare',
     idempotencyKey: string,
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
-    return MafiaGameSessionClient.#request(
-      gameSessionsApi
-        .post(`${this.#sessionId}/actions/verdict`, {
-          json: { vote },
-          headers: { 'Idempotency-Key': idempotencyKey },
-        })
-        .json(),
+    return MafiaGameSessionClient.#postProjection(
+      `${this.#sessionId}/actions/verdict`,
+      { vote },
+      idempotencyKey,
     );
   }
 
@@ -89,13 +73,10 @@ export class MafiaGameSessionClient {
     content: string,
     idempotencyKey: string,
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
-    return MafiaGameSessionClient.#request(
-      gameSessionsApi
-        .post(`${this.#sessionId}/actions/final-defence`, {
-          json: { content },
-          headers: { 'Idempotency-Key': idempotencyKey },
-        })
-        .json(),
+    return MafiaGameSessionClient.#postProjection(
+      `${this.#sessionId}/actions/final-defence`,
+      { content },
+      idempotencyKey,
     );
   }
 
@@ -105,13 +86,10 @@ export class MafiaGameSessionClient {
     expectedPhaseDeadline: string,
     idempotencyKey: string,
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
-    return MafiaGameSessionClient.#request(
-      gameSessionsApi
-        .post(`${this.#sessionId}/actions/phase-time-adjustment`, {
-          json: { adjustmentSeconds, expectedPhase, expectedPhaseDeadline },
-          headers: { 'Idempotency-Key': idempotencyKey },
-        })
-        .json(),
+    return MafiaGameSessionClient.#postProjection(
+      `${this.#sessionId}/actions/phase-time-adjustment`,
+      { adjustmentSeconds, expectedPhase, expectedPhaseDeadline },
+      idempotencyKey,
     );
   }
 
@@ -154,6 +132,21 @@ export class MafiaGameSessionClient {
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
     return ResultAsync.fromPromise(request, toGameSessionApiError).andThen(
       validateMafiaGameProjection,
+    );
+  }
+
+  static #postProjection(
+    path: string,
+    json: Record<string, unknown>,
+    idempotencyKey: string,
+  ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
+    return MafiaGameSessionClient.#request(
+      gameSessionsApi
+        .post(path, {
+          json,
+          headers: { 'Idempotency-Key': idempotencyKey },
+        })
+        .json(),
     );
   }
 }

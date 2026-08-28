@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { match } from 'ts-pattern';
 
 import { MafiaGameSessionClient } from '../api/client';
+import { updateGameSessionSnapshot } from './game-session-mutation-options';
 import { gameSessionSnapshotOptions } from './use-game-session-snapshot';
 
 export function useGameSessionSubscription(sessionId: string | undefined) {
@@ -31,7 +32,7 @@ export function useGameSessionSubscription(sessionId: string | undefined) {
           },
           onProjection: (projection, eventId) => {
             lastEventId = eventId;
-            queryClient.setQueryData(gameSessionSnapshotOptions(sessionId).queryKey, projection);
+            updateGameSessionSnapshot(queryClient, sessionId, projection);
           },
           signal: abortController.signal,
         });

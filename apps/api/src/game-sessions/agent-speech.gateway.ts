@@ -1,4 +1,5 @@
 import type { MafiaAgentSpeechContext } from '@repo/mafia';
+import { findLast } from 'remeda';
 
 export type AgentSpeechDecision =
   | { type: 'speak'; content: string; delayMs: number }
@@ -18,7 +19,7 @@ export const agentSpeechGateway = Symbol('agent-speech-gateway');
 
 export class DeterministicAgentSpeechGateway implements AgentSpeechGateway {
   decide(context: MafiaAgentSpeechContext): AgentSpeechDecision {
-    const latestChat = context.public.timeline.findLast((item) => item.type === 'chat');
+    const latestChat = findLast(context.public.timeline, (item) => item.type === 'chat');
     if (!latestChat || latestChat.message.participantId === context.participant.id) {
       return { type: 'remain-silent' };
     }

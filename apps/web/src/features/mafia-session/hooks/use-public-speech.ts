@@ -1,12 +1,12 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { match } from 'ts-pattern';
 
 import { MafiaGameSessionClient } from '../api/client';
 import { isGameSessionApiError } from '../api/error';
 import { useGameSessionStore } from '../store/game-session';
+import { gameSessionMutationOptions } from './game-session-mutation-options';
 import { useCooldown } from './use-cooldown';
-import { gameSessionSnapshotOptions } from './use-game-session-snapshot';
 
 export type UsePublicSpeechResult = {
   content: string;
@@ -19,37 +19,24 @@ export type UsePublicSpeechResult = {
 };
 
 export function usePublicSpeech(sessionId: string): UsePublicSpeechResult {
-  const queryClient = useQueryClient();
   const publicSpeechDraft = useGameSessionStore((state) => state.publicSpeechDraft);
   const setPublicSpeechContent = useGameSessionStore((state) => state.setPublicSpeechContent);
   const clearPublicSpeechDraft = useGameSessionStore((state) => state.clearPublicSpeechDraft);
   const cooldown = useCooldown();
   const client = new MafiaGameSessionClient(sessionId);
-  const mutation = useMutation({
-    mutationFn: async ({
-      speechContent,
-      idempotencyKey,
-    }: {
-      speechContent: string;
-      idempotencyKey: string;
-    }) => {
-      const result = await client.submitPublicSpeech(speechContent, idempotencyKey);
-      return result.match(
-        (projection) => projection,
-        (error) => {
-          throw error;
-        },
-      );
-    },
-    onSuccess: (projection) => {
-      queryClient.setQueryData(gameSessionSnapshotOptions(sessionId).queryKey, projection);
-    },
-    onError: (error) => {
-      if (isGameSessionApiError(error) && error.type === 'rate-limited') {
-        cooldown.startCooldown(error.retryAfterMs);
-      }
-    },
-  });
+  const mutation = useMutation(
+    gameSessionMutationOptions({
+      sessionId,
+      mutationFn: ({
+        speechContent,
+        idempotencyKey,
+      }: {
+        speechContent: string;
+        idempotencyKey: string;
+      }) => client.submitPublicSpeech(speechContent, idempotencyKey),
+      onRateLimited: cooldown.startCooldown,
+    }),
+  );
 
   const onContentChange = useCallback(
     (event: React.ChangeEvent<HTMLTextAreaElement>) => {

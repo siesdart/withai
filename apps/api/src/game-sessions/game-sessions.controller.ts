@@ -28,6 +28,7 @@ import {
   ApiTooManyRequestsResponse,
 } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
+import type { Result } from 'neverthrow';
 import { map, type Observable } from 'rxjs';
 import { match } from 'ts-pattern';
 
@@ -74,10 +75,10 @@ export class GameSessionsController {
     @Res({ passthrough: true }) response: Response,
     @OptionalIdempotencyKey() idempotencyKey: string | undefined,
   ) {
-    return this.gameSessionsService
-      .createMafiaSession(request.headers.cookie, body.participantCount, idempotencyKey)
-      .match(
-        ({ holderId, projection }) => {
+    return this.resolveGameSessionResult(
+      this.gameSessionsService
+        .createMafiaSession(request.headers.cookie, body.participantCount, idempotencyKey)
+        .map(({ holderId, projection }) => {
           response.cookie(
             this.gameSessionsService.guestCookieName(),
             this.gameSessionsService.signGuestId(holderId),
@@ -88,11 +89,8 @@ export class GameSessionsController {
             },
           );
           return projection;
-        },
-        (error) => {
-          throw this.toHttpException(error);
-        },
-      );
+        }),
+    );
   }
 
   @Get(':sessionId/snapshot')
@@ -137,21 +135,15 @@ export class GameSessionsController {
     @Res({ passthrough: true }) response: Response,
     @RequiredIdempotencyKey() idempotencyKey: string,
   ) {
-    return this.gameSessionsService
-      .submitPublicSpeech(sessionId, request.headers.cookie, body.content, idempotencyKey)
-      .match(
-        (projection) => projection,
-        (error) => {
-          if (error.type === 'public-speech-rate-limited') {
-            response.setHeader('Retry-After', String(retryAfterSeconds(error.retryAfterMs)));
-            throw new HttpException(
-              'Please wait before submitting another public speech.',
-              HttpStatus.TOO_MANY_REQUESTS,
-            );
-          }
-          throw this.toHttpException(error);
-        },
-      );
+    return this.resolveGameSessionResult(
+      this.gameSessionsService.submitPublicSpeech(
+        sessionId,
+        request.headers.cookie,
+        body.content,
+        idempotencyKey,
+      ),
+      response,
+    );
   }
 
   @Post(':sessionId/actions/nomination')
@@ -168,7 +160,7 @@ export class GameSessionsController {
     @Req() request: Request,
     @RequiredIdempotencyKey() idempotencyKey: string,
   ) {
-    return this.dayActionProjection(() =>
+    return this.resolveGameSessionResult(
       this.gameSessionsService.submitNomination(
         sessionId,
         request.headers.cookie,
@@ -204,14 +196,13 @@ export class GameSessionsController {
     @Res({ passthrough: true }) response: Response,
     @RequiredIdempotencyKey() idempotencyKey: string,
   ) {
-    return this.dayActionProjection(
-      () =>
-        this.gameSessionsService.submitFinalDefence(
-          sessionId,
-          request.headers.cookie,
-          body.content,
-          idempotencyKey,
-        ),
+    return this.resolveGameSessionResult(
+      this.gameSessionsService.submitFinalDefence(
+        sessionId,
+        request.headers.cookie,
+        body.content,
+        idempotencyKey,
+      ),
       response,
     );
   }
@@ -230,7 +221,7 @@ export class GameSessionsController {
     @Req() request: Request,
     @RequiredIdempotencyKey() idempotencyKey: string,
   ) {
-    return this.dayActionProjection(() =>
+    return this.resolveGameSessionResult(
       this.gameSessionsService.submitVerdict(
         sessionId,
         request.headers.cookie,
@@ -267,28 +258,17 @@ export class GameSessionsController {
     @Res({ passthrough: true }) response: Response,
     @RequiredIdempotencyKey() idempotencyKey: string,
   ) {
-    return this.gameSessionsService
-      .adjustPhaseTime(
+    return this.resolveGameSessionResult(
+      this.gameSessionsService.adjustPhaseTime(
         sessionId,
         request.headers.cookie,
         body.adjustmentSeconds,
         body.expectedPhase,
         body.expectedPhaseDeadline,
         idempotencyKey,
-      )
-      .match(
-        (projection) => projection,
-        (error) => {
-          if (error.type === 'phase-time-adjustment-rate-limited') {
-            response.setHeader('Retry-After', String(retryAfterSeconds(error.retryAfterMs)));
-            throw new HttpException(
-              'Please wait before adjusting the Phase time again.',
-              HttpStatus.TOO_MANY_REQUESTS,
-            );
-          }
-          throw this.toHttpException(error);
-        },
-      );
+      ),
+      response,
+    );
   }
 
   @Sse(':sessionId/events')
@@ -308,34 +288,53 @@ export class GameSessionsController {
     @Param('sessionId') sessionId: string,
     @Req() request: Request,
   ): Observable<{ id: string; type: string; data: object }> {
-    return this.gameSessionsService
-      .eventsFor(
+    const events = this.resolveGameSessionResult(
+      this.gameSessionsService.eventsFor(
         sessionId,
         request.headers.cookie,
         this.lastEventId(request.headers['last-event-id']),
-      )
-      .match(
-        (events) =>
-          events.pipe(
-            map((projection) => ({
-              id: String(projection.eventId),
-              type: 'snapshot',
-              data: projection,
-            })),
-          ),
-        (error) => {
-          throw this.toHttpException(error);
-        },
-      );
+      ),
+    );
+    return events.pipe(
+      map((projection) => ({
+        id: String(projection.eventId),
+        type: 'snapshot',
+        data: projection,
+      })),
+    );
   }
 
   private projectionFor(sessionId: string, cookie: string | undefined) {
-    return this.gameSessionsService.getProjection(sessionId, cookie).match(
-      (projection) => projection,
+    return this.resolveGameSessionResult(this.gameSessionsService.getProjection(sessionId, cookie));
+  }
+
+  private resolveGameSessionResult<Value>(
+    result: Result<Value, GameSessionError>,
+    response?: Response,
+  ): Value {
+    return result.match(
+      (value) => value,
       (error) => {
+        this.setRetryAfterHeader(response, error);
         throw this.toHttpException(error);
       },
     );
+  }
+
+  private setRetryAfterHeader(response: Response | undefined, error: GameSessionError) {
+    if (!response) return;
+
+    const retryAfterMs = match(error)
+      .with(
+        { type: 'public-speech-rate-limited' },
+        { type: 'day-action-rate-limited' },
+        { type: 'phase-time-adjustment-rate-limited' },
+        (rateLimitError) => rateLimitError.retryAfterMs,
+      )
+      .otherwise(() => undefined);
+    if (retryAfterMs) {
+      response.setHeader('Retry-After', String(retryAfterSeconds(retryAfterMs)));
+    }
   }
 
   private toHttpException(error: GameSessionError): HttpException {
@@ -459,20 +458,5 @@ export class GameSessionsController {
 
     const eventId = Number.parseInt(value, 10);
     return Number.isSafeInteger(eventId) && eventId >= 0 ? eventId : undefined;
-  }
-
-  private dayActionProjection(
-    action: () => ReturnType<GameSessionsService['submitNomination']>,
-    response?: Response,
-  ) {
-    return action().match(
-      (projection) => projection,
-      (error) => {
-        if (error.type === 'day-action-rate-limited' && response) {
-          response.setHeader('Retry-After', String(retryAfterSeconds(error.retryAfterMs)));
-        }
-        throw this.toHttpException(error);
-      },
-    );
   }
 }

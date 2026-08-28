@@ -51,6 +51,18 @@ type CreatedMafiaSession = {
   projection: MafiaGameSessionProjectionEntity;
 };
 
+type IdempotentProjectionAction = {
+  idempotencyKey: string;
+  fingerprint: string;
+  conflict: GameSessionError;
+  records: (
+    session: StoredGameSessionEntity,
+  ) => Map<string, IdempotencyRecord<MafiaGameSessionProjectionEntity>>;
+  submit: (
+    session: StoredGameSessionEntity,
+  ) => Result<MafiaGameSessionProjectionEntity, GameSessionError>;
+};
+
 @Injectable()
 export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
   private readonly mafiaModule = new MafiaGameModule();
@@ -212,69 +224,58 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     content: string,
     idempotencyKey: string,
   ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
-    return this.activeSessionForHolder(sessionId, cookie).andThen((session) => {
-      const lookup = lookupIdempotency(
-        session.publicSpeechIdempotencyKeys,
-        idempotencyKey,
-        content,
-      );
-      const idempotencyResult = match(lookup)
-        .with({ type: 'replayed' }, ({ result }) =>
-          ok<MafiaGameSessionProjectionEntity, GameSessionError>(result),
-        )
-        .with({ type: 'conflict' }, () =>
-          err<MafiaGameSessionProjectionEntity, GameSessionError>({
-            type: 'public-speech-idempotency-conflict',
-          }),
-        )
-        .with({ type: 'new-request' }, () => undefined)
-        .exhaustive();
-      if (idempotencyResult) return idempotencyResult;
+    return this.runIdempotentProjectionAction(sessionId, cookie, {
+      idempotencyKey,
+      fingerprint: content,
+      conflict: { type: 'public-speech-idempotency-conflict' },
+      records: (session) => session.publicSpeechIdempotencyKeys,
+      submit: (session) => {
+        const now = dayjs();
+        const retryAfterMs = cooldownRetryAfterMs(session.nextPublicSpeechAt, now);
+        if (retryAfterMs) {
+          return err<MafiaGameSessionProjectionEntity, GameSessionError>({
+            type: 'public-speech-rate-limited',
+            retryAfterMs,
+          });
+        }
 
-      const now = dayjs();
-      const retryAfterMs = cooldownRetryAfterMs(session.nextPublicSpeechAt, now);
-      if (retryAfterMs) {
-        return err<MafiaGameSessionProjectionEntity, GameSessionError>({
-          type: 'public-speech-rate-limited',
-          retryAfterMs,
-        });
-      }
-
-      const speechResult = session.gameSession.submitPublicSpeech(
-        session.humanParticipantId,
-        content,
-      );
-      if (speechResult.isErr()) {
-        const error: GameSessionError = match(speechResult.error)
-          .with({ type: 'invalid-public-speech' }, () => ({
-            type: 'invalid-public-speech' as const,
-          }))
-          .with({ type: 'expired-phase', phaseDeadline: P.select() }, (phaseDeadline) => ({
-            type: 'expired-phase' as const,
-            phaseDeadline,
-          }))
-          .with({ type: 'dead-participant', participantId: P.select() }, (participantId) => ({
-            type: 'dead-participant' as const,
-            participantId,
-          }))
-          .with({ type: 'unknown-participant' }, () => ({ type: 'invalid-public-speech' as const }))
-          .with({ type: 'invalid-phase' }, () => ({ type: 'invalid-public-speech' as const }))
-          .with({ type: 'not-nominated-participant' }, () => ({
-            type: 'invalid-public-speech' as const,
-          }))
-          .with({ type: 'invalid-target' }, () => ({ type: 'invalid-public-speech' as const }))
-          .exhaustive();
-        return err<MafiaGameSessionProjectionEntity, GameSessionError>(error);
-      }
-
-      return this.publishProjection(session).andTee((projection) => {
-        session.nextPublicSpeechAt = now.add(
-          gameSessionsConfig.humanActionCooldownMs,
-          'millisecond',
+        const speechResult = session.gameSession.submitPublicSpeech(
+          session.humanParticipantId,
+          content,
         );
-        recordIdempotency(session.publicSpeechIdempotencyKeys, idempotencyKey, content, projection);
-        this.publishAgentReplies(session);
-      });
+        if (speechResult.isErr()) {
+          const error: GameSessionError = match(speechResult.error)
+            .with({ type: 'invalid-public-speech' }, () => ({
+              type: 'invalid-public-speech' as const,
+            }))
+            .with({ type: 'expired-phase', phaseDeadline: P.select() }, (phaseDeadline) => ({
+              type: 'expired-phase' as const,
+              phaseDeadline,
+            }))
+            .with({ type: 'dead-participant', participantId: P.select() }, (participantId) => ({
+              type: 'dead-participant' as const,
+              participantId,
+            }))
+            .with({ type: 'unknown-participant' }, () => ({
+              type: 'invalid-public-speech' as const,
+            }))
+            .with({ type: 'invalid-phase' }, () => ({ type: 'invalid-public-speech' as const }))
+            .with({ type: 'not-nominated-participant' }, () => ({
+              type: 'invalid-public-speech' as const,
+            }))
+            .with({ type: 'invalid-target' }, () => ({ type: 'invalid-public-speech' as const }))
+            .exhaustive();
+          return err<MafiaGameSessionProjectionEntity, GameSessionError>(error);
+        }
+
+        return this.publishProjection(session).andTee(() => {
+          session.nextPublicSpeechAt = now.add(
+            gameSessionsConfig.humanActionCooldownMs,
+            'millisecond',
+          );
+          this.publishAgentReplies(session);
+        });
+      },
     });
   }
 
@@ -313,100 +314,82 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     expectedPhaseDeadline: string,
     idempotencyKey: string,
   ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
-    return this.activeSessionForHolder(sessionId, cookie).andThen((session) => {
-      const fingerprint = `${adjustmentSeconds}:${expectedPhase}:${expectedPhaseDeadline}`;
-      const lookup = lookupIdempotency(
-        session.phaseTimeAdjustmentIdempotencyKeys,
-        idempotencyKey,
-        fingerprint,
-      );
-      const idempotencyResult = match(lookup)
-        .with({ type: 'replayed' }, ({ result }) =>
-          ok<MafiaGameSessionProjectionEntity, GameSessionError>(result),
-        )
-        .with({ type: 'conflict' }, () =>
-          err<MafiaGameSessionProjectionEntity, GameSessionError>({
-            type: 'phase-time-adjustment-idempotency-conflict',
-          }),
-        )
-        .with({ type: 'new-request' }, () => undefined)
-        .exhaustive();
-      if (idempotencyResult) return idempotencyResult;
-
-      const currentProjection = session.gameSession.projectionFor(
-        session.humanParticipantId,
-        session.nextEventId,
-      );
-      if (currentProjection.isErr()) {
-        return err<MafiaGameSessionProjectionEntity, GameSessionError>({
-          type: 'invalid-mafia-projection',
-          cause: currentProjection.error,
-        });
-      }
-      if (
-        currentProjection.value.public.phase !== expectedPhase ||
-        currentProjection.value.public.phaseDeadline !== expectedPhaseDeadline
-      ) {
-        return err<MafiaGameSessionProjectionEntity, GameSessionError>({
-          type: 'stale-phase-time-adjustment',
-        });
-      }
-
-      const now = dayjs();
-      const retryAfterMs = cooldownRetryAfterMs(session.nextPhaseTimeAdjustmentAt, now);
-      if (retryAfterMs) {
-        return err<MafiaGameSessionProjectionEntity, GameSessionError>({
-          type: 'phase-time-adjustment-rate-limited',
-          retryAfterMs,
-        });
-      }
-
-      const adjustment = session.gameSession.adjustPhaseTime(
-        session.humanParticipantId,
-        adjustmentSeconds,
-        now.toDate(),
-      );
-      if (adjustment.isErr()) {
-        return err<MafiaGameSessionProjectionEntity, GameSessionError>(
-          match(adjustment.error)
-            .with({ type: 'dead-participant', participantId: P.select() }, (participantId) => ({
-              type: 'dead-participant' as const,
-              participantId,
-            }))
-            .with(
-              { type: 'unknown-participant' },
-              { type: 'expired-phase' },
-              { type: 'invalid-phase' },
-              { type: 'not-nominated-participant' },
-              { type: 'invalid-target' },
-              { type: 'invalid-public-speech' },
-              () => ({ type: 'invalid-phase-time-adjustment' as const }),
-            )
-            .exhaustive(),
+    const fingerprint = `${adjustmentSeconds}:${expectedPhase}:${expectedPhaseDeadline}`;
+    return this.runIdempotentProjectionAction(sessionId, cookie, {
+      idempotencyKey,
+      fingerprint,
+      conflict: { type: 'phase-time-adjustment-idempotency-conflict' },
+      records: (session) => session.phaseTimeAdjustmentIdempotencyKeys,
+      submit: (session) => {
+        const currentProjection = session.gameSession.projectionFor(
+          session.humanParticipantId,
+          session.nextEventId,
         );
-      }
+        if (currentProjection.isErr()) {
+          return err<MafiaGameSessionProjectionEntity, GameSessionError>({
+            type: 'invalid-mafia-projection',
+            cause: currentProjection.error,
+          });
+        }
+        if (
+          currentProjection.value.public.phase !== expectedPhase ||
+          currentProjection.value.public.phaseDeadline !== expectedPhaseDeadline
+        ) {
+          return err<MafiaGameSessionProjectionEntity, GameSessionError>({
+            type: 'stale-phase-time-adjustment',
+          });
+        }
 
-      const phaseResult = session.gameSession.advanceDayPhase(now.toDate());
-      phaseResult.match(
-        (result) => {
-          if (result.type !== 'not-due') this.submitAgentDayActions(session);
-        },
-        () => undefined,
-      );
+        const now = dayjs();
+        const retryAfterMs = cooldownRetryAfterMs(session.nextPhaseTimeAdjustmentAt, now);
+        if (retryAfterMs) {
+          return err<MafiaGameSessionProjectionEntity, GameSessionError>({
+            type: 'phase-time-adjustment-rate-limited',
+            retryAfterMs,
+          });
+        }
 
-      return this.publishProjection(session).andTee((projection) => {
-        session.nextPhaseTimeAdjustmentAt = now.add(
-          gameSessionsConfig.humanActionCooldownMs,
-          'millisecond',
+        const adjustment = session.gameSession.adjustPhaseTime(
+          session.humanParticipantId,
+          adjustmentSeconds,
+          now.toDate(),
         );
-        recordIdempotency(
-          session.phaseTimeAdjustmentIdempotencyKeys,
-          idempotencyKey,
-          fingerprint,
-          projection,
+        if (adjustment.isErr()) {
+          return err<MafiaGameSessionProjectionEntity, GameSessionError>(
+            match(adjustment.error)
+              .with({ type: 'dead-participant', participantId: P.select() }, (participantId) => ({
+                type: 'dead-participant' as const,
+                participantId,
+              }))
+              .with(
+                { type: 'unknown-participant' },
+                { type: 'expired-phase' },
+                { type: 'invalid-phase' },
+                { type: 'not-nominated-participant' },
+                { type: 'invalid-target' },
+                { type: 'invalid-public-speech' },
+                () => ({ type: 'invalid-phase-time-adjustment' as const }),
+              )
+              .exhaustive(),
+          );
+        }
+
+        const phaseResult = session.gameSession.advanceDayPhase(now.toDate());
+        phaseResult.match(
+          (result) => {
+            if (result.type !== 'not-due') this.submitAgentDayActions(session);
+          },
+          () => undefined,
         );
-        this.schedulePhaseTransition(session);
-      });
+
+        return this.publishProjection(session).andTee(() => {
+          session.nextPhaseTimeAdjustmentAt = now.add(
+            gameSessionsConfig.humanActionCooldownMs,
+            'millisecond',
+          );
+          this.schedulePhaseTransition(session);
+        });
+      },
     });
   }
 
@@ -416,55 +399,36 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     content: string,
     idempotencyKey: string,
   ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
-    return this.activeSessionForHolder(sessionId, cookie).andThen((session) => {
-      const fingerprint = `final-defence:${content}`;
-      const lookup = lookupIdempotency(
-        session.dayActionIdempotencyKeys,
-        idempotencyKey,
-        fingerprint,
-      );
-      const idempotencyResult = match(lookup)
-        .with({ type: 'replayed' }, ({ result }) =>
-          ok<MafiaGameSessionProjectionEntity, GameSessionError>(result),
-        )
-        .with({ type: 'conflict' }, () =>
-          err<MafiaGameSessionProjectionEntity, GameSessionError>({
-            type: 'day-action-idempotency-conflict',
-          }),
-        )
-        .with({ type: 'new-request' }, () => undefined)
-        .exhaustive();
-      if (idempotencyResult) return idempotencyResult;
+    const fingerprint = `final-defence:${content}`;
+    return this.runIdempotentProjectionAction(sessionId, cookie, {
+      idempotencyKey,
+      fingerprint,
+      conflict: { type: 'day-action-idempotency-conflict' },
+      records: (session) => session.dayActionIdempotencyKeys,
+      submit: (session) => {
+        const now = dayjs();
+        const retryAfterMs = cooldownRetryAfterMs(session.nextFinalDefenceAt, now);
+        if (retryAfterMs) {
+          return err<MafiaGameSessionProjectionEntity, GameSessionError>({
+            type: 'day-action-rate-limited',
+            retryAfterMs,
+          });
+        }
 
-      const now = dayjs();
-      const retryAfterMs = cooldownRetryAfterMs(session.nextFinalDefenceAt, now);
-      if (retryAfterMs) {
-        return err<MafiaGameSessionProjectionEntity, GameSessionError>({
-          type: 'day-action-rate-limited',
-          retryAfterMs,
+        const action = session.gameSession.submitFinalDefence(session.humanParticipantId, content);
+        if (action.isErr()) {
+          return err<MafiaGameSessionProjectionEntity, GameSessionError>({
+            type: 'invalid-day-action',
+          });
+        }
+
+        return this.publishProjection(session).andTee(() => {
+          session.nextFinalDefenceAt = now.add(
+            gameSessionsConfig.humanActionCooldownMs,
+            'millisecond',
+          );
         });
-      }
-
-      const action = session.gameSession.submitFinalDefence(session.humanParticipantId, content);
-      if (action.isErr()) {
-        return err<MafiaGameSessionProjectionEntity, GameSessionError>({
-          type: 'invalid-day-action',
-        });
-      }
-
-      return this.publishProjection(session).map((projection) => {
-        session.nextFinalDefenceAt = now.add(
-          gameSessionsConfig.humanActionCooldownMs,
-          'millisecond',
-        );
-        recordIdempotency(
-          session.dayActionIdempotencyKeys,
-          idempotencyKey,
-          fingerprint,
-          projection,
-        );
-        return projection;
-      });
+      },
     });
   }
 
@@ -477,37 +441,43 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       session: StoredGameSessionEntity,
     ) => ReturnType<StoredGameSessionEntity['gameSession']['submitNomination']>,
   ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
+    return this.runIdempotentProjectionAction(sessionId, cookie, {
+      idempotencyKey,
+      fingerprint,
+      conflict: { type: 'day-action-idempotency-conflict' },
+      records: (session) => session.dayActionIdempotencyKeys,
+      submit: (session) => {
+        const action = submit(session);
+        if (action.isErr()) {
+          return err<MafiaGameSessionProjectionEntity, GameSessionError>({
+            type: 'invalid-day-action',
+          });
+        }
+        return this.publishProjection(session);
+      },
+    });
+  }
+
+  private runIdempotentProjectionAction(
+    sessionId: string,
+    cookie: string | undefined,
+    { idempotencyKey, fingerprint, conflict, records, submit }: IdempotentProjectionAction,
+  ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
     return this.activeSessionForHolder(sessionId, cookie).andThen((session) => {
-      const lookup = lookupIdempotency(
-        session.dayActionIdempotencyKeys,
-        idempotencyKey,
-        fingerprint,
-      );
-      const idempotencyResult = match(lookup)
+      const ledger = records(session);
+      const idempotencyResult = match(lookupIdempotency(ledger, idempotencyKey, fingerprint))
         .with({ type: 'replayed' }, ({ result }) =>
           ok<MafiaGameSessionProjectionEntity, GameSessionError>(result),
         )
         .with({ type: 'conflict' }, () =>
-          err<MafiaGameSessionProjectionEntity, GameSessionError>({
-            type: 'day-action-idempotency-conflict',
-          }),
+          err<MafiaGameSessionProjectionEntity, GameSessionError>(conflict),
         )
         .with({ type: 'new-request' }, () => undefined)
         .exhaustive();
       if (idempotencyResult) return idempotencyResult;
-      const action = submit(session);
-      if (action.isErr()) {
-        return err<MafiaGameSessionProjectionEntity, GameSessionError>({
-          type: 'invalid-day-action',
-        });
-      }
-      return this.publishProjection(session).andTee((projection) => {
-        recordIdempotency(
-          session.dayActionIdempotencyKeys,
-          idempotencyKey,
-          fingerprint,
-          projection,
-        );
+
+      return submit(session).andTee((projection) => {
+        recordIdempotency(ledger, idempotencyKey, fingerprint, projection);
       });
     });
   }

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { nextDayActionDraft, type DayAction, type DayActionDraft } from './day-action-draft';
+import { clearIdempotentDraft } from './idempotent-draft';
 import { nextPublicSpeechDraft, type PublicSpeechDraft } from './public-speech-draft';
 
 type GameSessionState = {
@@ -49,11 +50,9 @@ export const useGameSessionStore = create<GameSessionState>()(
         }));
       },
       clearPublicSpeechDraft: (idempotencyKey) => {
-        set(({ publicSpeechDraft }) =>
-          publicSpeechDraft?.idempotencyKey === idempotencyKey
-            ? { publicSpeechDraft: undefined }
-            : {},
-        );
+        set(({ publicSpeechDraft }) => ({
+          publicSpeechDraft: clearIdempotentDraft(publicSpeechDraft, idempotencyKey),
+        }));
       },
       ensureDayActionDraft: (action) => {
         const dayActionDraft = nextDayActionDraft(action, get().dayActionDraft);
@@ -61,9 +60,9 @@ export const useGameSessionStore = create<GameSessionState>()(
         return dayActionDraft;
       },
       clearDayActionDraft: (idempotencyKey) => {
-        set(({ dayActionDraft }) =>
-          dayActionDraft?.idempotencyKey === idempotencyKey ? { dayActionDraft: undefined } : {},
-        );
+        set(({ dayActionDraft }) => ({
+          dayActionDraft: clearIdempotentDraft(dayActionDraft, idempotencyKey),
+        }));
       },
       clearSession: () => {
         set({

@@ -5,7 +5,6 @@ import {
   ForbiddenException,
   Get,
   Header,
-  Headers,
   HttpException,
   HttpStatus,
   Param,
@@ -32,12 +31,17 @@ import type { Request, Response } from 'express';
 import { map, type Observable } from 'rxjs';
 import { match } from 'ts-pattern';
 
+import { retryAfterSeconds } from './cooldown/cooldown';
 import { CreateMafiaSessionDto } from './dto/create-mafia-session.dto';
 import { CreateNominationDto } from './dto/create-nomination.dto';
 import { CreatePublicSpeechDto } from './dto/create-public-speech.dto';
 import { CreateVerdictDto } from './dto/create-verdict.dto';
 import { MafiaGameSessionProjectionEntity } from './entities/mafia-game-session-projection.entity';
 import { type GameSessionError, GameSessionsService } from './game-sessions.service';
+import {
+  OptionalIdempotencyKey,
+  RequiredIdempotencyKey,
+} from './idempotency/idempotency-key.decorator';
 
 @ApiTags('Game Sessions')
 @Controller('game-sessions')
@@ -67,11 +71,8 @@ export class GameSessionsController {
     @Body() body: CreateMafiaSessionDto,
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
-    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @OptionalIdempotencyKey() idempotencyKey: string | undefined,
   ) {
-    if (idempotencyKey && (idempotencyKey.length < 16 || idempotencyKey.length > 200)) {
-      throw new BadRequestException('The Idempotency-Key header is invalid.');
-    }
     return this.gameSessionsService
       .createMafiaSession(request.headers.cookie, body.participantCount, idempotencyKey)
       .match(
@@ -133,19 +134,15 @@ export class GameSessionsController {
     @Body() body: CreatePublicSpeechDto,
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
-    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @RequiredIdempotencyKey() idempotencyKey: string,
   ) {
-    if (!idempotencyKey || idempotencyKey.length < 16 || idempotencyKey.length > 200) {
-      throw new BadRequestException('The Idempotency-Key header is invalid.');
-    }
-
     return this.gameSessionsService
       .submitPublicSpeech(sessionId, request.headers.cookie, body.content, idempotencyKey)
       .match(
         (projection) => projection,
         (error) => {
           if (error.type === 'public-speech-rate-limited') {
-            response.setHeader('Retry-After', String(Math.ceil(error.retryAfterMs / 1000)));
+            response.setHeader('Retry-After', String(retryAfterSeconds(error.retryAfterMs)));
             throw new HttpException(
               'Please wait before submitting another public speech.',
               HttpStatus.TOO_MANY_REQUESTS,
@@ -168,14 +165,14 @@ export class GameSessionsController {
     @Param('sessionId') sessionId: string,
     @Body() body: CreateNominationDto,
     @Req() request: Request,
-    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @RequiredIdempotencyKey() idempotencyKey: string,
   ) {
-    return this.dayActionProjection(idempotencyKey, () =>
+    return this.dayActionProjection(() =>
       this.gameSessionsService.submitNomination(
         sessionId,
         request.headers.cookie,
         body.targetParticipantId,
-        idempotencyKey!,
+        idempotencyKey,
       ),
     );
   }
@@ -189,21 +186,32 @@ export class GameSessionsController {
   @ApiBadRequestResponse({
     description: 'The Human Player is not eligible to make a Final Defence.',
   })
-  @ApiTooManyRequestsResponse({ description: 'The Final Defence speech cooldown is active.' })
+  @ApiTooManyRequestsResponse({
+    description: 'The Final Defence speech cooldown is active.',
+    headers: {
+      'Retry-After': {
+        description: 'Seconds until another Final Defence statement may be submitted.',
+        schema: { type: 'integer', minimum: 1 },
+      },
+    },
+  })
   @ApiConflictResponse({ description: 'The idempotency key was reused with a different action.' })
   submitFinalDefence(
     @Param('sessionId') sessionId: string,
     @Body() body: CreatePublicSpeechDto,
     @Req() request: Request,
-    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Res({ passthrough: true }) response: Response,
+    @RequiredIdempotencyKey() idempotencyKey: string,
   ) {
-    return this.dayActionProjection(idempotencyKey, () =>
-      this.gameSessionsService.submitFinalDefence(
-        sessionId,
-        request.headers.cookie,
-        body.content,
-        idempotencyKey!,
-      ),
+    return this.dayActionProjection(
+      () =>
+        this.gameSessionsService.submitFinalDefence(
+          sessionId,
+          request.headers.cookie,
+          body.content,
+          idempotencyKey,
+        ),
+      response,
     );
   }
 
@@ -219,14 +227,14 @@ export class GameSessionsController {
     @Param('sessionId') sessionId: string,
     @Body() body: CreateVerdictDto,
     @Req() request: Request,
-    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @RequiredIdempotencyKey() idempotencyKey: string,
   ) {
-    return this.dayActionProjection(idempotencyKey, () =>
+    return this.dayActionProjection(() =>
       this.gameSessionsService.submitVerdict(
         sessionId,
         request.headers.cookie,
         body.vote,
-        idempotencyKey!,
+        idempotencyKey,
       ),
     );
   }
@@ -374,15 +382,15 @@ export class GameSessionsController {
   }
 
   private dayActionProjection(
-    idempotencyKey: string | undefined,
     action: () => ReturnType<GameSessionsService['submitNomination']>,
+    response?: Response,
   ) {
-    if (!idempotencyKey || idempotencyKey.length < 16 || idempotencyKey.length > 200) {
-      throw new BadRequestException('The Idempotency-Key header is invalid.');
-    }
     return action().match(
       (projection) => projection,
       (error) => {
+        if (error.type === 'day-action-rate-limited' && response) {
+          response.setHeader('Retry-After', String(retryAfterSeconds(error.retryAfterMs)));
+        }
         throw this.toHttpException(error);
       },
     );

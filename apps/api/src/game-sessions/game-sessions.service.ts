@@ -15,9 +15,15 @@ import { defer, filter, finalize, type Observable, ReplaySubject } from 'rxjs';
 import { match, P } from 'ts-pattern';
 
 import { agentSpeechGateway, type AgentSpeechGateway } from './agent-speech.gateway';
+import { cooldownRetryAfterMs } from './cooldown/cooldown';
 import type { MafiaGameSessionProjectionEntity } from './entities/mafia-game-session-projection.entity';
 import type { StoredGameSessionEntity } from './entities/stored-game-session.entity';
 import { gameSessionsConfig } from './game-sessions.config';
+import {
+  type IdempotencyRecord,
+  lookupIdempotency,
+  recordIdempotency,
+} from './idempotency/idempotency-ledger';
 
 export type GameSessionError =
   | { type: 'idempotency-conflict' }
@@ -45,10 +51,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
   private readonly mafiaModule = new MafiaGameModule();
   private readonly sessions = new Map<string, StoredGameSessionEntity>();
   private readonly guestSessionCounts = new Map<string, number>();
-  private readonly idempotencyKeys = new Map<
-    string,
-    { sessionId: string; participantCount: number }
-  >();
+  private readonly idempotencyKeys = new Map<string, IdempotencyRecord<string>>();
   private readonly cookieSecret = this.guestCookieSecret();
   private cleanupTimer: NodeJS.Timeout | undefined;
 
@@ -76,20 +79,27 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     this.cleanupExpiredSessions();
     const holderId = this.readGuestId(cookie) ?? randomUUID();
     const scopedIdempotencyKey = idempotencyKey && `${holderId}:${idempotencyKey}`;
-    const idempotencyRecord =
-      scopedIdempotencyKey && this.idempotencyKeys.get(scopedIdempotencyKey);
-    if (idempotencyRecord) {
-      if (idempotencyRecord.participantCount !== participantCount) {
+    if (scopedIdempotencyKey) {
+      const lookup = lookupIdempotency(
+        this.idempotencyKeys,
+        scopedIdempotencyKey,
+        String(participantCount),
+      );
+      if (lookup.type === 'conflict') {
         return err({ type: 'idempotency-conflict' });
       }
+      if (lookup.type === 'replayed') {
+        const existingSession = this.sessions.get(lookup.result);
+        if (existingSession) {
+          this.touch(existingSession);
+          return this.projectionFor(existingSession).map((projection) => ({
+            holderId,
+            projection,
+          }));
+        }
 
-      const existingSession = this.sessions.get(idempotencyRecord.sessionId);
-      if (existingSession) {
-        this.touch(existingSession);
-        return this.projectionFor(existingSession).map((projection) => ({ holderId, projection }));
+        this.idempotencyKeys.delete(scopedIdempotencyKey);
       }
-
-      this.idempotencyKeys.delete(scopedIdempotencyKey);
     }
 
     const countKey = `${this.utcDay()}:${holderId}`;
@@ -128,7 +138,12 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     };
     this.sessions.set(sessionId, session);
     if (scopedIdempotencyKey) {
-      this.idempotencyKeys.set(scopedIdempotencyKey, { sessionId, participantCount });
+      recordIdempotency(
+        this.idempotencyKeys,
+        scopedIdempotencyKey,
+        String(participantCount),
+        sessionId,
+      );
     }
     this.guestSessionCounts.set(countKey, count + 1);
 
@@ -186,20 +201,26 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     idempotencyKey: string,
   ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
     return this.activeSessionForHolder(sessionId, cookie).andThen((session) => {
-      const previous = session.publicSpeechIdempotencyKeys.get(idempotencyKey);
-      if (previous) {
-        return previous.content === content
-          ? ok<MafiaGameSessionProjectionEntity, GameSessionError>(previous.projection)
-          : err<MafiaGameSessionProjectionEntity, GameSessionError>({
-              type: 'public-speech-idempotency-conflict',
-            });
+      const lookup = lookupIdempotency(
+        session.publicSpeechIdempotencyKeys,
+        idempotencyKey,
+        content,
+      );
+      if (lookup.type === 'replayed') {
+        return ok<MafiaGameSessionProjectionEntity, GameSessionError>(lookup.result);
+      }
+      if (lookup.type === 'conflict') {
+        return err<MafiaGameSessionProjectionEntity, GameSessionError>({
+          type: 'public-speech-idempotency-conflict',
+        });
       }
 
       const now = dayjs();
-      if (session.nextPublicSpeechAt?.isAfter(now)) {
+      const retryAfterMs = cooldownRetryAfterMs(session.nextPublicSpeechAt, now);
+      if (retryAfterMs) {
         return err<MafiaGameSessionProjectionEntity, GameSessionError>({
           type: 'public-speech-rate-limited',
-          retryAfterMs: session.nextPublicSpeechAt.diff(now),
+          retryAfterMs,
         });
       }
 
@@ -232,10 +253,10 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
       return this.publishProjection(session).andTee((projection) => {
         session.nextPublicSpeechAt = now.add(
-          gameSessionsConfig.publicSpeechCooldownMs,
+          gameSessionsConfig.humanActionCooldownMs,
           'millisecond',
         );
-        session.publicSpeechIdempotencyKeys.set(idempotencyKey, { content, projection });
+        recordIdempotency(session.publicSpeechIdempotencyKeys, idempotencyKey, content, projection);
         this.publishAgentReplies(session);
       });
     });
@@ -276,20 +297,26 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
   ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
     return this.activeSessionForHolder(sessionId, cookie).andThen((session) => {
       const fingerprint = `final-defence:${content}`;
-      const previous = session.dayActionIdempotencyKeys.get(idempotencyKey);
-      if (previous) {
-        return previous.fingerprint === fingerprint
-          ? ok(previous.projection)
-          : err<MafiaGameSessionProjectionEntity, GameSessionError>({
-              type: 'day-action-idempotency-conflict',
-            });
+      const lookup = lookupIdempotency(
+        session.dayActionIdempotencyKeys,
+        idempotencyKey,
+        fingerprint,
+      );
+      if (lookup.type === 'replayed') {
+        return ok(lookup.result);
+      }
+      if (lookup.type === 'conflict') {
+        return err<MafiaGameSessionProjectionEntity, GameSessionError>({
+          type: 'day-action-idempotency-conflict',
+        });
       }
 
       const now = dayjs();
-      if (session.nextFinalDefenceAt?.isAfter(now)) {
+      const retryAfterMs = cooldownRetryAfterMs(session.nextFinalDefenceAt, now);
+      if (retryAfterMs) {
         return err<MafiaGameSessionProjectionEntity, GameSessionError>({
           type: 'day-action-rate-limited',
-          retryAfterMs: session.nextFinalDefenceAt.diff(now),
+          retryAfterMs,
         });
       }
 
@@ -302,10 +329,15 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
       return this.publishProjection(session).map((projection) => {
         session.nextFinalDefenceAt = now.add(
-          gameSessionsConfig.publicSpeechCooldownMs,
+          gameSessionsConfig.humanActionCooldownMs,
           'millisecond',
         );
-        session.dayActionIdempotencyKeys.set(idempotencyKey, { fingerprint, projection });
+        recordIdempotency(
+          session.dayActionIdempotencyKeys,
+          idempotencyKey,
+          fingerprint,
+          projection,
+        );
         return projection;
       });
     });
@@ -321,13 +353,18 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     ) => ReturnType<StoredGameSessionEntity['gameSession']['submitNomination']>,
   ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
     return this.activeSessionForHolder(sessionId, cookie).andThen((session) => {
-      const previous = session.dayActionIdempotencyKeys.get(idempotencyKey);
-      if (previous) {
-        return previous.fingerprint === fingerprint
-          ? ok(previous.projection)
-          : err<MafiaGameSessionProjectionEntity, GameSessionError>({
-              type: 'day-action-idempotency-conflict',
-            });
+      const lookup = lookupIdempotency(
+        session.dayActionIdempotencyKeys,
+        idempotencyKey,
+        fingerprint,
+      );
+      if (lookup.type === 'replayed') {
+        return ok(lookup.result);
+      }
+      if (lookup.type === 'conflict') {
+        return err<MafiaGameSessionProjectionEntity, GameSessionError>({
+          type: 'day-action-idempotency-conflict',
+        });
       }
       const action = submit(session);
       if (action.isErr()) {
@@ -336,7 +373,12 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         });
       }
       return this.publishProjection(session).andTee((projection) => {
-        session.dayActionIdempotencyKeys.set(idempotencyKey, { fingerprint, projection });
+        recordIdempotency(
+          session.dayActionIdempotencyKeys,
+          idempotencyKey,
+          fingerprint,
+          projection,
+        );
       });
     });
   }
@@ -619,7 +661,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       }
       this.sessions.delete(sessionId);
       for (const [key, record] of this.idempotencyKeys) {
-        if (record.sessionId === sessionId) {
+        if (record.result === sessionId) {
           this.idempotencyKeys.delete(key);
         }
       }

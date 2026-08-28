@@ -1,6 +1,7 @@
 import { match } from 'ts-pattern';
 
 import type { MafiaGameProjection } from '../../api/api';
+import type { UseDayActionResult } from '../../hooks/use-day-action';
 import type { UsePublicSpeechResult } from '../../hooks/use-public-speech';
 import { FinalDefenceForm } from './final-defence-form';
 import { NominationControls } from './nomination-controls';
@@ -13,8 +14,8 @@ type PhaseActionPanelProps = {
   isPhaseExpired: boolean;
   personalVote: MafiaGameProjection['personal']['vote'];
   publicInformation: MafiaGameProjection['public'];
+  dayAction: UseDayActionResult;
   speech: UsePublicSpeechResult;
-  isSubmittingAction: boolean;
   onNominate: (participantId: string) => void;
   onSubmitFinalDefence: (content: string) => void;
   onSubmitVerdict: (vote: 'eliminate' | 'spare') => void;
@@ -26,8 +27,8 @@ export function PhaseActionPanel({
   isPhaseExpired,
   personalVote,
   publicInformation,
+  dayAction,
   speech,
-  isSubmittingAction,
   onNominate,
   onSubmitFinalDefence,
   onSubmitVerdict,
@@ -48,7 +49,7 @@ export function PhaseActionPanel({
     );
   }
 
-  const actionDisabled = isSubmittingAction || isPhaseExpired;
+  const actionDisabled = dayAction.isPending || dayAction.isCoolingDown || isPhaseExpired;
   const nominatedParticipant = publicInformation.participants.find(
     (participant) => participant.id === publicInformation.nominatedParticipantId,
   );
@@ -74,7 +75,12 @@ export function PhaseActionPanel({
             : 'The nominated participant is preparing a final defence.'}
         </p>
         {publicInformation.nominatedParticipantId === currentParticipantId ? (
-          <FinalDefenceForm disabled={actionDisabled} onSubmitFinalDefence={onSubmitFinalDefence} />
+          <FinalDefenceForm
+            disabled={actionDisabled}
+            error={dayAction.error}
+            onSubmitFinalDefence={onSubmitFinalDefence}
+            retryAfterSeconds={dayAction.retryAfterSeconds}
+          />
         ) : null}
       </div>
     ))

@@ -1,10 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback } from 'react';
 import { match } from 'ts-pattern';
 
 import { submitPublicSpeech } from '../api/api';
 import { isGameSessionApiError } from '../api/error';
 import { useGameSessionStore } from '../store/game-session';
+import { useCooldown } from './use-cooldown';
 import { gameSessionSnapshotOptions } from './use-game-session-snapshot';
 
 export type UsePublicSpeechResult = {
@@ -22,7 +23,7 @@ export function usePublicSpeech(sessionId: string): UsePublicSpeechResult {
   const publicSpeechDraft = useGameSessionStore((state) => state.publicSpeechDraft);
   const setPublicSpeechContent = useGameSessionStore((state) => state.setPublicSpeechContent);
   const clearPublicSpeechDraft = useGameSessionStore((state) => state.clearPublicSpeechDraft);
-  const [retryAfterSeconds, setRetryAfterSeconds] = useState<number | undefined>();
+  const cooldown = useCooldown();
   const mutation = useMutation({
     mutationFn: async ({
       speechContent,
@@ -44,23 +45,10 @@ export function usePublicSpeech(sessionId: string): UsePublicSpeechResult {
     },
     onError: (error) => {
       if (isGameSessionApiError(error) && error.type === 'rate-limited') {
-        setRetryAfterSeconds(Math.ceil(error.retryAfterMs / 1000));
+        cooldown.startCooldown(error.retryAfterMs);
       }
     },
   });
-
-  useEffect(() => {
-    if (!retryAfterSeconds) {
-      return undefined;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setRetryAfterSeconds(undefined);
-    }, retryAfterSeconds * 1000);
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [retryAfterSeconds]);
 
   const onContentChange = useCallback(
     (event: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -71,7 +59,7 @@ export function usePublicSpeech(sessionId: string): UsePublicSpeechResult {
 
   const submit = (event: React.SyntheticEvent<HTMLFormElement, SubmitEvent>) => {
     event.preventDefault();
-    if (!publicSpeechDraft || mutation.isPending || retryAfterSeconds) {
+    if (!publicSpeechDraft || mutation.isPending || cooldown.isCoolingDown) {
       return;
     }
 
@@ -92,8 +80,8 @@ export function usePublicSpeech(sessionId: string): UsePublicSpeechResult {
     content: publicSpeechDraft?.content ?? '',
     error: mutation.isError ? actionErrorMessage(mutation.error) : undefined,
     isPending: mutation.isPending,
-    isThrottled: Boolean(retryAfterSeconds),
-    retryAfterSeconds,
+    isThrottled: cooldown.isCoolingDown,
+    retryAfterSeconds: cooldown.retryAfterSeconds,
     onContentChange,
     submit,
   };

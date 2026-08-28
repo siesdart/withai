@@ -69,6 +69,25 @@ describe('Mafia Game Session API', () => {
     );
   });
 
+  it('validates optional and required Idempotency-Key parameters', async () => {
+    await request(app.getHttpServer())
+      .post('/game-sessions/mafia')
+      .set('Idempotency-Key', 'too-short')
+      .send({ participantCount: 5 })
+      .expect(400);
+
+    const created = await request(app.getHttpServer())
+      .post('/game-sessions/mafia')
+      .send({ participantCount: 5 })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post(`/game-sessions/${created.body.sessionId}/actions/public-speech`)
+      .set('Cookie', firstSetCookie(created.headers['set-cookie']))
+      .send({ content: 'I want to hear from the other participants.' })
+      .expect(400);
+  });
+
   it('serves an ordered initial snapshot over SSE to the session holder', async () => {
     const created = await request(app.getHttpServer())
       .post('/game-sessions/mafia')

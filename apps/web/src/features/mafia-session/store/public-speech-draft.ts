@@ -1,7 +1,10 @@
-export type PublicSpeechDraft = {
+import { type IdempotentDraft, nextIdempotentDraft } from './idempotent-draft';
+
+type PublicSpeech = {
   content: string;
-  idempotencyKey: string;
 };
+
+export type PublicSpeechDraft = IdempotentDraft<PublicSpeech>;
 
 export function nextPublicSpeechDraft(
   content: string,
@@ -11,9 +14,9 @@ export function nextPublicSpeechDraft(
     return undefined;
   }
 
-  if (existing?.content === content) {
-    return existing;
-  }
-
-  return { content, idempotencyKey: crypto.randomUUID() };
+  return nextIdempotentDraft(
+    { content },
+    existing,
+    (value, draft) => value.content === draft.content,
+  );
 }

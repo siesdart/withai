@@ -106,8 +106,8 @@ export function ControlRoom({ sessionId }: { sessionId: string }) {
             <PhaseActionPanel
               currentParticipantId={snapshot.personal.participantId}
               currentParticipantAlive={currentParticipantAlive}
+              dayAction={dayAction}
               isPhaseExpired={deadline.isExpired}
-              isSubmittingAction={dayAction.isPending}
               onNominate={(targetParticipantId) =>
                 dayAction.submit({ type: 'nomination', targetParticipantId })
               }

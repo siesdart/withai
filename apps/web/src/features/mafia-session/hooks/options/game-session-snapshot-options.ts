@@ -1,8 +1,8 @@
 import type { MafiaGameProjection } from '@repo/mafia';
-import { queryOptions, useSuspenseQuery } from '@tanstack/react-query';
+import { queryOptions } from '@tanstack/react-query';
 
-import { MafiaGameSessionClient } from '../api/client';
-import { isUnavailableGameSession } from '../api/error';
+import { MafiaGameSessionClient } from '../../api/client';
+import { isUnavailableGameSession } from '../../api/error';
 import { retainNewerProjection } from './projection-order';
 
 export const gameSessionSnapshotOptions = (sessionId: string) =>
@@ -26,9 +26,3 @@ export const gameSessionSnapshotOptions = (sessionId: string) =>
     },
     structuralSharing: retainNewerProjection,
   });
-
-export function useGameSessionSnapshot(sessionId: string) {
-  const query = useSuspenseQuery(gameSessionSnapshotOptions(sessionId));
-
-  return { snapshot: query.data };
-}

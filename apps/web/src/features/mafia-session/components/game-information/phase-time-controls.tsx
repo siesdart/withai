@@ -2,7 +2,7 @@ import { Button } from '@repo/ui/components/button';
 import { MinusIcon, PlusIcon } from 'lucide-react';
 
 import type { MafiaGameProjection } from '../../api/client';
-import { usePhaseTimeAdjustment } from '../../hooks/use-phase-time-adjustment';
+import { usePhaseTimeAdjustment } from '../../hooks/actions/use-phase-time-adjustment';
 
 type PhaseTimeControlsProps = {
   sessionId: string;

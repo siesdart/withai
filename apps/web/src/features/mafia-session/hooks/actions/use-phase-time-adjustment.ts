@@ -1,9 +1,9 @@
 import { useMutation } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
-import { type MafiaGameProjection, MafiaGameSessionClient } from '../api/client';
-import { gameSessionMutationOptions } from './game-session-mutation-options';
-import { useCooldown } from './use-cooldown';
+import { type MafiaGameProjection, MafiaGameSessionClient } from '../../api/client';
+import { gameSessionMutationOptions } from '../options/game-session-mutation-options';
+import { useCooldown } from '../ui/use-cooldown';
 
 type PhaseTimeAdjustment = 10 | -10;
 type ActiveMafiaPhase = Exclude<MafiaGameProjection['public']['phase'], 'completed'>;

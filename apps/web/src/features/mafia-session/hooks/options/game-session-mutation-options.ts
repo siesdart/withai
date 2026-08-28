@@ -2,9 +2,9 @@ import type { MafiaGameProjection } from '@repo/mafia';
 import { mutationOptions, type QueryClient } from '@tanstack/react-query';
 import type { ResultAsync } from 'neverthrow';
 
-import type { GameSessionApiError } from '../api/error';
-import { isGameSessionApiError } from '../api/error';
-import { gameSessionSnapshotOptions } from './use-game-session-snapshot';
+import type { GameSessionApiError } from '../../api/error';
+import { isGameSessionApiError } from '../../api/error';
+import { gameSessionSnapshotOptions } from './game-session-snapshot-options';
 
 type GameSessionMutationConfig<Variables> = {
   sessionId: string;

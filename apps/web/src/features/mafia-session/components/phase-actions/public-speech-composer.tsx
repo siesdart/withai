@@ -9,7 +9,7 @@ import {
 import { Textarea } from '@repo/ui/components/textarea';
 import { SendIcon } from 'lucide-react';
 
-import type { UsePublicSpeechResult } from '../../hooks/use-public-speech';
+import type { UsePublicSpeechResult } from '../../hooks/actions/use-public-speech';
 
 type PublicSpeechComposerProps = {
   disabled: boolean;

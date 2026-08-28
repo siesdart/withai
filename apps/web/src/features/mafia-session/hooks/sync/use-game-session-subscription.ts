@@ -2,9 +2,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { match } from 'ts-pattern';
 
-import { MafiaGameSessionClient } from '../api/client';
-import { updateGameSessionSnapshot } from './game-session-mutation-options';
-import { gameSessionSnapshotOptions } from './use-game-session-snapshot';
+import { MafiaGameSessionClient } from '../../api/client';
+import { updateGameSessionSnapshot } from '../options/game-session-mutation-options';
+import { gameSessionSnapshotOptions } from '../options/game-session-snapshot-options';
 
 export function useGameSessionSubscription(sessionId: string | undefined) {
   const queryClient = useQueryClient();

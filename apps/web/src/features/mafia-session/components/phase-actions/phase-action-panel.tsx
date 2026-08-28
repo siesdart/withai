@@ -2,8 +2,8 @@ import { find } from 'remeda';
 import { match } from 'ts-pattern';
 
 import type { MafiaGameProjection } from '../../api/client';
-import type { UseDayActionResult } from '../../hooks/use-day-action';
-import type { UsePublicSpeechResult } from '../../hooks/use-public-speech';
+import type { UseDayActionResult } from '../../hooks/actions/use-day-action';
+import type { UsePublicSpeechResult } from '../../hooks/actions/use-public-speech';
 import { FinalDefenceForm } from './final-defence-form';
 import { NominationControls } from './nomination-controls';
 import { PublicSpeechComposer } from './public-speech-composer';

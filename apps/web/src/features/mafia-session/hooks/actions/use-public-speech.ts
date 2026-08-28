@@ -2,11 +2,11 @@ import { useMutation } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { match } from 'ts-pattern';
 
-import { MafiaGameSessionClient } from '../api/client';
-import { isGameSessionApiError } from '../api/error';
-import { useGameSessionStore } from '../store/game-session';
-import { gameSessionMutationOptions } from './game-session-mutation-options';
-import { useCooldown } from './use-cooldown';
+import { MafiaGameSessionClient } from '../../api/client';
+import { isGameSessionApiError } from '../../api/error';
+import { useGameSessionStore } from '../../store/game-session';
+import { gameSessionMutationOptions } from '../options/game-session-mutation-options';
+import { useCooldown } from '../ui/use-cooldown';
 
 export type UsePublicSpeechResult = {
   content: string;

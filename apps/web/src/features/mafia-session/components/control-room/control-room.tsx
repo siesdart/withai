@@ -8,11 +8,11 @@ import {
 import { EyeOffIcon, UsersIcon } from 'lucide-react';
 import { filter, flatMap } from 'remeda';
 
-import { useDayAction } from '../../hooks/use-day-action';
-import { useDeadlineCountdown } from '../../hooks/use-deadline-countdown';
-import { useGameSessionSnapshot } from '../../hooks/use-game-session-snapshot';
-import { useGameSessionSubscription } from '../../hooks/use-game-session-subscription';
-import { usePublicSpeech } from '../../hooks/use-public-speech';
+import { useDayAction } from '../../hooks/actions/use-day-action';
+import { usePublicSpeech } from '../../hooks/actions/use-public-speech';
+import { useGameSessionSnapshot } from '../../hooks/sync/use-game-session-snapshot';
+import { useGameSessionSubscription } from '../../hooks/sync/use-game-session-subscription';
+import { useDeadlineCountdown } from '../../hooks/ui/use-deadline-countdown';
 import { GamePhaseStatus } from '../game-information/game-phase-status';
 import { ParticipantList } from '../game-information/participant-list';
 import { PersonalInformation } from '../game-information/personal-information';

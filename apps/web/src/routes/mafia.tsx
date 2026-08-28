@@ -7,7 +7,7 @@ import { isUnavailableGameSession } from '@/features/mafia-session/api/error';
 import { ControlRoom } from '@/features/mafia-session/components/control-room/control-room';
 import { ControlRoomError } from '@/features/mafia-session/components/control-room/control-room-error';
 import { ControlRoomLoading } from '@/features/mafia-session/components/control-room/control-room-loading';
-import { gameSessionSnapshotOptions } from '@/features/mafia-session/hooks/use-game-session-snapshot';
+import { gameSessionSnapshotOptions } from '@/features/mafia-session/hooks/options/game-session-snapshot-options';
 import { useGameSessionStore } from '@/features/mafia-session/store/game-session';
 
 export const Route = createFileRoute('/mafia')({

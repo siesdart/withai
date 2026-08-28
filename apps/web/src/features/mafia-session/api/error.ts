@@ -1,30 +1,20 @@
 import { HTTPError } from 'ky';
-import { match, P } from 'ts-pattern';
+import { match } from 'ts-pattern';
+import * as v from 'valibot';
 
-export type GameSessionApiError =
-  | { type: 'unavailable'; status: 403 | 404 }
-  | { type: 'action-rejected'; status: 400 | 409 }
-  | { type: 'rate-limited'; retryAfterMs: number }
-  | { type: 'aborted' }
-  | { type: 'invalid-event'; cause: unknown }
-  | { type: 'request-failed'; cause: unknown };
+export const GameSessionApiErrorSchema = v.variant('type', [
+  v.object({ type: v.literal('unavailable'), status: v.picklist([403, 404] as const) }),
+  v.object({ type: v.literal('action-rejected'), status: v.picklist([400, 409] as const) }),
+  v.object({ type: v.literal('rate-limited'), retryAfterMs: v.number() }),
+  v.object({ type: v.literal('aborted') }),
+  v.object({ type: v.literal('invalid-event'), cause: v.unknown() }),
+  v.object({ type: v.literal('request-failed'), cause: v.unknown() }),
+]);
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
+export type GameSessionApiError = v.InferOutput<typeof GameSessionApiErrorSchema>;
 
 export function isGameSessionApiError(error: unknown): error is GameSessionApiError {
-  if (!isRecord(error)) {
-    return false;
-  }
-
-  return match(error)
-    .with({ type: 'unavailable', status: P.union(403, 404) }, () => true)
-    .with({ type: 'action-rejected', status: P.union(400, 409) }, () => true)
-    .with({ type: 'rate-limited', retryAfterMs: P.number }, () => true)
-    .with({ type: 'aborted' }, () => true)
-    .with({ type: P.union('invalid-event', 'request-failed'), cause: P._ }, () => true)
-    .otherwise(() => false);
+  return v.safeParse(GameSessionApiErrorSchema, error).success;
 }
 
 export function toGameSessionApiError(error: unknown): GameSessionApiError {
@@ -32,28 +22,15 @@ export function toGameSessionApiError(error: unknown): GameSessionApiError {
     return error;
   }
 
-  if (
-    error instanceof HTTPError &&
-    (error.response.status === 403 || error.response.status === 404)
-  ) {
-    return { type: 'unavailable', status: error.response.status };
-  }
-
-  if (
-    error instanceof HTTPError &&
-    (error.response.status === 400 || error.response.status === 409)
-  ) {
-    return { type: 'action-rejected', status: error.response.status };
-  }
-
-  if (error instanceof HTTPError && error.response.status === 429) {
-    const retryAfterSeconds = Number.parseInt(error.response.headers.get('Retry-After') ?? '', 10);
-    return {
-      type: 'rate-limited',
-      retryAfterMs: Number.isSafeInteger(retryAfterSeconds)
-        ? Math.max(1, retryAfterSeconds) * 1000
-        : 1000,
-    };
+  if (error instanceof HTTPError) {
+    return match(error.response.status)
+      .with(403, 404, (status) => ({ type: 'unavailable', status }) as const)
+      .with(400, 409, (status) => ({ type: 'action-rejected', status }) as const)
+      .with(429, () => ({
+        type: 'rate-limited' as const,
+        retryAfterMs: retryAfterMilliseconds(error.response.headers.get('Retry-After')),
+      }))
+      .otherwise(() => ({ type: 'request-failed' as const, cause: error }));
   }
 
   if (error instanceof DOMException && error.name === 'AbortError') {
@@ -61,6 +38,11 @@ export function toGameSessionApiError(error: unknown): GameSessionApiError {
   }
 
   return { type: 'request-failed', cause: error };
+}
+
+function retryAfterMilliseconds(retryAfter: string | null): number {
+  const retryAfterSeconds = Number.parseInt(retryAfter ?? '', 10);
+  return Number.isSafeInteger(retryAfterSeconds) ? Math.max(1, retryAfterSeconds) * 1000 : 1000;
 }
 
 export function isUnavailableGameSession(error: unknown): error is GameSessionApiError {

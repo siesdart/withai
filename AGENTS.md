@@ -33,6 +33,10 @@
 - Always use TanStack Query when writing server-state code.
 - Before any Tanstack Query work, find and read the relevant doc in `/router-query`.
 
+## Valibot: ALWAYS read docs before coding
+
+- Before any Valibot work, find and read the relevant doc in `/valibot`.
+
 ## Nest.js
 
 - When creating or changing API endpoints, reflect them in the Scalar API Reference.

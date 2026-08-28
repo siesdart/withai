@@ -8,6 +8,9 @@ import { defineConfig } from 'vite';
 
 // https://vite.dev/config/
 export default defineConfig({
+  optimizeDeps: {
+    include: ['@repo/mafia'],
+  },
   plugins: [
     tanstackRouter({
       target: 'react',

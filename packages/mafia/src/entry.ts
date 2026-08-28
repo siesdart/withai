@@ -1,6 +1,7 @@
 export * from './config';
 export { MafiaGameSession } from './mafia-game-session';
 export * from './mafia-game-module';
+export { MafiaGameProjectionSchema } from './mafia-projection.schema';
 export type {
   MafiaActionError,
   MafiaAgentSpeechContext,

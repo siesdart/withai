@@ -31,7 +31,7 @@ export class DeterministicAgentSpeechGateway implements AgentSpeechGateway {
 
     return {
       type: 'speak',
-      content: `${context.participant.name}: As someone ${focus}, ${stance}`,
+      content: `As someone ${focus}, ${stance}`,
       delayMs: Number.parseInt(context.participant.id.split('-')[1] ?? '1', 10) * 100,
     };
   }
@@ -44,8 +44,8 @@ export class DeterministicAgentSpeechGateway implements AgentSpeechGateway {
         : 'I ask you to judge the evidence carefully.';
 
     return {
-      opening: `${context.participant.name}: As someone ${focus}, ${stance}`,
-      followUp: `${context.participant.name}: My position has not changed; please weigh the facts.`,
+      opening: `As someone ${focus}, ${stance}`,
+      followUp: `My position has not changed; please weigh the facts.`,
     };
   }
 }

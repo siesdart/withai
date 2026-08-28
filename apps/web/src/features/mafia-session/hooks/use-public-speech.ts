@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { match } from 'ts-pattern';
 
-import { submitPublicSpeech } from '../api/api';
+import { MafiaGameSessionClient } from '../api/client';
 import { isGameSessionApiError } from '../api/error';
 import { useGameSessionStore } from '../store/game-session';
 import { useCooldown } from './use-cooldown';
@@ -24,6 +24,7 @@ export function usePublicSpeech(sessionId: string): UsePublicSpeechResult {
   const setPublicSpeechContent = useGameSessionStore((state) => state.setPublicSpeechContent);
   const clearPublicSpeechDraft = useGameSessionStore((state) => state.clearPublicSpeechDraft);
   const cooldown = useCooldown();
+  const client = new MafiaGameSessionClient(sessionId);
   const mutation = useMutation({
     mutationFn: async ({
       speechContent,
@@ -32,7 +33,7 @@ export function usePublicSpeech(sessionId: string): UsePublicSpeechResult {
       speechContent: string;
       idempotencyKey: string;
     }) => {
-      const result = await submitPublicSpeech(sessionId, speechContent, idempotencyKey);
+      const result = await client.submitPublicSpeech(speechContent, idempotencyKey);
       return result.match(
         (projection) => projection,
         (error) => {

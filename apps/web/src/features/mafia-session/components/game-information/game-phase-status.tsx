@@ -2,7 +2,7 @@ import { Badge } from '@repo/ui/components/badge';
 import { TimerIcon } from 'lucide-react';
 import { match } from 'ts-pattern';
 
-import type { MafiaGameProjection } from '../../api/api';
+import type { MafiaGameProjection } from '../../api/client';
 
 type GamePhaseStatusProps = {
   dayNumber: number;

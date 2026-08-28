@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { match } from 'ts-pattern';
 
-import { subscribeToGameSession } from '../api/api';
+import { MafiaGameSessionClient } from '../api/client';
 import { gameSessionSnapshotOptions } from './use-game-session-snapshot';
 
 export function useGameSessionSubscription(sessionId: string | undefined) {
@@ -14,6 +14,7 @@ export function useGameSessionSubscription(sessionId: string | undefined) {
       return undefined;
     }
 
+    const client = new MafiaGameSessionClient(sessionId);
     const abortController = new AbortController();
     let lastEventId: string | undefined;
     let retryCount = 0;
@@ -21,7 +22,7 @@ export function useGameSessionSubscription(sessionId: string | undefined) {
     const subscribe = async () => {
       while (!abortController.signal.aborted) {
         // oxlint-disable-next-line no-await-in-loop -- reconnect attempts must remain ordered.
-        const result = await subscribeToGameSession(sessionId, {
+        const result = await client.subscribe({
           lastEventId,
           onConnected: () => {
             retryCount = 0;

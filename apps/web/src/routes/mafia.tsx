@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { useCallback } from 'react';
 
-import { createMafiaGameSession } from '@/features/mafia-session/api/api';
+import { MafiaGameSessionClient } from '@/features/mafia-session/api/client';
 import { isUnavailableGameSession } from '@/features/mafia-session/api/error';
 import { ControlRoom } from '@/features/mafia-session/components/control-room/control-room';
 import { ControlRoomError } from '@/features/mafia-session/components/control-room/control-room-error';
@@ -17,7 +17,7 @@ export const Route = createFileRoute('/mafia')({
       return { sessionId };
     }
 
-    const result = await createMafiaGameSession(ensureCreationKey());
+    const result = await MafiaGameSessionClient.createSession(ensureCreationKey());
     return result.match(
       (projection) => {
         setSessionId(projection.sessionId);

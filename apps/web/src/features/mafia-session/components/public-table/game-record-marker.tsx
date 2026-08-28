@@ -3,7 +3,7 @@ import { ScrollTextIcon } from 'lucide-react';
 import { map } from 'remeda';
 import { match } from 'ts-pattern';
 
-import type { MafiaGameProjection } from '../../api/api';
+import type { MafiaGameProjection } from '../../api/client';
 
 type GameRecordMarkerProps = {
   outcome: Extract<

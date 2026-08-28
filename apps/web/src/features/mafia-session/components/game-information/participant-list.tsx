@@ -2,7 +2,7 @@ import { Badge } from '@repo/ui/components/badge';
 import { cn } from '@repo/ui/lib/utils';
 import { map } from 'remeda';
 
-import type { MafiaGameProjection } from '../../api/api';
+import type { MafiaGameProjection } from '../../api/client';
 
 export function ParticipantList({
   participants,

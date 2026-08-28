@@ -1,7 +1,7 @@
 /* oxlint-disable react-perf/jsx-no-new-function-as-prop -- each button binds one explicit Verdict intent. */
 import { Button } from '@repo/ui/components/button';
 
-import type { MafiaGameProjection } from '../../api/api';
+import type { MafiaGameProjection } from '../../api/client';
 
 type VerdictControlsProps = {
   disabled: boolean;

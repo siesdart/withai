@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { match } from 'ts-pattern';
 
-import { submitFinalDefence, submitNomination, submitVerdict } from '../api/api';
+import { MafiaGameSessionClient } from '../api/client';
 import { isGameSessionApiError } from '../api/error';
 import { type DayAction, type DayActionDraft } from '../store/drafts/day-action-draft';
 import { useGameSessionStore } from '../store/game-session';
@@ -25,17 +25,18 @@ export function useDayAction(sessionId: string): UseDayActionResult {
   const ensureDayActionDraft = useGameSessionStore((state) => state.ensureDayActionDraft);
   const clearDayActionDraft = useGameSessionStore((state) => state.clearDayActionDraft);
   const cooldown = useCooldown();
+  const client = new MafiaGameSessionClient(sessionId);
   const mutation = useMutation({
     mutationFn: async (action: DayActionDraft) => {
       const result = await match(action)
         .with({ type: 'nomination' }, (draft) =>
-          submitNomination(sessionId, draft.targetParticipantId, draft.idempotencyKey),
+          client.submitNomination(draft.targetParticipantId, draft.idempotencyKey),
         )
         .with({ type: 'verdict' }, (draft) =>
-          submitVerdict(sessionId, draft.vote, draft.idempotencyKey),
+          client.submitVerdict(draft.vote, draft.idempotencyKey),
         )
         .with({ type: 'final-defence' }, (draft) =>
-          submitFinalDefence(sessionId, draft.content, draft.idempotencyKey),
+          client.submitFinalDefence(draft.content, draft.idempotencyKey),
         )
         .exhaustive();
       return result.match(

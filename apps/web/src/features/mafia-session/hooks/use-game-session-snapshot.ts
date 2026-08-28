@@ -1,15 +1,16 @@
 import type { MafiaGameProjection } from '@repo/mafia';
 import { queryOptions, useSuspenseQuery } from '@tanstack/react-query';
 
-import { getGameSessionSnapshot } from '../api/api';
+import { MafiaGameSessionClient } from '../api/client';
 import { isUnavailableGameSession } from '../api/error';
 import { retainNewerProjection } from './projection-order';
 
 export const gameSessionSnapshotOptions = (sessionId: string) =>
   queryOptions<MafiaGameProjection>({
     queryKey: ['game-session', sessionId],
-    queryFn: async (): Promise<MafiaGameProjection> => {
-      const result = await getGameSessionSnapshot(sessionId);
+    queryFn: async () => {
+      const client = new MafiaGameSessionClient(sessionId);
+      const result = await client.getSnapshot();
       return result.match(
         (projection) => projection,
         (error) => {

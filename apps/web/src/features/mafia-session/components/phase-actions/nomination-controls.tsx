@@ -2,7 +2,7 @@
 import { Button } from '@repo/ui/components/button';
 import { filter, map, pipe } from 'remeda';
 
-import type { MafiaGameProjection } from '../../api/api';
+import type { MafiaGameProjection } from '../../api/client';
 
 type NominationControlsProps = {
   disabled: boolean;

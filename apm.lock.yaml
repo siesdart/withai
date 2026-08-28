@@ -1,5 +1,5 @@
 lockfile_version: '1'
-generated_at: '2026-08-27T09:17:31.612336+00:00'
+generated_at: '2026-08-28T11:18:31.158990+00:00'
 apm_version: 0.28.0
 dependencies:
 - repo_url: addyosmani/web-quality-skills
@@ -78,6 +78,22 @@ dependencies:
     .agents/skills/taste-skill/SKILL.md: sha256:aa194351b246b8b4799099d4ed7b033d29eab6e6e3d58d8d2172978be7b3ec89
   content_hash: sha256:1b69742e9409feeb340ef9d61671e84ae266631b98b27143928b84b926d8e091
   declared_license: MIT
+- repo_url: open-circle/agent-skills
+  name: agent-skills
+  host: github.com
+  resolved_commit: 21d123742218d3cd748056fad78aa88d7da3dc96
+  version: 21d1237
+  package_type: marketplace_plugin
+  deployed_files:
+  - .agents/skills/valibot
+  - .agents/skills/valibot/.claude-plugin/plugin.json
+  - .agents/skills/valibot/SKILL.md
+  deployed_file_hashes:
+    .agents/skills/valibot/.claude-plugin/plugin.json: sha256:aa335cff8536fcd2d97b4c38cc83e018c9f1fdb90e37825fbe8bcedf219c4fd1
+    .agents/skills/valibot/SKILL.md: sha256:8c7397be7b71d4f13d50094f25458c1dd70dbd027030b69428f97b96b9099991
+  content_hash: sha256:276ebc5f400039a3aaa23cd7ced766c39ac125115380d678496d128a0395e32c
+  skill_subset:
+  - valibot
 - repo_url: shadcn/ui
   name: shadcn
   host: github.com
@@ -143,7 +159,7 @@ dependencies:
 - repo_url: siesdart/skills
   name: skills
   host: github.com
-  resolved_commit: 1f89c30072d1d02d656cb4ad5444c998a0713318
+  resolved_commit: 1ee5848c9b7a884563434e02d836b0b2704ef189
   version: unknown
   package_type: skill_bundle
   deployed_files:
@@ -160,10 +176,10 @@ dependencies:
     .agents/skills/canonical-package-layout/SKILL.md: sha256:e8ea816a0d58d329feaba3baaab9ccdc38642c3741485f02efa89f10f916756b
     .agents/skills/react-view-logic-boundaries/SKILL.md: sha256:3457fcd0bf8c1c99baec4c3eb880e9fff528203f1d82e460c2ac512f8d36db67
     .agents/skills/react-view-logic-boundaries/agents/openai.yaml: sha256:b822e2c4346135d4434fc465dd7347c0a848cc41eb694e8d52596a24f3868ac4
-    .agents/skills/typescript-functional-patterns/SKILL.md: sha256:6a3458e86ceed9b05b91547c20f007c4be78ffe3767206a165babce74bbb081d
+    .agents/skills/typescript-functional-patterns/SKILL.md: sha256:cfe29ae09d8a7908cc9b2bffda2688472fc9db6492e0c4993041b5f3083f553d
     .agents/skills/typescript-functional-patterns/agents/openai.yaml: sha256:effac4408d317b380033fe079e4cb76c17686c64dfef419ae5a5e1b400485e35
     .agents/skills/typescript-functional-patterns/references/PATTERNS.md: sha256:e8da60ebfa7b2cab850bf2188bf75a2c843aa9376db261288cb806516c3f296c
-  content_hash: sha256:e28a3e278ffcc635b638edafcd1a0e2d9c69ad18ebe95d7f0df374fca39aefbe
+  content_hash: sha256:87e3d53172535b7734263e87ad83f8047704835f309d17e4e2ada8bafc66b1fd
   skill_subset:
   - canonical-package-layout
   - react-view-logic-boundaries
@@ -172,7 +188,7 @@ dependencies:
   materialization_repo_url: TanStack/ai
   name: ai
   host: github.com
-  resolved_commit: 0e4e340a02c19ca8b28700507aacc2f61a2f2178
+  resolved_commit: 49fc54ca0aacf2fc60bb36647a61a23559dda4bc
   version: unknown
   virtual_path: packages/ai
   is_virtual: true
@@ -200,7 +216,7 @@ dependencies:
   - .agents/skills/ai-core/structured-outputs/SKILL.md
   - .agents/skills/ai-core/tool-calling/SKILL.md
   deployed_file_hashes:
-    .agents/skills/ai-core/SKILL.md: sha256:520f0b84eddaae1272171e91e2a156c211553db4c420cf1fd7f9c99b79b6075d
+    .agents/skills/ai-core/SKILL.md: sha256:d69011d75ea88d76471257b7165796d9502e1fc4dd2e85a101f9314e991d0681
     .agents/skills/ai-core/adapter-configuration/SKILL.md: sha256:e068f8dcedd9b7692547a3ac5560f92b4a012e3774b2b554f16b68b614f8a529
     .agents/skills/ai-core/adapter-configuration/references/anthropic-adapter.md: sha256:1092445e6ab9bf70f86b98f84b8cfe3fd3df4d1f396eecbac460d6d396634f17
     .agents/skills/ai-core/adapter-configuration/references/byteplus-adapter.md: sha256:9a7ec23dea5f52618959ad73ae2089daecc1ac43f157edf261ef7e85a43c80ab
@@ -220,12 +236,12 @@ dependencies:
     .agents/skills/ai-core/middleware/SKILL.md: sha256:13d23d966f6a0d8e9db5fb5df9efcab0c02e3f14c1639a6b011832e34d85d107
     .agents/skills/ai-core/structured-outputs/SKILL.md: sha256:0fa3e2fec6df5b7c9c16ff9174841de8f721a06db4dd90fb5e55587877157030
     .agents/skills/ai-core/tool-calling/SKILL.md: sha256:8397ae59ffcb66983f7b125f90af5105475cb2087859d6632eb1954c53e1b863
-  content_hash: sha256:de965eac425cf2204485fa05ace0a2295631cd75abeeab97118374fefc47dbec
+  content_hash: sha256:d3e1937014be9b0b1b7a7ace02ade59aa26dad937e41f6194404745ac8ad4677
 - repo_url: tanstack/router
   materialization_repo_url: TanStack/router
   name: router
   host: github.com
-  resolved_commit: 0dbb77f7260b4919786c2c3d594b8c262de43a9e
+  resolved_commit: 0caf6b9a2b7e14b0b146c74cc27cb05c19d700a5
   version: unknown
   virtual_path: packages/router-core
   is_virtual: true
@@ -259,7 +275,7 @@ dependencies:
 - repo_url: vercel-labs/agent-skills
   name: agent-skills
   host: github.com
-  resolved_commit: dd089a8c752c966dee8bf0f27cb625ba193ffd9e
+  resolved_commit: 20e89cc4bb256eb7b1fcbdc68f7175284709a847
   version: unknown
   package_type: skill_bundle
   deployed_files:
@@ -420,7 +436,7 @@ dependencies:
     .agents/skills/react-best-practices/rules/server-parallel-nested-fetching.md: sha256:ad5d9656984d4a959997a2367bf59cc6632297b4634a1dd13a087939d83f30b3
     .agents/skills/react-best-practices/rules/server-serialization.md: sha256:f4c7d68b29c82381baad059c4a7f09e868e71ec9c3115a26ad3ae7d24c0dfe1f
     .agents/skills/web-design-guidelines/SKILL.md: sha256:f4647ca866a3accf763777f83e7682954f0187cd6bea7eea0399796652414e8f
-  content_hash: sha256:f0ff668fea4447964f175479da4d5fa2598cd866ddc1f57af5588f5adc90d05a
+  content_hash: sha256:1e91e73ee17b34139b5cc7f1f64de4b5621f68602269c329f8f6a4bac83f848e
   skill_subset:
   - react-best-practices
   - web-design-guidelines
@@ -429,7 +445,7 @@ dependencies:
   host: github.com
   resolved_commit: 60af39b796c01a25998fdb70cfe2320dcfc26a61
   resolved_ref: v2.10.11
-  version: 0.0.0
+  version: unknown
   package_type: skill_bundle
   deployed_files:
   - .agents/skills/turborepo
@@ -505,7 +521,7 @@ deployments:
   owners:
   - tanstack/ai/packages/ai
   active_owner: tanstack/ai/packages/ai
-  content_hash: sha256:520f0b84eddaae1272171e91e2a156c211553db4c420cf1fd7f9c99b79b6075d
+  content_hash: sha256:d69011d75ea88d76471257b7165796d9502e1fc4dd2e85a101f9314e991d0681
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/ai-core/adapter-configuration/SKILL.md
@@ -2296,7 +2312,7 @@ deployments:
   owners:
   - siesdart/skills
   active_owner: siesdart/skills
-  content_hash: sha256:6a3458e86ceed9b05b91547c20f007c4be78ffe3767206a165babce74bbb081d
+  content_hash: sha256:cfe29ae09d8a7908cc9b2bffda2688472fc9db6492e0c4993041b5f3083f553d
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/typescript-functional-patterns/agents/openai.yaml
@@ -2315,6 +2331,33 @@ deployments:
   - siesdart/skills
   active_owner: siesdart/skills
   content_hash: sha256:e8da60ebfa7b2cab850bf2188bf75a2c843aa9376db261288cb806516c3f296c
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/valibot
+  runtime: null
+  scope: project
+  owners:
+  - open-circle/agent-skills
+  active_owner: open-circle/agent-skills
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/valibot/.claude-plugin/plugin.json
+  runtime: null
+  scope: project
+  owners:
+  - open-circle/agent-skills
+  active_owner: open-circle/agent-skills
+  content_hash: sha256:aa335cff8536fcd2d97b4c38cc83e018c9f1fdb90e37825fbe8bcedf219c4fd1
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/valibot/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - open-circle/agent-skills
+  active_owner: open-circle/agent-skills
+  content_hash: sha256:8c7397be7b71d4f13d50094f25458c1dd70dbd027030b69428f97b96b9099991
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/web-design-guidelines

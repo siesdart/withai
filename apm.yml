@@ -14,6 +14,9 @@ dependencies:
       skills:
         - react-best-practices
         - web-design-guidelines
+    - git: open-circle/agent-skills
+      skills:
+        - valibot
     - git: siesdart/skills
       skills:
         - canonical-package-layout

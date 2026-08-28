@@ -46,8 +46,9 @@ direct dependency has a source or public-type owner.
 Classify each meaningful piece of logic:
 
 - **Transform**: normalize, select, filter, group, sort, aggregate, or project
-  data. Prefer Remeda's data-last functions inside `pipe`; use data-first form
-  for a short isolated operation.
+  data. Use the corresponding Remeda function for every such collection or
+  record transformation; use its data-first form for one operation and its
+  data-last form inside a multi-operation `pipe`.
 - **Result**: an operation can fail in a known, caller-relevant way. Return
   `Result<T, E>` or `ResultAsync<T, E>` and compose it instead of hiding the
   failure in `throw`, `null`, a sentinel, or an untyped rejected promise.
@@ -58,11 +59,12 @@ Classify each meaningful piece of logic:
   the edge; make the transformation, result composition, and decision logic
   pure where practical.
 
-The three libraries are project defaults, not a demand to wrap every expression
-in a library call. A local omission is valid only when the corresponding
-construct does not exist—for example, a function has no recoverable failure or
-finite union. When omitting one in a substantial TypeScript area, state the
-reason in the change summary or code-level design note.
+The three libraries are project defaults, not a demand to wrap unrelated
+expressions in library calls. A local omission is valid only when the
+corresponding construct does not exist. When a Remeda equivalent exists, native
+collection methods are not an omission: use Remeda instead. When omitting one in
+a substantial TypeScript area, state the reason in the change summary or
+code-level design note.
 
 Completion criterion: every non-trivial branch or transformation has a named
 reason for its chosen representation, and the core logic is separable from
@@ -87,6 +89,20 @@ const names = pipe(users, filter(isActive), map(toName));
 The only local exceptions are when the function has no usable data-first form,
 or when a unary function is deliberately being passed to another higher-order
 API. In those cases, keep the exception local and make the reason apparent.
+
+This applies to native collection methods as well. Replace equivalent calls
+such as `items.filter(predicate)`, `items.map(transform)`, `items.reduce(step,
+initial)`, `items.find(predicate)`, and `items.some(predicate)` with the
+corresponding Remeda function, even when there is only one operation:
+
+```ts
+const activeUsers = filter(users, isActive);
+const firstAdmin = find(users, isAdmin);
+```
+
+Do not use a native method merely because it is a single step or because it is
+shorter. Keep native collection methods only when Remeda has no equivalent or
+when a project/runtime constraint is recorded.
 
 For multi-stage work, use Remeda to express a sequence as a left-to-right
 pipeline:
@@ -202,6 +218,8 @@ Before declaring TypeScript work complete, check:
 - Are union decisions exhaustive where the domain is closed?
 - Are collection transformations readable as data flow rather than callback
   nesting or mutation?
+- Do all collection transformations use Remeda when an equivalent exists,
+  including single-step `filter`/`map`/`find`/`reduce`/`some` calls?
 - Does every one-operation Remeda transformation avoid a one-stage `pipe`?
 - Are side effects at the edge and translated into domain-level results once?
 - Did any helper exist only to satisfy a library style, or did it earn its

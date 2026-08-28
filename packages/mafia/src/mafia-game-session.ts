@@ -45,6 +45,13 @@ export type MafiaPublicOutcome =
     }
   | { id: string; type: 'day-changed'; dayNumber: number }
   | { id: string; type: 'phase-changed'; dayNumber: number; phase: MafiaPhase }
+  | {
+      id: string;
+      type: 'phase-time-adjusted';
+      dayNumber: number;
+      phase: Exclude<MafiaPhase, 'completed'>;
+      adjustmentSeconds: 10 | -10;
+    }
   | { id: string; type: 'allegiance-reveal'; participantId: string; allegiance: MafiaAllegiance }
   | { id: string; type: 'victory'; allegiance: MafiaAllegiance };
 export type MafiaPublicVoteStatus = {
@@ -168,6 +175,24 @@ export class MafiaGameSession implements GameModuleSession<
       .with('final-defence', () => ok(this.advanceTo('verdict', now)))
       .with('verdict', () => ok(this.resolveVerdict(now)))
       .exhaustive();
+  }
+  adjustPhaseTime(
+    participantId: string,
+    adjustmentSeconds: 10 | -10,
+    now = new Date(),
+  ): Result<void, MafiaActionError> {
+    if (this.phase === 'completed') return err({ type: 'invalid-phase', phase: this.phase });
+    const phase = this.phase;
+    return this.livingParticipant(participantId, now).map(() => {
+      this.phaseDeadline = new Date(this.phaseDeadline.getTime() + adjustmentSeconds * 1000);
+      this.recordOutcome({
+        id: this.nextOutcomeId(),
+        type: 'phase-time-adjusted',
+        dayNumber: this.dayNumber,
+        phase,
+        adjustmentSeconds,
+      });
+    });
   }
   agentSpeechContextFor(
     participantId: string,

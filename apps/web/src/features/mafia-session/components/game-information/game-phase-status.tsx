@@ -3,10 +3,14 @@ import { TimerIcon } from 'lucide-react';
 import { match } from 'ts-pattern';
 
 import type { MafiaGameProjection } from '../../api/client';
+import { PhaseTimeControls } from './phase-time-controls';
 
 type GamePhaseStatusProps = {
   dayNumber: number;
   phase: MafiaGameProjection['public']['phase'];
+  phaseDeadline: string;
+  sessionId: string;
+  currentParticipantAlive: boolean;
   deadline: { label: string; isExpired: boolean; isUrgent: boolean };
 };
 
@@ -34,7 +38,14 @@ const phaseCopy = (phase: GamePhaseStatusProps['phase']) =>
     }))
     .exhaustive();
 
-export function GamePhaseStatus({ dayNumber, phase, deadline }: GamePhaseStatusProps) {
+export function GamePhaseStatus({
+  dayNumber,
+  phase,
+  phaseDeadline,
+  deadline,
+  sessionId,
+  currentParticipantAlive,
+}: GamePhaseStatusProps) {
   const copy = phaseCopy(phase);
   const deadlineLabel = deadline.isExpired ? 'Resolving result' : `Deadline in ${deadline.label}`;
 
@@ -54,23 +65,25 @@ export function GamePhaseStatus({ dayNumber, phase, deadline }: GamePhaseStatusP
       </div>
       <p className="mt-1 text-xs text-[#625e55] sm:text-sm">{copy.detail}</p>
       {phase !== 'completed' ? (
-        <div
-          className="absolute top-0 right-0 flex shrink-0 items-center gap-1.5 text-xs text-[#625e55] sm:gap-2 sm:text-sm"
-          aria-live="polite"
-        >
-          <TimerIcon
-            aria-hidden="true"
-            className={deadline.isUrgent ? 'size-4 text-[#a43b31]' : 'size-4'}
-          />
-          <span
-            className={
-              deadline.isUrgent
-                ? 'font-semibold whitespace-nowrap text-[#a43b31]'
-                : 'whitespace-nowrap'
-            }
-          >
-            {deadlineLabel}
-          </span>
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[#625e55] sm:absolute sm:top-0 sm:right-0 sm:mt-0 sm:text-sm">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2" aria-live="polite">
+            <TimerIcon
+              aria-hidden="true"
+              className={deadline.isUrgent ? 'size-4 text-[#a43b31]' : 'size-4'}
+            />
+            <span
+              className={
+                deadline.isUrgent
+                  ? 'font-semibold whitespace-nowrap text-[#a43b31]'
+                  : 'whitespace-nowrap'
+              }
+            >
+              {deadlineLabel}
+            </span>
+          </div>
+          {currentParticipantAlive ? (
+            <PhaseTimeControls phase={phase} phaseDeadline={phaseDeadline} sessionId={sessionId} />
+          ) : null}
         </div>
       ) : null}
     </section>

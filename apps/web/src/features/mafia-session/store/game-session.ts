@@ -1,77 +1,15 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-import { nextDayActionDraft, type DayAction, type DayActionDraft } from './day-action-draft';
-import { clearIdempotentDraft } from './idempotent-draft';
-import { nextPublicSpeechDraft, type PublicSpeechDraft } from './public-speech-draft';
+import { createDraftSlice } from './draft-slice';
+import type { GameSessionStore } from './game-session.types';
+import { createSessionSlice } from './session-slice';
 
-type GameSessionState = {
-  sessionId: string | undefined;
-  creationKey: string | undefined;
-  publicSpeechDraft: PublicSpeechDraft | undefined;
-  dayActionDraft: DayActionDraft | undefined;
-  setSessionId: (sessionId: string) => void;
-  ensureCreationKey: () => string;
-  setPublicSpeechContent: (content: string) => void;
-  clearPublicSpeechDraft: (idempotencyKey: string) => void;
-  ensureDayActionDraft: (action: DayAction) => DayActionDraft;
-  clearDayActionDraft: (idempotencyKey: string) => void;
-  clearSession: () => void;
-};
-
-export const useGameSessionStore = create<GameSessionState>()(
+export const useGameSessionStore = create<GameSessionStore>()(
   persist(
-    (set, get) => ({
-      sessionId: undefined,
-      creationKey: undefined,
-      publicSpeechDraft: undefined,
-      dayActionDraft: undefined,
-      setSessionId: (sessionId) => {
-        set({
-          sessionId,
-          creationKey: undefined,
-          publicSpeechDraft: undefined,
-          dayActionDraft: undefined,
-        });
-      },
-      ensureCreationKey: () => {
-        const existingKey = get().creationKey;
-        if (existingKey) {
-          return existingKey;
-        }
-
-        const creationKey = crypto.randomUUID();
-        set({ creationKey });
-        return creationKey;
-      },
-      setPublicSpeechContent: (content) => {
-        set(({ publicSpeechDraft }) => ({
-          publicSpeechDraft: nextPublicSpeechDraft(content, publicSpeechDraft),
-        }));
-      },
-      clearPublicSpeechDraft: (idempotencyKey) => {
-        set(({ publicSpeechDraft }) => ({
-          publicSpeechDraft: clearIdempotentDraft(publicSpeechDraft, idempotencyKey),
-        }));
-      },
-      ensureDayActionDraft: (action) => {
-        const dayActionDraft = nextDayActionDraft(action, get().dayActionDraft);
-        set({ dayActionDraft });
-        return dayActionDraft;
-      },
-      clearDayActionDraft: (idempotencyKey) => {
-        set(({ dayActionDraft }) => ({
-          dayActionDraft: clearIdempotentDraft(dayActionDraft, idempotencyKey),
-        }));
-      },
-      clearSession: () => {
-        set({
-          sessionId: undefined,
-          creationKey: undefined,
-          publicSpeechDraft: undefined,
-          dayActionDraft: undefined,
-        });
-      },
+    (...args) => ({
+      ...createSessionSlice(...args),
+      ...createDraftSlice(...args),
     }),
     {
       name: 'withai-mafia-game-session',

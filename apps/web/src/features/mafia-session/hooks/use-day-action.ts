@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { submitFinalDefence, submitNomination, submitVerdict } from '../api/api';
 import { isGameSessionApiError } from '../api/error';
-import { type DayAction, type DayActionDraft } from '../store/day-action-draft';
+import { type DayAction, type DayActionDraft } from '../store/drafts/day-action-draft';
 import { useGameSessionStore } from '../store/game-session';
 import { useCooldown } from './use-cooldown';
 import { gameSessionSnapshotOptions } from './use-game-session-snapshot';

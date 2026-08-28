@@ -46,10 +46,7 @@ export function NominationControls({
                   : 'outline'
               }
             >
-              {personalVote?.phase === 'nomination' &&
-              personalVote.targetParticipantId === participant.id
-                ? `Nominated: ${participant.name}`
-                : `Nominate ${participant.name}`}
+              Nominate {participant.name}
             </Button>
           ))}
       </div>

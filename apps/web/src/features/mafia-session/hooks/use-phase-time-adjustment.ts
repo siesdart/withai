@@ -8,6 +8,7 @@ import { gameSessionSnapshotOptions } from './use-game-session-snapshot';
 
 type PhaseTimeAdjustment = 10 | -10;
 type ActiveMafiaPhase = Exclude<MafiaGameProjection['public']['phase'], 'completed'>;
+const phaseTimeAdjustmentCooldownMs = 1_000;
 
 export function usePhaseTimeAdjustment(
   sessionId: string,
@@ -44,6 +45,7 @@ export function usePhaseTimeAdjustment(
     },
     onSuccess: (projection) => {
       queryClient.setQueryData(gameSessionSnapshotOptions(sessionId).queryKey, projection);
+      cooldown.startCooldown(phaseTimeAdjustmentCooldownMs);
     },
     onError: (error) => {
       if (isGameSessionApiError(error) && error.type === 'rate-limited') {

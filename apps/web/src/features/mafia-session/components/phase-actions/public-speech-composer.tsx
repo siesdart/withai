@@ -9,19 +9,11 @@ import {
 import { Textarea } from '@repo/ui/components/textarea';
 import { SendIcon } from 'lucide-react';
 
-export type PublicSpeechControl = {
-  content: string;
-  error: string | undefined;
-  isPending: boolean;
-  isThrottled: boolean;
-  retryAfterSeconds: number | undefined;
-  onContentChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
-  submitSpeech: (event: React.SyntheticEvent<HTMLFormElement, SubmitEvent>) => void;
-};
+import type { UsePublicSpeechResult } from '../../hooks/use-public-speech';
 
 type PublicSpeechComposerProps = {
   disabled: boolean;
-  speech: PublicSpeechControl;
+  speech: UsePublicSpeechResult;
 };
 
 export function PublicSpeechComposer({ disabled, speech }: PublicSpeechComposerProps) {
@@ -30,7 +22,7 @@ export function PublicSpeechComposer({ disabled, speech }: PublicSpeechComposerP
   return (
     <form
       className="shrink-0 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-5"
-      onSubmit={speech.submitSpeech}
+      onSubmit={speech.submit}
     >
       <FieldGroup>
         <Field data-disabled={isDisabled} data-invalid={Boolean(speech.error)}>

@@ -117,15 +117,7 @@ export function ControlRoom({ sessionId }: { sessionId: string }) {
               onSubmitVerdict={(vote) => dayAction.submit({ type: 'verdict', vote })}
               personalVote={snapshot.personal.vote}
               publicInformation={snapshot.public}
-              speech={{
-                content: publicSpeech.content,
-                error: publicSpeech.error,
-                isPending: publicSpeech.isPending,
-                isThrottled: publicSpeech.isThrottled,
-                onContentChange: publicSpeech.onContentChange,
-                retryAfterSeconds: publicSpeech.retryAfterSeconds,
-                submitSpeech: publicSpeech.submit,
-              }}
+              speech={publicSpeech}
             />
           }
         />

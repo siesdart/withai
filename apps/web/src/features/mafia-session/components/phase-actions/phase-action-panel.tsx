@@ -1,9 +1,10 @@
 import { match } from 'ts-pattern';
 
 import type { MafiaGameProjection } from '../../api/api';
+import type { UsePublicSpeechResult } from '../../hooks/use-public-speech';
 import { FinalDefenceForm } from './final-defence-form';
 import { NominationControls } from './nomination-controls';
-import { PublicSpeechComposer, type PublicSpeechControl } from './public-speech-composer';
+import { PublicSpeechComposer } from './public-speech-composer';
 import { VerdictControls } from './verdict-controls';
 
 type PhaseActionPanelProps = {
@@ -12,7 +13,7 @@ type PhaseActionPanelProps = {
   isPhaseExpired: boolean;
   personalVote: MafiaGameProjection['personal']['vote'];
   publicInformation: MafiaGameProjection['public'];
-  speech: PublicSpeechControl;
+  speech: UsePublicSpeechResult;
   isSubmittingAction: boolean;
   onNominate: (participantId: string) => void;
   onSubmitFinalDefence: (content: string) => void;

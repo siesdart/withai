@@ -27,9 +27,8 @@ describe('DeterministicAgentSpeechGateway', () => {
     };
 
     expect(new DeterministicAgentSpeechGateway().decideFinalDefence(context)).toEqual({
-      opening:
-        'Mina: As someone observant and concise., I ask you to judge the evidence carefully.',
-      followUp: 'Mina: My position has not changed; please weigh the facts.',
+      opening: 'As someone observant and concise., I ask you to judge the evidence carefully.',
+      followUp: 'My position has not changed; please weigh the facts.',
     });
   });
 });

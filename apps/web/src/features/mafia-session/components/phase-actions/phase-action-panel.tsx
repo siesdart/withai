@@ -17,7 +17,7 @@ type PhaseActionPanelProps = {
   dayAction: UseDayActionResult;
   speech: UsePublicSpeechResult;
   onNominate: (participantId: string) => void;
-  onSubmitFinalDefence: (content: string) => void;
+  onSubmitFinalDefence: (content: string, onSuccess: () => void) => void;
   onSubmitVerdict: (vote: 'eliminate' | 'spare') => void;
 };
 

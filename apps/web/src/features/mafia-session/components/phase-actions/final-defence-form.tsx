@@ -13,7 +13,7 @@ import { useState } from 'react';
 type FinalDefenceFormProps = {
   disabled: boolean;
   error: string | undefined;
-  onSubmitFinalDefence: (content: string) => void;
+  onSubmitFinalDefence: (content: string, onSuccess: () => void) => void;
   retryAfterSeconds: number | undefined;
 };
 
@@ -31,7 +31,7 @@ export function FinalDefenceForm({
       onSubmit={(event) => {
         event.preventDefault();
         if (content.trim()) {
-          onSubmitFinalDefence(content);
+          onSubmitFinalDefence(content, () => setContent(''));
         }
       }}
     >

@@ -111,8 +111,8 @@ export function ControlRoom({ sessionId }: { sessionId: string }) {
               onNominate={(targetParticipantId) =>
                 dayAction.submit({ type: 'nomination', targetParticipantId })
               }
-              onSubmitFinalDefence={(content) =>
-                dayAction.submit({ type: 'final-defence', content })
+              onSubmitFinalDefence={(content, onSuccess) =>
+                dayAction.submit({ type: 'final-defence', content }, { onSuccess })
               }
               onSubmitVerdict={(vote) => dayAction.submit({ type: 'verdict', vote })}
               personalVote={snapshot.personal.vote}

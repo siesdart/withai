@@ -12,7 +12,11 @@ export type UseDayActionResult = {
   isCoolingDown: boolean;
   isPending: boolean;
   retryAfterSeconds: number | undefined;
-  submit: (action: DayAction) => void;
+  submit: (action: DayAction, options?: DayActionSubmitOptions) => void;
+};
+
+type DayActionSubmitOptions = {
+  onSuccess?: () => void;
 };
 
 export function useDayAction(sessionId: string): UseDayActionResult {
@@ -45,11 +49,12 @@ export function useDayAction(sessionId: string): UseDayActionResult {
     },
   });
   return {
-    submit: (action: DayAction) => {
+    submit: (action: DayAction, options?: DayActionSubmitOptions) => {
       const draft = ensureDayActionDraft(action);
       mutation.mutate(draft, {
         onSuccess: () => {
           clearDayActionDraft(draft.idempotencyKey);
+          options?.onSuccess?.();
         },
       });
     },

@@ -55,8 +55,8 @@ export function PublicDiscussionPanel({
         ) : null}
       </div>
       <MessageScrollerProvider autoScroll>
-        <MessageScroller>
-          <MessageScrollerViewport className="p-3 text-sm sm:p-5">
+        <MessageScroller className="h-auto! flex-1!">
+          <MessageScrollerViewport className="h-auto! flex-1! p-3 text-sm sm:p-5">
             <MessageScrollerContent>
               {publicInformation.timeline.length === 0 ? (
                 <p className="mt-auto text-[#625e55]">

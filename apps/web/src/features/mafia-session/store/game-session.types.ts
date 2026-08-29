@@ -1,7 +1,6 @@
 import type { StateCreator } from 'zustand';
 
-import type { DayAction, DayActionDraft } from './drafts/day-action-draft';
-import type { PublicSpeechDraft } from './drafts/public-speech-draft';
+import type { GameAction, GameActionDraft } from './drafts/game-action-draft';
 
 export type GameSessionStore = SessionSlice & DraftSlice;
 
@@ -14,12 +13,9 @@ export type SessionSlice = {
 };
 
 export type DraftSlice = {
-  publicSpeechDraft: PublicSpeechDraft | undefined;
-  dayActionDraft: DayActionDraft | undefined;
-  setPublicSpeechContent: (content: string) => void;
-  clearPublicSpeechDraft: (idempotencyKey: string) => void;
-  ensureDayActionDraft: (action: DayAction) => DayActionDraft;
-  clearDayActionDraft: (idempotencyKey: string) => void;
+  gameActionDraft: GameActionDraft | undefined;
+  setGameActionDraft: (action: GameAction) => GameActionDraft | undefined;
+  clearGameActionDraft: (idempotencyKey: string) => void;
 };
 
 export type GameSessionSliceCreator<Slice> = StateCreator<GameSessionStore, [], [], Slice>;

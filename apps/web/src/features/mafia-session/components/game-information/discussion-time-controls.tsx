@@ -10,7 +10,6 @@ type DiscussionTimeControlsProps = {
 
 export function DiscussionTimeControls({ sessionId, phaseDeadline }: DiscussionTimeControlsProps) {
   const discussionTimeAdjustment = useDiscussionTimeAdjustment(sessionId, phaseDeadline);
-  const disabled = discussionTimeAdjustment.isPending || discussionTimeAdjustment.isCoolingDown;
   const cooldownLabel = discussionTimeAdjustment.retryAfterSeconds
     ? ` Available again in ${discussionTimeAdjustment.retryAfterSeconds} seconds.`
     : '';
@@ -22,7 +21,7 @@ export function DiscussionTimeControls({ sessionId, phaseDeadline }: DiscussionT
     >
       <Button
         aria-label={`Remove 10 seconds from the discussion timer.${cooldownLabel}`}
-        disabled={disabled}
+        disabled={discussionTimeAdjustment.isSubmissionBlocked}
         onClick={discussionTimeAdjustment.adjustMinus10}
         size="sm"
         type="button"
@@ -33,7 +32,7 @@ export function DiscussionTimeControls({ sessionId, phaseDeadline }: DiscussionT
       </Button>
       <Button
         aria-label={`Add 10 seconds to the discussion timer.${cooldownLabel}`}
-        disabled={disabled}
+        disabled={discussionTimeAdjustment.isSubmissionBlocked}
         onClick={discussionTimeAdjustment.adjustPlus10}
         size="sm"
         type="button"

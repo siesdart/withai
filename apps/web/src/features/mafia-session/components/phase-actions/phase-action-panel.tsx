@@ -3,7 +3,7 @@ import { find } from 'remeda';
 import { match } from 'ts-pattern';
 
 import type { MafiaGameProjection } from '../../api/client';
-import type { UseDayActionResult } from '../../hooks/actions/use-day-action';
+import type { UseGameActionResult } from '../../hooks/actions/use-game-action';
 import { DiscussionTimeControls } from '../game-information/discussion-time-controls';
 import { FinalDefenceForm } from './final-defence-form';
 import { PublicSpeechForm } from './public-speech-form';
@@ -14,9 +14,7 @@ type PhaseActionPanelProps = {
   snapshot: MafiaGameProjection;
   currentParticipantAlive: boolean;
   isPhaseExpired: boolean;
-  dayAction: UseDayActionResult;
-  onSubmitFinalDefence: (content: string, onSuccess: () => void) => void;
-  onSubmitVerdict: (vote: 'eliminate' | 'spare') => void;
+  gameAction: UseGameActionResult;
 };
 
 export function PhaseActionPanel({
@@ -24,9 +22,7 @@ export function PhaseActionPanel({
   snapshot,
   currentParticipantAlive,
   isPhaseExpired,
-  dayAction,
-  onSubmitFinalDefence,
-  onSubmitVerdict,
+  gameAction,
 }: PhaseActionPanelProps) {
   if (snapshot.public.phase === 'completed') {
     return (
@@ -44,7 +40,7 @@ export function PhaseActionPanel({
     );
   }
 
-  const actionDisabled = dayAction.isPending || dayAction.isCoolingDown || isPhaseExpired;
+  const actionDisabled = gameAction.isSubmissionBlocked || isPhaseExpired;
   const nominatedParticipant = find(
     snapshot.public.participants,
     (participant) => participant.id === snapshot.public.nominatedParticipantId,
@@ -57,7 +53,7 @@ export function PhaseActionPanel({
           phaseDeadline={snapshot.public.phaseDeadline}
           sessionId={sessionId}
         />
-        <PublicSpeechForm sessionId={sessionId} disabled={actionDisabled} />
+        <PublicSpeechForm disabled={actionDisabled} gameAction={gameAction} />
       </div>
     ))
     .with('nomination', () => (
@@ -82,11 +78,7 @@ export function PhaseActionPanel({
             </p>
           </div>
           {isCurrentParticipantNominated ? (
-            <FinalDefenceForm
-              disabled={actionDisabled}
-              error={dayAction.error}
-              onSubmitFinalDefence={onSubmitFinalDefence}
-            />
+            <FinalDefenceForm disabled={actionDisabled} gameAction={gameAction} />
           ) : null}
         </div>
       );
@@ -95,8 +87,8 @@ export function PhaseActionPanel({
       <VerdictControls
         disabled={actionDisabled}
         nominatedParticipantName={nominatedParticipant?.name}
-        onSubmitVerdict={onSubmitVerdict}
         personalVote={snapshot.personal.vote}
+        gameAction={gameAction}
       />
     ))
     .with('night', () => (

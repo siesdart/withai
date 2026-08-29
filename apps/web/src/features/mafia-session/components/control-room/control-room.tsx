@@ -1,142 +1,117 @@
-/* oxlint-disable react-perf/jsx-no-jsx-as-prop, react-perf/jsx-no-new-function-as-prop, react-perf/jsx-no-new-object-as-prop -- session-owned actions are adapted into a semantic child contract at this composition boundary. */
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@repo/ui/components/accordion';
-import { EyeOffIcon, UsersIcon } from 'lucide-react';
-import { filter, flatMap } from 'remeda';
+/* oxlint-disable react-perf/jsx-no-jsx-as-prop, react-perf/jsx-no-new-function-as-prop -- session-owned actions are adapted into a semantic child contract at this composition boundary. */
+import { UsersIcon } from 'lucide-react';
+import { filter } from 'remeda';
+import { match } from 'ts-pattern';
 
-import { useDayAction } from '../../hooks/actions/use-day-action';
-import { usePublicSpeech } from '../../hooks/actions/use-public-speech';
+import { useGameAction } from '../../hooks/actions/use-game-action';
 import { useGameSessionSnapshot } from '../../hooks/sync/use-game-session-snapshot';
 import { useGameSessionSubscription } from '../../hooks/sync/use-game-session-subscription';
 import { useDeadlineCountdown } from '../../hooks/ui/use-deadline-countdown';
-import { GamePhaseStatus } from '../game-information/game-phase-status';
 import { ParticipantList } from '../game-information/participant-list';
-import { PersonalInformation } from '../game-information/personal-information';
 import { PhaseActionPanel } from '../phase-actions/phase-action-panel';
 import { PublicDiscussionPanel } from '../public-table/public-discussion-panel';
 
 export function ControlRoom({ sessionId }: { sessionId: string }) {
   const { snapshot } = useGameSessionSnapshot(sessionId);
   const { isReconnecting } = useGameSessionSubscription(sessionId);
-  const publicSpeech = usePublicSpeech(sessionId);
-  const dayAction = useDayAction(sessionId);
+  const gameAction = useGameAction(sessionId);
   const deadline = useDeadlineCountdown(snapshot.public.phaseDeadline);
   const currentParticipantAlive = snapshot.public.participants.some(
     (participant) => participant.id === snapshot.personal.participantId && participant.alive,
   );
-  const revealedAllegiances = new Map(
-    flatMap(snapshot.public.timeline, (item) =>
-      item.type === 'record' && item.outcome.type === 'allegiance-reveal'
-        ? [[item.outcome.participantId, item.outcome.allegiance] as const]
-        : [],
-    ),
-  );
+  const actionDisabled =
+    !currentParticipantAlive || gameAction.isSubmissionBlocked || deadline.isExpired;
+  const participantSelection = match({
+    phase: snapshot.public.phase,
+    role: snapshot.personal.role,
+  })
+    .with({ phase: 'nomination' }, () => ({
+      actionLabel: 'Nominate',
+      disabled: actionDisabled,
+      onSelect: (targetParticipantId: string) =>
+        gameAction.submit({ type: 'nomination', targetParticipantId }),
+      selectedParticipantId:
+        snapshot.personal.vote?.phase === 'nomination'
+          ? snapshot.personal.vote.targetParticipantId
+          : undefined,
+    }))
+    .with({ phase: 'night', role: 'Mafia' }, () => ({
+      actionLabel: 'Target',
+      disabled: actionDisabled,
+      onSelect: (targetParticipantId: string) =>
+        gameAction.submit({ type: 'mafia-target', targetParticipantId }),
+      selectedParticipantId: snapshot.personal.nightAction?.targetParticipantId,
+    }))
+    .with({ phase: 'night', role: 'Doctor' }, () => ({
+      actionLabel: 'Protect',
+      disabled: actionDisabled,
+      onSelect: (targetParticipantId: string) =>
+        gameAction.submit({ type: 'doctor-protection', targetParticipantId }),
+      selectedParticipantId: snapshot.personal.nightAction?.targetParticipantId,
+    }))
+    .with({ phase: 'night', role: 'Detective' }, () => ({
+      actionLabel: 'Investigate',
+      disabled: actionDisabled || snapshot.personal.nightAction !== undefined,
+      onSelect: (targetParticipantId: string) =>
+        gameAction.submit({ type: 'detective-investigation', targetParticipantId }),
+      selectedParticipantId: snapshot.personal.nightAction?.targetParticipantId,
+    }))
+    .otherwise(() => undefined);
 
   return (
     <main className="flex h-dvh flex-col overflow-hidden bg-[#e9e3d6] px-4 py-3 text-[#22221e] sm:px-8 sm:py-5">
-      <header className="mx-auto w-full max-w-7xl shrink-0">
-        <GamePhaseStatus
-          dayNumber={snapshot.public.dayNumber}
-          phase={snapshot.public.phase}
-          phaseDeadline={snapshot.public.phaseDeadline}
-          deadline={deadline}
-          sessionId={sessionId}
-          currentParticipantAlive={currentParticipantAlive}
-        />
+      <header
+        className="relative mx-auto w-full max-w-7xl min-w-0 shrink-0 border-b-2 border-[#22221e] pb-3 sm:pb-5"
+        aria-labelledby="phase-title"
+      >
+        <h1
+          id="phase-title"
+          className="text-2xl leading-none font-bold tracking-[-0.035em] sm:text-3xl"
+        >
+          WithAI / Mafia
+        </h1>
       </header>
 
-      <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col gap-3 py-3 lg:grid lg:grid-cols-[15rem_minmax(0,1fr)_18rem] lg:gap-5 lg:py-6">
-        <Accordion className="border border-[#22221e]/45 bg-[#f4efe7] px-3 lg:hidden">
-          <AccordionItem value="participants">
-            <AccordionTrigger className="py-3 no-underline hover:no-underline">
-              <span className="flex min-w-0 items-center gap-2 text-xs tracking-[0.18em] text-[#625e55] uppercase">
-                <UsersIcon aria-hidden="true" /> Living participants
-              </span>
-              <span className="mr-2 text-xs tracking-normal text-[#625e55] normal-case">
-                {filter(snapshot.public.participants, (participant) => participant.alive).length}{' '}
-                alive
-              </span>
-            </AccordionTrigger>
-            <AccordionContent className="pb-3">
-              <ParticipantList
-                participants={snapshot.public.participants}
-                currentParticipantId={snapshot.personal.participantId}
-                revealedAllegiances={revealedAllegiances}
-              />
-            </AccordionContent>
-          </AccordionItem>
-          <AccordionItem value="private-information">
-            <AccordionTrigger className="py-3 no-underline hover:no-underline">
-              <span className="flex min-w-0 items-center gap-2 text-xs tracking-[0.18em] text-[#a43b31] uppercase">
-                <EyeOffIcon aria-hidden="true" /> Your private information
-              </span>
-              <span className="mr-2 text-xs tracking-normal text-[#625e55] normal-case">
-                {snapshot.personal.role}
-              </span>
-            </AccordionTrigger>
-            <AccordionContent className="pb-3">
-              <PersonalInformation personal={snapshot.personal} compact />
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
-
-        <section
-          className="hidden border border-[#22221e]/45 bg-[#f4efe7] p-4 lg:block lg:min-h-0 lg:overflow-y-auto"
-          aria-labelledby="participants-heading"
-        >
-          <h2
-            id="participants-heading"
-            className="flex items-center gap-2 text-xs tracking-[0.18em] text-[#625e55] uppercase"
-          >
-            <UsersIcon aria-hidden="true" /> Living participants
-          </h2>
-          <ParticipantList
-            participants={snapshot.public.participants}
-            currentParticipantId={snapshot.personal.participantId}
-            revealedAllegiances={revealedAllegiances}
-          />
-        </section>
-
+      <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col gap-3 py-3 lg:grid lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-5 lg:py-6">
         <PublicDiscussionPanel
           currentParticipantId={snapshot.personal.participantId}
           currentParticipantAlive={currentParticipantAlive}
           isReconnecting={isReconnecting}
+          deadline={deadline}
           publicInformation={snapshot.public}
           controls={
             <PhaseActionPanel
-              currentParticipantId={snapshot.personal.participantId}
+              sessionId={sessionId}
+              snapshot={snapshot}
               currentParticipantAlive={currentParticipantAlive}
-              dayAction={dayAction}
               isPhaseExpired={deadline.isExpired}
-              onNominate={(targetParticipantId) =>
-                dayAction.submit({ type: 'nomination', targetParticipantId })
-              }
-              onSubmitFinalDefence={(content, onSuccess) =>
-                dayAction.submit({ type: 'final-defence', content }, { onSuccess })
-              }
-              onSubmitVerdict={(vote) => dayAction.submit({ type: 'verdict', vote })}
-              personalVote={snapshot.personal.vote}
-              publicInformation={snapshot.public}
-              speech={publicSpeech}
+              gameAction={gameAction}
             />
           }
         />
 
         <aside
-          className="hidden border-2 border-[#a43b31] bg-[#f4efe7] p-4 lg:block lg:min-h-0 lg:overflow-y-auto"
-          aria-labelledby="personal-information-heading"
+          className="border border-[#22221e]/45 bg-[#f4efe7] p-4 lg:min-h-0 lg:overflow-y-auto"
+          aria-labelledby="participants-heading"
         >
-          <h2
-            id="personal-information-heading"
-            className="flex items-center gap-2 text-xs tracking-[0.18em] text-[#a43b31] uppercase"
-          >
-            <EyeOffIcon aria-hidden="true" /> Your private information
-          </h2>
-          <PersonalInformation personal={snapshot.personal} />
+          <div className="flex shrink-0">
+            <h2
+              id="participants-heading"
+              className="flex items-center gap-2 text-xs tracking-[0.18em] text-[#625e55] uppercase"
+            >
+              <UsersIcon aria-hidden="true" /> Participants
+            </h2>
+            <span className="mr-2 text-xs tracking-normal text-[#625e55] normal-case">
+              {filter(snapshot.public.participants, (participant) => participant.alive).length}{' '}
+              alive
+            </span>
+          </div>
+          <ParticipantList
+            participants={snapshot.public.participants}
+            currentParticipantId={snapshot.personal.participantId}
+            knownRoles={snapshot.personal.knownRoles}
+            selection={participantSelection}
+          />
         </aside>
       </div>
     </main>

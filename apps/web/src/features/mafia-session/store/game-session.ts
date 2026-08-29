@@ -14,11 +14,10 @@ export const useGameSessionStore = create<GameSessionStore>()(
     {
       name: 'withai-mafia-game-session',
       storage: createJSONStorage(() => sessionStorage),
-      partialize: ({ sessionId, creationKey, publicSpeechDraft, dayActionDraft }) => ({
+      partialize: ({ sessionId, creationKey, gameActionDraft }) => ({
         sessionId,
         creationKey,
-        publicSpeechDraft,
-        dayActionDraft,
+        gameActionDraft,
       }),
     },
   ),

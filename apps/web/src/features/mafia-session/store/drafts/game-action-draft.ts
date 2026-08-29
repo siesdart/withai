@@ -2,7 +2,8 @@ import { match } from 'ts-pattern';
 
 import { type IdempotentDraft, nextIdempotentDraft } from './idempotent-draft';
 
-export type DayAction =
+export type GameAction =
+  | { type: 'public-speech'; content: string }
   | { type: 'nomination'; targetParticipantId: string }
   | { type: 'verdict'; vote: 'eliminate' | 'spare' }
   | { type: 'final-defence'; content: string }
@@ -10,17 +11,31 @@ export type DayAction =
   | { type: 'doctor-protection'; targetParticipantId: string }
   | { type: 'detective-investigation'; targetParticipantId: string };
 
-export type DayActionDraft = IdempotentDraft<DayAction>;
+export type GameActionDraft = IdempotentDraft<GameAction>;
 
-export function nextDayActionDraft(
-  action: DayAction,
-  existing: DayActionDraft | undefined,
-): DayActionDraft {
-  return nextIdempotentDraft(action, existing, isSameDayAction);
+export function nextGameActionDraft(
+  action: GameAction,
+  existing: GameActionDraft | undefined,
+): GameActionDraft | undefined {
+  if (isEmptyMessage(action)) {
+    return undefined;
+  }
+
+  return nextIdempotentDraft(action, existing, isSameGameAction);
 }
 
-function isSameDayAction(action: DayAction, draft: DayActionDraft) {
+function isEmptyMessage(action: GameAction) {
   return match(action)
+    .with({ type: 'public-speech' }, { type: 'final-defence' }, ({ content }) => !content.trim())
+    .otherwise(() => false);
+}
+
+function isSameGameAction(action: GameAction, draft: GameActionDraft) {
+  return match(action)
+    .with(
+      { type: 'public-speech' },
+      (next) => draft.type === 'public-speech' && next.content === draft.content,
+    )
     .with(
       { type: 'nomination' },
       (next) =>

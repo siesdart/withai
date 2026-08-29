@@ -1,26 +1,26 @@
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 
+import type { UseGameActionResult } from '../../hooks/actions/use-game-action';
 import { MessageForm } from './message-form';
 
 type FinalDefenceFormProps = {
   disabled: boolean;
-  error: string | undefined;
-  onSubmitFinalDefence: (content: string, onSuccess: () => void) => void;
+  gameAction: UseGameActionResult;
 };
 
-export function FinalDefenceForm({ disabled, error, onSubmitFinalDefence }: FinalDefenceFormProps) {
-  const [content, setContent] = useState('');
-  const onSubmit = useCallback(
-    () => onSubmitFinalDefence(content, () => setContent('')),
-    [onSubmitFinalDefence, content],
+export function FinalDefenceForm({ disabled, gameAction }: FinalDefenceFormProps) {
+  const content = gameAction.draft?.type === 'final-defence' ? gameAction.draft.content : '';
+  const onContentChange = useCallback(
+    (nextContent: string) => gameAction.setDraft({ type: 'final-defence', content: nextContent }),
+    [gameAction],
   );
 
   return (
     <MessageForm
       disabled={disabled}
-      error={error}
-      onSubmit={onSubmit}
-      onValueChange={setContent}
+      error={gameAction.error}
+      onSubmit={gameAction.submitDraft}
+      onValueChange={onContentChange}
       value={content}
     />
   );

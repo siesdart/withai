@@ -1,20 +1,27 @@
-import { usePublicSpeech } from '../../hooks/actions/use-public-speech';
+import { useCallback } from 'react';
+
+import type { UseGameActionResult } from '../../hooks/actions/use-game-action';
 import { MessageForm } from './message-form';
 
 type PublicSpeechFormProps = {
-  sessionId: string;
   disabled: boolean;
+  gameAction: UseGameActionResult;
 };
 
-export function PublicSpeechForm({ sessionId, disabled }: PublicSpeechFormProps) {
-  const speech = usePublicSpeech(sessionId);
+export function PublicSpeechForm({ disabled, gameAction }: PublicSpeechFormProps) {
+  const content = gameAction.draft?.type === 'public-speech' ? gameAction.draft.content : '';
+  const onContentChange = useCallback(
+    (nextContent: string) => gameAction.setDraft({ type: 'public-speech', content: nextContent }),
+    [gameAction],
+  );
+
   return (
     <MessageForm
-      disabled={disabled || speech.isPending || speech.isThrottled}
-      error={speech.error}
-      onSubmit={speech.submit}
-      onValueChange={speech.onContentChange}
-      value={speech.content}
+      disabled={disabled}
+      error={gameAction.error}
+      onSubmit={gameAction.submitDraft}
+      onValueChange={onContentChange}
+      value={content}
     />
   );
 }

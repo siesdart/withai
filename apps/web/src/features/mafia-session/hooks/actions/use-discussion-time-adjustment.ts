@@ -16,39 +16,36 @@ export function useDiscussionTimeAdjustment(sessionId: string, expectedDeadline:
       sessionId,
       mutationFn: ({
         adjustmentSeconds,
-        expectedDeadline: requestDeadline,
         idempotencyKey,
       }: {
         adjustmentSeconds: DiscussionTimeAdjustmentSeconds;
-        expectedDeadline: string;
         idempotencyKey: string;
-      }) => client.adjustDiscussionTime(adjustmentSeconds, requestDeadline, idempotencyKey),
+      }) => client.adjustDiscussionTime(adjustmentSeconds, expectedDeadline, idempotencyKey),
       onRateLimited: cooldown.startCooldown,
       onSuccess: () => cooldown.startCooldown(discussionTimeAdjustmentCooldownMs),
     }),
   );
+  const isSubmissionBlocked = isPending || cooldown.isCoolingDown;
 
   const adjust = useCallback(
     (adjustmentSeconds: DiscussionTimeAdjustmentSeconds) => {
-      if (isPending || cooldown.isCoolingDown) {
+      if (isSubmissionBlocked) {
         return;
       }
 
       mutate({
         adjustmentSeconds,
-        expectedDeadline,
         idempotencyKey: crypto.randomUUID(),
       });
     },
-    [cooldown.isCoolingDown, expectedDeadline, isPending, mutate],
+    [isSubmissionBlocked, mutate],
   );
 
   const adjustMinus10 = useCallback(() => adjust(-10), [adjust]);
   const adjustPlus10 = useCallback(() => adjust(10), [adjust]);
 
   return {
-    isCoolingDown: cooldown.isCoolingDown,
-    isPending,
+    isSubmissionBlocked,
     retryAfterSeconds: cooldown.retryAfterSeconds,
     adjustMinus10,
     adjustPlus10,

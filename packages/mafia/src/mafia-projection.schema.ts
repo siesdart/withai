@@ -4,19 +4,17 @@ import * as v from 'valibot';
 import type { MafiaGameProjection } from './mafia-game-session';
 
 const MafiaPhaseSchema = v.picklist([
-  'day-discussion',
+  'discussion',
   'nomination',
   'final-defence',
   'verdict',
+  'night',
   'completed',
 ] as const);
+const MafiaRoleSchema = v.picklist(['Mafia', 'Detective', 'Doctor', 'Citizen'] as const);
 const MafiaAllegianceSchema = v.picklist(['Mafia', 'Citizen'] as const);
 const MafiaParticipantSchema = v.object({ id: v.string(), name: v.string(), alive: v.boolean() });
 const NominationVoteCountSchema = v.object({ participantId: v.string(), voteCount: v.number() });
-const VoteStatusSchema = v.variant('phase', [
-  v.object({ phase: v.literal('nomination'), submittedParticipantIds: v.array(v.string()) }),
-  v.object({ phase: v.literal('verdict'), submittedParticipantIds: v.array(v.string()) }),
-]);
 const PublicOutcomeSchema = v.variant('type', [
   v.object({
     id: v.string(),
@@ -40,9 +38,8 @@ const PublicOutcomeSchema = v.variant('type', [
   v.object({ id: v.string(), type: v.literal('day-changed'), dayNumber: v.number() }),
   v.object({
     id: v.string(),
-    type: v.literal('phase-time-adjusted'),
+    type: v.literal('discussion-time-adjusted'),
     dayNumber: v.number(),
-    phase: v.picklist(['day-discussion', 'nomination', 'final-defence', 'verdict'] as const),
     adjustmentSeconds: v.picklist([10, -10] as const),
   }),
   v.object({
@@ -58,6 +55,13 @@ const PublicOutcomeSchema = v.variant('type', [
     allegiance: MafiaAllegianceSchema,
   }),
   v.object({ id: v.string(), type: v.literal('victory'), allegiance: MafiaAllegianceSchema }),
+  v.object({
+    id: v.string(),
+    type: v.literal('night-resolved'),
+    dayNumber: v.number(),
+    result: v.picklist(['no-death', 'protected', 'participant-eliminated'] as const),
+    participantId: v.optional(v.string()),
+  }),
 ]);
 const PublicTimelineItemSchema = v.variant('type', [
   v.object({
@@ -88,13 +92,12 @@ const MafiaGameProjectionPayloadSchema = v.object({
     phaseDeadline: v.string(),
     participants: v.array(MafiaParticipantSchema),
     nominatedParticipantId: v.optional(v.string()),
-    voteStatus: v.optional(VoteStatusSchema),
     timeline: v.array(PublicTimelineItemSchema),
     completedVoteRecords: v.array(CompletedVoteRecordSchema),
   }),
   personal: v.object({
     participantId: v.string(),
-    role: v.picklist(['Mafia', 'Detective', 'Doctor', 'Citizen'] as const),
+    role: MafiaRoleSchema,
     allegiance: MafiaAllegianceSchema,
     vote: v.optional(
       v.variant('phase', [
@@ -105,6 +108,17 @@ const MafiaGameProjectionPayloadSchema = v.object({
         }),
       ]),
     ),
+    nightAction: v.optional(
+      v.variant('type', [
+        v.object({ type: v.literal('mafia-target'), targetParticipantId: v.string() }),
+        v.object({ type: v.literal('doctor-protection'), targetParticipantId: v.string() }),
+        v.object({
+          type: v.literal('detective-investigation'),
+          targetParticipantId: v.string(),
+        }),
+      ]),
+    ),
+    knownRoles: v.array(v.object({ participantId: v.string(), role: MafiaRoleSchema })),
   }),
 });
 
@@ -128,12 +142,16 @@ function normalizeMafiaGameProjection(projection: ParsedMafiaGameProjection): Ma
     public: {
       ...projection.public,
       nominatedParticipantId: projection.public.nominatedParticipantId,
-      voteStatus: projection.public.voteStatus,
       timeline: map(projection.public.timeline, (item) =>
         item.type === 'record' ? { ...item, outcome: normalizePublicOutcome(item.outcome) } : item,
       ),
     },
-    personal: { ...projection.personal, vote: projection.personal.vote },
+    personal: {
+      ...projection.personal,
+      vote: projection.personal.vote,
+      nightAction: projection.personal.nightAction,
+      knownRoles: projection.personal.knownRoles,
+    },
   };
 }
 

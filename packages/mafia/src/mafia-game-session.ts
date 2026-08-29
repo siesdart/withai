@@ -1,6 +1,7 @@
 import type { AuthorizedGameProjection, GameModuleSession } from '@repo/game-contract';
+import dayjs from 'dayjs';
 import { err, ok, type Result } from 'neverthrow';
-import { filter, find, map, pipe } from 'remeda';
+import { filter, find, flatMap, map, pipe, sort } from 'remeda';
 import { match } from 'ts-pattern';
 
 import { mafiaGameConfig, type MafiaDayDurations } from './config';
@@ -17,10 +18,11 @@ import {
 export { mafiaGameConfig } from './config';
 
 export type MafiaPhase =
-  | 'day-discussion'
+  | 'discussion'
   | 'nomination'
   | 'final-defence'
   | 'verdict'
+  | 'night'
   | 'completed';
 export type MafiaPublicChatMessage = { id: string; participantId: string; content: string };
 export type MafiaPublicOutcome =
@@ -47,17 +49,19 @@ export type MafiaPublicOutcome =
   | { id: string; type: 'phase-changed'; dayNumber: number; phase: MafiaPhase }
   | {
       id: string;
-      type: 'phase-time-adjusted';
+      type: 'night-resolved';
       dayNumber: number;
-      phase: Exclude<MafiaPhase, 'completed'>;
+      result: 'no-death' | 'protected' | 'participant-eliminated';
+      participantId?: string;
+    }
+  | {
+      id: string;
+      type: 'discussion-time-adjusted';
+      dayNumber: number;
       adjustmentSeconds: 10 | -10;
     }
   | { id: string; type: 'allegiance-reveal'; participantId: string; allegiance: MafiaAllegiance }
   | { id: string; type: 'victory'; allegiance: MafiaAllegiance };
-export type MafiaPublicVoteStatus = {
-  phase: 'nomination' | 'verdict';
-  submittedParticipantIds: ReadonlyArray<string>;
-};
 export type MafiaCompletedVoteRecord = {
   id: string;
   dayNumber: number;
@@ -76,7 +80,6 @@ export type MafiaPublicInformation = {
   phaseDeadline: string;
   participants: ReadonlyArray<Omit<MafiaParticipant, 'role'>>;
   nominatedParticipantId: string | undefined;
-  voteStatus: MafiaPublicVoteStatus | undefined;
   timeline: ReadonlyArray<MafiaPublicTimelineItem>;
   completedVoteRecords: ReadonlyArray<MafiaCompletedVoteRecord>;
 };
@@ -88,6 +91,8 @@ export type MafiaActionError =
   | { type: 'invalid-phase'; phase: MafiaPhase }
   | { type: 'not-nominated-participant'; participantId: string }
   | { type: 'invalid-target'; participantId: string }
+  | { type: 'invalid-night-action'; participantId: string }
+  | { type: 'night-action-already-submitted'; participantId: string }
   | { type: 'invalid-public-speech' };
 export type MafiaAgentSpeechContext = {
   participant: Pick<MafiaParticipant, 'id' | 'name'>;
@@ -103,6 +108,7 @@ export type MafiaDayPhaseResult =
       reason: 'nomination-tie' | 'no-nomination' | 'verdict-tie' | 'no-majority';
     }
   | { type: 'participant-eliminated'; participantId: string }
+  | { type: 'night-resolved'; result: 'protected' | 'no-death' | 'participant-eliminated' }
   | { type: 'game-completed'; winner: MafiaAllegiance };
 export class MafiaGameSession implements GameModuleSession<
   MafiaPublicInformation,
@@ -112,17 +118,22 @@ export class MafiaGameSession implements GameModuleSession<
   private readonly timeline: MafiaPublicTimelineItem[] = [];
   private readonly nominations = new Map<string, string>();
   private readonly verdicts = new Map<string, 'eliminate' | 'spare'>();
+  private readonly mafiaTargets = new Map<string, string>();
+  private readonly doctorProtections = new Map<string, string>();
+  private readonly detectiveInvestigations = new Map<string, string>();
+  private readonly detectiveInvestigationHistory = new Map<string, Map<string, MafiaAllegiance>>();
   private readonly completedVoteRecords: MafiaCompletedVoteRecord[] = [];
-  private phase: MafiaPhase = 'day-discussion';
+  private phase: MafiaPhase = 'night';
+  private phaseDeadline: Date;
   private nominatedParticipantId: string | undefined;
   private dayNumber = 1;
   constructor(
     private readonly sessionId: string,
-    private phaseDeadline: Date,
     private readonly participants: MafiaParticipant[],
     private readonly dayDurations: MafiaDayDurations,
   ) {
-    this.recordDayStart();
+    this.changePhase('night');
+    this.phaseDeadline = new Date(Date.now() + dayDurations.nightDurationMs);
   }
 
   submitPublicSpeech(
@@ -130,7 +141,7 @@ export class MafiaGameSession implements GameModuleSession<
     content: string,
     now = new Date(),
   ): Result<void, MafiaActionError> {
-    return this.phase === 'day-discussion'
+    return this.phase === 'discussion'
       ? this.submitSpeech(participantId, content, now)
       : err({ type: 'invalid-phase', phase: this.phase });
   }
@@ -166,30 +177,74 @@ export class MafiaGameSession implements GameModuleSession<
       this.verdicts.set(participantId, vote);
     });
   }
+  submitMafiaTarget(
+    participantId: string,
+    targetParticipantId: string,
+    now = new Date(),
+  ): Result<void, MafiaActionError> {
+    return this.submitNightAction(
+      participantId,
+      targetParticipantId,
+      'Mafia',
+      this.mafiaTargets,
+      now,
+    );
+  }
+  submitDoctorProtection(
+    participantId: string,
+    targetParticipantId: string,
+    now = new Date(),
+  ): Result<void, MafiaActionError> {
+    return this.submitNightAction(
+      participantId,
+      targetParticipantId,
+      'Doctor',
+      this.doctorProtections,
+      now,
+    );
+  }
+  submitDetectiveInvestigation(
+    participantId: string,
+    targetParticipantId: string,
+    now = new Date(),
+  ): Result<void, MafiaActionError> {
+    return this.submitNightAction(
+      participantId,
+      targetParticipantId,
+      'Detective',
+      this.detectiveInvestigations,
+      now,
+    ).map(() => {
+      const target = find(this.participants, ({ id }) => id === targetParticipantId);
+      if (!target) return;
+      const investigations = this.detectiveInvestigationHistory.get(participantId) ?? new Map();
+      investigations.set(targetParticipantId, allegianceFor(target.role));
+      this.detectiveInvestigationHistory.set(participantId, investigations);
+    });
+  }
   advanceDayPhase(now = new Date()): Result<MafiaDayPhaseResult, never> {
     if (now < this.phaseDeadline) return ok<MafiaDayPhaseResult>({ type: 'not-due' });
     return match(this.phase)
       .with('completed', () => ok<MafiaDayPhaseResult>({ type: 'not-due' }))
-      .with('day-discussion', () => ok(this.advanceTo('nomination', now)))
+      .with('discussion', () => ok(this.advanceTo('nomination', now)))
       .with('nomination', () => ok(this.resolveNomination(now)))
       .with('final-defence', () => ok(this.advanceTo('verdict', now)))
       .with('verdict', () => ok(this.resolveVerdict(now)))
+      .with('night', () => ok(this.resolveNight(now)))
       .exhaustive();
   }
-  adjustPhaseTime(
+  adjustDiscussionTime(
     participantId: string,
     adjustmentSeconds: 10 | -10,
     now = new Date(),
   ): Result<void, MafiaActionError> {
-    if (this.phase === 'completed') return err({ type: 'invalid-phase', phase: this.phase });
-    const phase = this.phase;
+    if (this.phase !== 'discussion') return err({ type: 'invalid-phase', phase: this.phase });
     return this.livingParticipant(participantId, now).map(() => {
       this.phaseDeadline = new Date(this.phaseDeadline.getTime() + adjustmentSeconds * 1000);
       this.recordOutcome({
         id: this.nextOutcomeId(),
-        type: 'phase-time-adjusted',
+        type: 'discussion-time-adjusted',
         dayNumber: this.dayNumber,
-        phase,
         adjustmentSeconds,
       });
     });
@@ -206,6 +261,8 @@ export class MafiaGameSession implements GameModuleSession<
           personal: {
             ...toPersonalInformation(participant),
             vote: this.personalVoteFor(participantId),
+            nightAction: this.personalNightActionFor(participantId),
+            knownRoles: this.knownRolesFor(participant),
           },
         })
       : err({ type: 'unknown-participant', participantId });
@@ -230,6 +287,8 @@ export class MafiaGameSession implements GameModuleSession<
           personal: {
             ...toPersonalInformation(participant),
             vote: this.personalVoteFor(participantId),
+            nightAction: this.personalNightActionFor(participantId),
+            knownRoles: this.knownRolesFor(participant),
           },
         })
       : err({ type: 'unknown-participant', participantId });
@@ -343,18 +402,66 @@ export class MafiaGameSession implements GameModuleSession<
       });
       return { type: 'game-completed', winner };
     }
-    this.startNextDay();
-    this.phaseDeadline = new Date(now.getTime() + this.dayDurations.dayDiscussionDurationMs);
+    this.startNight(now);
     return { type: 'participant-eliminated', participantId: nominated.id };
+  }
+  private resolveNight(now: Date): MafiaDayPhaseResult {
+    const targetParticipantId = this.mafiaTarget();
+    const protectedParticipantId = [...this.doctorProtections.values()][0];
+    const result = !targetParticipantId
+      ? ('no-death' as const)
+      : targetParticipantId === protectedParticipantId
+        ? ('protected' as const)
+        : ('participant-eliminated' as const);
+    const target =
+      result === 'participant-eliminated'
+        ? find(this.participants, ({ id }) => id === targetParticipantId)
+        : undefined;
+    if (target) target.alive = false;
+    this.recordOutcome({
+      id: this.nextOutcomeId(),
+      type: 'night-resolved',
+      dayNumber: this.dayNumber,
+      result,
+      participantId: result === 'participant-eliminated' ? targetParticipantId : undefined,
+    });
+    if (target) {
+      this.recordOutcome({
+        id: this.nextOutcomeId(),
+        type: 'allegiance-reveal',
+        participantId: target.id,
+        allegiance: allegianceFor(target.role),
+      });
+    }
+    const winner = this.winner();
+    if (winner) {
+      this.changePhase('completed');
+      this.recordOutcome({ id: this.nextOutcomeId(), type: 'victory', allegiance: winner });
+      return { type: 'game-completed', winner };
+    }
+    this.startDay();
+    this.phaseDeadline = dayjs(now)
+      .add(this.dayDurations.discussionDurationMs, 'millisecond')
+      .toDate();
+    return { type: 'night-resolved', result };
+  }
+  private startNight(now: Date) {
+    this.dayNumber += 1;
+    this.nominatedParticipantId = undefined;
+    this.mafiaTargets.clear();
+    this.doctorProtections.clear();
+    this.detectiveInvestigations.clear();
+    this.changePhase('night');
+    this.phaseDeadline = dayjs(now)
+      .add(this.dayDurations.nightDurationMs ?? mafiaGameConfig.nightDurationMs, 'millisecond')
+      .toDate();
   }
   private restartDay(
     now: Date,
     reason: 'nomination-tie' | 'no-nomination' | 'verdict-tie' | 'no-majority',
   ): MafiaDayPhaseResult {
-    this.startNextDay();
-    this.nominatedParticipantId = undefined;
+    this.startNight(now);
     this.nominations.clear();
-    this.phaseDeadline = new Date(now.getTime() + this.dayDurations.dayDiscussionDurationMs);
     return { type: 'day-restarted', reason };
   }
   private durationFor(phase: 'nomination' | 'final-defence' | 'verdict') {
@@ -379,7 +486,6 @@ export class MafiaGameSession implements GameModuleSession<
       phaseDeadline: this.phaseDeadline.toISOString(),
       participants: map(this.participants, ({ id, name, alive }) => ({ id, name, alive })),
       nominatedParticipantId: this.nominatedParticipantId,
-      voteStatus: this.voteStatus(),
       timeline: [...this.timeline],
       completedVoteRecords: this.phase === 'completed' ? [...this.completedVoteRecords] : [],
     };
@@ -396,20 +502,7 @@ export class MafiaGameSession implements GameModuleSession<
         const vote = this.verdicts.get(participantId);
         return vote ? { phase: 'verdict' as const, vote } : undefined;
       })
-      .with('day-discussion', 'final-defence', 'completed', () => undefined)
-      .exhaustive();
-  }
-  private voteStatus(): MafiaPublicVoteStatus | undefined {
-    return match(this.phase)
-      .with('nomination', () => ({
-        phase: 'nomination' as const,
-        submittedParticipantIds: [...this.nominations.keys()],
-      }))
-      .with('verdict', () => ({
-        phase: 'verdict' as const,
-        submittedParticipantIds: [...this.verdicts.keys()],
-      }))
-      .with('day-discussion', 'final-defence', 'completed', () => undefined)
+      .with('discussion', 'final-defence', 'night', 'completed', () => undefined)
       .exhaustive();
   }
   private recordOutcome(outcome: MafiaPublicOutcome) {
@@ -424,20 +517,109 @@ export class MafiaGameSession implements GameModuleSession<
       phase,
     });
   }
-  private startNextDay() {
-    this.dayNumber += 1;
-    this.recordDayStart();
-  }
-  private recordDayStart() {
+  private startDay() {
     this.recordOutcome({
       id: this.nextOutcomeId(),
       type: 'day-changed',
       dayNumber: this.dayNumber,
     });
-    this.changePhase('day-discussion');
+    this.changePhase('discussion');
   }
   private nextOutcomeId() {
     return `outcome-${filter(this.timeline, ({ type }) => type === 'record').length + 1}`;
+  }
+  private submitNightAction(
+    participantId: string,
+    targetParticipantId: string,
+    role: MafiaParticipant['role'],
+    actions: Map<string, string>,
+    now: Date,
+  ): Result<void, MafiaActionError> {
+    if (this.phase !== 'night') return err({ type: 'invalid-phase', phase: this.phase });
+    return this.livingParticipant(participantId, now)
+      .andThen((participant) =>
+        participant.role === role
+          ? ok(participant)
+          : err({ type: 'invalid-night-action' as const, participantId }),
+      )
+      .andThen(() =>
+        role === 'Detective' && actions.has(participantId)
+          ? err({ type: 'night-action-already-submitted' as const, participantId })
+          : ok(undefined),
+      )
+      .andThen(() => this.livingParticipant(targetParticipantId, now))
+      .map(() => {
+        actions.set(participantId, targetParticipantId);
+      });
+  }
+  private mafiaTarget() {
+    const targets = sort([...this.mafiaTargets.values()], (left, right) =>
+      left.localeCompare(right),
+    );
+    return targets[0];
+  }
+  private personalNightActionFor(participantId: string): MafiaPersonalInformation['nightAction'] {
+    const mafiaTarget = this.mafiaTargets.get(participantId);
+    if (mafiaTarget) return { type: 'mafia-target', targetParticipantId: mafiaTarget };
+    const protectedParticipantId = this.doctorProtections.get(participantId);
+    if (protectedParticipantId)
+      return { type: 'doctor-protection', targetParticipantId: protectedParticipantId };
+    const investigatedParticipantId = this.detectiveInvestigations.get(participantId);
+    if (!investigatedParticipantId) return undefined;
+    return {
+      type: 'detective-investigation',
+      targetParticipantId: investigatedParticipantId,
+    };
+  }
+  private knownRolesFor(participant: MafiaParticipant): MafiaPersonalInformation['knownRoles'] {
+    if (this.phase === 'completed') {
+      return map(this.participants, ({ id, role }) => ({
+        participantId: id,
+        role,
+      }));
+    }
+    const detectiveHistory = this.detectiveInvestigationHistory.get(participant.id);
+    const roleknownRoles =
+      participant.role === 'Mafia'
+        ? map(this.participants, ({ id, role }) => ({
+            participantId: id,
+            role: allegianceFor(role),
+          }))
+        : detectiveHistory
+          ? map([...detectiveHistory], ([participantId, allegiance]) => ({
+              participantId,
+              role: allegiance,
+            }))
+          : [];
+    const ownRole = {
+      participantId: participant.id,
+      role: participant.role,
+    };
+    const knownRoles = new Map(
+      map(
+        [...this.publiclyRevealedAllegiances(), ...roleknownRoles, ownRole],
+        ({ participantId, role }) => [participantId, role] as const,
+      ),
+    );
+    return map([...knownRoles], ([participantId, role]) => ({
+      participantId,
+      role,
+    }));
+  }
+  private publiclyRevealedAllegiances(): MafiaPersonalInformation['knownRoles'] {
+    return pipe(
+      this.timeline,
+      flatMap((item) =>
+        item.type === 'record' && item.outcome.type === 'allegiance-reveal'
+          ? [
+              {
+                participantId: item.outcome.participantId,
+                role: item.outcome.allegiance,
+              },
+            ]
+          : [],
+      ),
+    );
   }
 }
 export type MafiaGameProjection = AuthorizedGameProjection<

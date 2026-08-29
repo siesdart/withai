@@ -1,4 +1,4 @@
-import type { MafiaGameProjection } from '@repo/mafia';
+import type { MafiaGameProjection } from '@repo/mafia/client';
 import { mutationOptions, type QueryClient } from '@tanstack/react-query';
 import type { ResultAsync } from 'neverthrow';
 

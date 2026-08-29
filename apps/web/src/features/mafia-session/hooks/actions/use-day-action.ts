@@ -39,6 +39,15 @@ export function useDayAction(sessionId: string): UseDayActionResult {
           .with({ type: 'final-defence' }, (draft) =>
             client.submitFinalDefence(draft.content, draft.idempotencyKey),
           )
+          .with({ type: 'mafia-target' }, (draft) =>
+            client.submitMafiaTarget(draft.targetParticipantId, draft.idempotencyKey),
+          )
+          .with({ type: 'doctor-protection' }, (draft) =>
+            client.submitDoctorProtection(draft.targetParticipantId, draft.idempotencyKey),
+          )
+          .with({ type: 'detective-investigation' }, (draft) =>
+            client.submitDetectiveInvestigation(draft.targetParticipantId, draft.idempotencyKey),
+          )
           .exhaustive(),
       onRateLimited: cooldown.startCooldown,
     }),

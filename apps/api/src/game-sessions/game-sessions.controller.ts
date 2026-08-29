@@ -33,9 +33,9 @@ import { map, type Observable } from 'rxjs';
 import { match } from 'ts-pattern';
 
 import { retryAfterSeconds } from './cooldown/cooldown';
+import { CreateDiscussionTimeAdjustmentDto } from './dto/create-discussion-time-adjustment.dto';
 import { CreateMafiaSessionDto } from './dto/create-mafia-session.dto';
 import { CreateNominationDto } from './dto/create-nomination.dto';
-import { CreatePhaseTimeAdjustmentDto } from './dto/create-phase-time-adjustment.dto';
 import { CreatePublicSpeechDto } from './dto/create-public-speech.dto';
 import { CreateVerdictDto } from './dto/create-verdict.dto';
 import { MafiaGameSessionProjectionEntity } from './entities/mafia-game-session-projection.entity';
@@ -231,19 +231,85 @@ export class GameSessionsController {
     );
   }
 
-  @Post(':sessionId/actions/phase-time-adjustment')
-  @ApiOperation({ summary: 'Adjust the active Phase deadline for the Human Player' })
+  @Post(':sessionId/actions/mafia-target')
+  @ApiOperation({ summary: 'Submit the Human Player private Mafia target' })
   @ApiCookieAuth('withai_guest')
-  @ApiBody({ type: CreatePhaseTimeAdjustmentDto })
+  @ApiBody({ type: CreateNominationDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ApiCreatedResponse({ type: MafiaGameSessionProjectionEntity })
-  @ApiBadRequestResponse({ description: 'The active Phase cannot be adjusted.' })
+  submitMafiaTarget(
+    @Param('sessionId') sessionId: string,
+    @Body() body: CreateNominationDto,
+    @Req() request: Request,
+    @RequiredIdempotencyKey() idempotencyKey: string,
+  ) {
+    return this.resolveGameSessionResult(
+      this.gameSessionsService.submitMafiaTarget(
+        sessionId,
+        request.headers.cookie,
+        body.targetParticipantId,
+        idempotencyKey,
+      ),
+    );
+  }
+
+  @Post(':sessionId/actions/doctor-protection')
+  @ApiOperation({ summary: 'Submit the Human Player private Doctor protection' })
+  @ApiCookieAuth('withai_guest')
+  @ApiBody({ type: CreateNominationDto })
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  @ApiCreatedResponse({ type: MafiaGameSessionProjectionEntity })
+  submitDoctorProtection(
+    @Param('sessionId') sessionId: string,
+    @Body() body: CreateNominationDto,
+    @Req() request: Request,
+    @RequiredIdempotencyKey() idempotencyKey: string,
+  ) {
+    return this.resolveGameSessionResult(
+      this.gameSessionsService.submitDoctorProtection(
+        sessionId,
+        request.headers.cookie,
+        body.targetParticipantId,
+        idempotencyKey,
+      ),
+    );
+  }
+
+  @Post(':sessionId/actions/detective-investigation')
+  @ApiOperation({ summary: 'Submit the Human Player private Detective investigation' })
+  @ApiCookieAuth('withai_guest')
+  @ApiBody({ type: CreateNominationDto })
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  @ApiCreatedResponse({ type: MafiaGameSessionProjectionEntity })
+  submitDetectiveInvestigation(
+    @Param('sessionId') sessionId: string,
+    @Body() body: CreateNominationDto,
+    @Req() request: Request,
+    @RequiredIdempotencyKey() idempotencyKey: string,
+  ) {
+    return this.resolveGameSessionResult(
+      this.gameSessionsService.submitDetectiveInvestigation(
+        sessionId,
+        request.headers.cookie,
+        body.targetParticipantId,
+        idempotencyKey,
+      ),
+    );
+  }
+
+  @Post(':sessionId/actions/discussion-time-adjustment')
+  @ApiOperation({ summary: 'Adjust the Discussion deadline for the Human Player' })
+  @ApiCookieAuth('withai_guest')
+  @ApiBody({ type: CreateDiscussionTimeAdjustmentDto })
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  @ApiCreatedResponse({ type: MafiaGameSessionProjectionEntity })
+  @ApiBadRequestResponse({ description: 'The Discussion Phase cannot be adjusted.' })
   @ApiConflictResponse({ description: 'The idempotency key was reused with a different action.' })
   @ApiTooManyRequestsResponse({
-    description: 'The Human Player must wait before adjusting the Phase time again.',
+    description: 'The Human Player must wait before adjusting the Discussion time again.',
     headers: {
       'Retry-After': {
-        description: 'Seconds until another Phase Time Adjustment may be submitted.',
+        description: 'Seconds until another Discussion Time Adjustment may be submitted.',
         schema: { type: 'integer', minimum: 1 },
       },
     },
@@ -251,20 +317,19 @@ export class GameSessionsController {
   @ApiForbiddenResponse({
     description: 'The Game Session does not exist or is unavailable to this guest.',
   })
-  adjustPhaseTime(
+  adjustDiscussionTime(
     @Param('sessionId') sessionId: string,
-    @Body() body: CreatePhaseTimeAdjustmentDto,
+    @Body() body: CreateDiscussionTimeAdjustmentDto,
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
     @RequiredIdempotencyKey() idempotencyKey: string,
   ) {
     return this.resolveGameSessionResult(
-      this.gameSessionsService.adjustPhaseTime(
+      this.gameSessionsService.adjustDiscussionTime(
         sessionId,
         request.headers.cookie,
         body.adjustmentSeconds,
-        body.expectedPhase,
-        body.expectedPhaseDeadline,
+        body.expectedDeadline,
         idempotencyKey,
       ),
       response,
@@ -328,7 +393,7 @@ export class GameSessionsController {
       .with(
         { type: 'public-speech-rate-limited' },
         { type: 'day-action-rate-limited' },
-        { type: 'phase-time-adjustment-rate-limited' },
+        { type: 'discussion-time-adjustment-rate-limited' },
         (rateLimitError) => rateLimitError.retryAfterMs,
       )
       .otherwise(() => undefined);
@@ -413,7 +478,7 @@ export class GameSessionsController {
           ),
       )
       .with(
-        { type: 'phase-time-adjustment-idempotency-conflict' },
+        { type: 'discussion-time-adjustment-idempotency-conflict' },
         () =>
           new HttpException(
             'The Idempotency-Key was already used with a different action.',
@@ -421,22 +486,22 @@ export class GameSessionsController {
           ),
       )
       .with(
-        { type: 'phase-time-adjustment-rate-limited' },
+        { type: 'discussion-time-adjustment-rate-limited' },
         () =>
           new HttpException(
-            'Please wait before adjusting the Phase time again.',
+            'Please wait before adjusting the Discussion time again.',
             HttpStatus.TOO_MANY_REQUESTS,
           ),
       )
       .with(
-        { type: 'invalid-phase-time-adjustment' },
-        () => new BadRequestException('The active Phase cannot be adjusted.'),
+        { type: 'invalid-discussion-time-adjustment' },
+        () => new BadRequestException('The Discussion Phase cannot be adjusted.'),
       )
       .with(
-        { type: 'stale-phase-time-adjustment' },
+        { type: 'stale-discussion-time-adjustment' },
         () =>
           new HttpException(
-            'The Phase changed before the adjustment could be applied.',
+            'The Discussion Phase changed before the adjustment could be applied.',
             HttpStatus.CONFLICT,
           ),
       )

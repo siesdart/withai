@@ -7,6 +7,10 @@
       "types": "./dist/entry.d.ts",
       "default": "./dist/entry.js"
     },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "default": "./dist/client.js"
+    },
     "./config": {
       "types": "./dist/config.d.ts",
       "default": "./dist/config.js"
@@ -17,6 +21,7 @@
   },
   "dependencies": {
     "@repo/game-contract": "workspace:*",
+    "dayjs": "^1.11.23",
     "neverthrow": "^8.2.0",
     "remeda": "^2.43.0",
     "ts-pattern": "^5.9.0",

@@ -14,7 +14,6 @@ describe('DeterministicAgentSpeechGateway', () => {
         phaseDeadline: '2026-08-28T00:00:45.000Z',
         participants: [],
         nominatedParticipantId: 'participant-2',
-        voteStatus: undefined,
         timeline: [],
         completedVoteRecords: [],
       },
@@ -23,6 +22,8 @@ describe('DeterministicAgentSpeechGateway', () => {
         role: 'Citizen',
         allegiance: 'Citizen',
         vote: undefined,
+        nightAction: undefined,
+        knownRoles: [],
       },
     };
 

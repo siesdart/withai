@@ -1,40 +1,34 @@
+import { cn } from '@repo/ui/lib/utils';
 import { find } from 'remeda';
 import { match } from 'ts-pattern';
 
 import type { MafiaGameProjection } from '../../api/client';
 import type { UseDayActionResult } from '../../hooks/actions/use-day-action';
-import type { UsePublicSpeechResult } from '../../hooks/actions/use-public-speech';
+import { DiscussionTimeControls } from '../game-information/discussion-time-controls';
 import { FinalDefenceForm } from './final-defence-form';
-import { NominationControls } from './nomination-controls';
-import { PublicSpeechComposer } from './public-speech-composer';
+import { PublicSpeechForm } from './public-speech-form';
 import { VerdictControls } from './verdict-controls';
 
 type PhaseActionPanelProps = {
-  currentParticipantId: string;
+  sessionId: string;
+  snapshot: MafiaGameProjection;
   currentParticipantAlive: boolean;
   isPhaseExpired: boolean;
-  personalVote: MafiaGameProjection['personal']['vote'];
-  publicInformation: MafiaGameProjection['public'];
   dayAction: UseDayActionResult;
-  speech: UsePublicSpeechResult;
-  onNominate: (participantId: string) => void;
   onSubmitFinalDefence: (content: string, onSuccess: () => void) => void;
   onSubmitVerdict: (vote: 'eliminate' | 'spare') => void;
 };
 
 export function PhaseActionPanel({
-  currentParticipantId,
+  sessionId,
+  snapshot,
   currentParticipantAlive,
   isPhaseExpired,
-  personalVote,
-  publicInformation,
   dayAction,
-  speech,
-  onNominate,
   onSubmitFinalDefence,
   onSubmitVerdict,
 }: PhaseActionPanelProps) {
-  if (publicInformation.phase === 'completed') {
+  if (snapshot.public.phase === 'completed') {
     return (
       <div className="shrink-0 p-3 text-sm text-[#625e55] sm:p-5">
         You are now observing the completed game. The full vote record is available below.
@@ -52,47 +46,75 @@ export function PhaseActionPanel({
 
   const actionDisabled = dayAction.isPending || dayAction.isCoolingDown || isPhaseExpired;
   const nominatedParticipant = find(
-    publicInformation.participants,
-    (participant) => participant.id === publicInformation.nominatedParticipantId,
+    snapshot.public.participants,
+    (participant) => participant.id === snapshot.public.nominatedParticipantId,
   );
 
-  return match(publicInformation.phase)
-    .with('day-discussion', () => (
-      <PublicSpeechComposer disabled={actionDisabled} speech={speech} />
-    ))
-    .with('nomination', () => (
-      <NominationControls
-        disabled={actionDisabled}
-        onNominate={onNominate}
-        participants={publicInformation.participants}
-        personalVote={personalVote}
-      />
-    ))
-    .with('final-defence', () => (
-      <div className="shrink-0 p-3 sm:p-5">
-        <h3 className="text-base font-medium">Final defence</h3>
-        <p className="mt-1 text-sm text-[#625e55]">
-          {nominatedParticipant
-            ? `${nominatedParticipant.name} is nominated and has the floor.`
-            : 'The nominated participant is preparing a final defence.'}
-        </p>
-        {publicInformation.nominatedParticipantId === currentParticipantId ? (
-          <FinalDefenceForm
-            disabled={actionDisabled}
-            error={dayAction.error}
-            onSubmitFinalDefence={onSubmitFinalDefence}
-            retryAfterSeconds={dayAction.retryAfterSeconds}
-          />
-        ) : null}
+  return match(snapshot.public.phase)
+    .with('discussion', () => (
+      <div className="flex shrink-0 flex-col">
+        <DiscussionTimeControls
+          phaseDeadline={snapshot.public.phaseDeadline}
+          sessionId={sessionId}
+        />
+        <PublicSpeechForm sessionId={sessionId} disabled={actionDisabled} />
       </div>
     ))
+    .with('nomination', () => (
+      <div className="shrink-0 p-3 sm:p-5">
+        <h3 className="text-base font-medium">Choose a nominee</h3>
+        <p className="mt-1 text-sm text-[#625e55]">
+          Select an alive participant from the participant list.
+        </p>
+      </div>
+    ))
+    .with('final-defence', () => {
+      const isCurrentParticipantNominated =
+        snapshot.public.nominatedParticipantId === snapshot.personal.participantId;
+      return (
+        <div className="shrink-0">
+          <div className={cn('p-3 sm:p-5', isCurrentParticipantNominated && 'pb-0 sm:pb-0')}>
+            <h3 className="text-base font-medium">Final defence</h3>
+            <p className="mt-1 text-sm text-[#625e55]">
+              {nominatedParticipant
+                ? `${nominatedParticipant.name} is nominated and has the floor.`
+                : 'The nominated participant is preparing a final defence.'}
+            </p>
+          </div>
+          {isCurrentParticipantNominated ? (
+            <FinalDefenceForm
+              disabled={actionDisabled}
+              error={dayAction.error}
+              onSubmitFinalDefence={onSubmitFinalDefence}
+            />
+          ) : null}
+        </div>
+      );
+    })
     .with('verdict', () => (
       <VerdictControls
         disabled={actionDisabled}
         nominatedParticipantName={nominatedParticipant?.name}
         onSubmitVerdict={onSubmitVerdict}
-        personalVote={personalVote}
+        personalVote={snapshot.personal.vote}
       />
+    ))
+    .with('night', () => (
+      <div className="shrink-0 p-3 sm:p-5">
+        <h3 className="text-base font-medium">
+          {match(snapshot.personal.role)
+            .with('Mafia', () => 'Choose a target')
+            .with('Doctor', () => 'Choose someone to protect')
+            .with('Detective', () => 'Choose someone to investigate')
+            .with('Citizen', () => 'Night actions are private')
+            .exhaustive()}
+        </h3>
+        <p className="mt-1 text-sm text-[#625e55]">
+          {snapshot.personal.role === 'Citizen'
+            ? 'Wait for dawn.'
+            : 'Select an alive participant from the participant list.'}
+        </p>
+      </div>
     ))
     .exhaustive();
 }

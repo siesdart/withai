@@ -9,26 +9,68 @@ import {
   MessageScrollerViewport,
 } from '@repo/ui/components/message-scroller';
 import { Separator } from '@repo/ui/components/separator';
-import { RadioIcon } from 'lucide-react';
-import { map } from 'remeda';
+import { cn } from '@repo/ui/lib/utils';
+import { MoonIcon, SunIcon } from 'lucide-react';
+import { map, reduce } from 'remeda';
 
 import type { MafiaGameProjection } from '../../api/client';
+import type { UseDeadlineCountdownResult } from '../../hooks/ui/use-deadline-countdown';
+import { GamePhaseTimer } from '../game-information/game-phase-timer';
 import { GameRecordMarker } from './game-record-marker';
-import { VoteStatus } from './vote-status';
 
 type PublicDiscussionPanelProps = {
   publicInformation: MafiaGameProjection['public'];
   currentParticipantId: string;
   currentParticipantAlive: boolean;
   isReconnecting: boolean;
+  deadline: UseDeadlineCountdownResult;
   controls: React.ReactNode;
 };
+
+type TimelineItem = MafiaGameProjection['public']['timeline'][number];
+type TimelinePeriod = 'day' | 'night';
+type TimelineSegment = {
+  id: string;
+  dayNumber: number;
+  items: TimelineItem[];
+  period: TimelinePeriod;
+};
+
+const periodFor = (item: TimelineItem, currentPeriod: TimelinePeriod): TimelinePeriod => {
+  if (item.type !== 'record') return currentPeriod;
+  if (item.outcome.type === 'day-changed') return 'day';
+  if (item.outcome.type !== 'phase-changed') return currentPeriod;
+  return item.outcome.phase === 'night' ? 'night' : 'day';
+};
+
+const dayNumberFor = (item: TimelineItem, currentDayNumber: number) =>
+  item.type === 'record' && 'dayNumber' in item.outcome ? item.outcome.dayNumber : currentDayNumber;
+
+const groupTimelineByPeriod = (timeline: readonly TimelineItem[]): TimelineSegment[] =>
+  reduce(
+    timeline,
+    (segments, item) => {
+      const previousSegment = segments.at(-1);
+      const period = periodFor(item, previousSegment?.period ?? 'night');
+      const dayNumber = dayNumberFor(item, previousSegment?.dayNumber ?? 1);
+
+      if (!previousSegment || previousSegment.period !== period) {
+        segments.push({ dayNumber, id: item.id, items: [item], period });
+        return segments;
+      }
+
+      previousSegment.items.push(item);
+      return segments;
+    },
+    [] as TimelineSegment[],
+  );
 
 export function PublicDiscussionPanel({
   publicInformation,
   currentParticipantId,
   currentParticipantAlive,
   isReconnecting,
+  deadline,
   controls,
 }: PublicDiscussionPanelProps) {
   const participantNames = new Map(
@@ -36,68 +78,103 @@ export function PublicDiscussionPanel({
   );
   const shouldShowPlayerControls =
     currentParticipantAlive && publicInformation.phase !== 'completed';
+  const timelineSegments = groupTimelineByPeriod(publicInformation.timeline);
+  const currentPeriod = publicInformation.phase === 'night' ? 'night' : 'day';
+  const CurrentPeriodIcon = currentPeriod === 'night' ? MoonIcon : SunIcon;
 
   return (
     <section
       className="flex min-h-0 flex-1 flex-col border border-[#22221e]/45 bg-[#f4efe7] lg:min-h-0"
       aria-labelledby="public-information-heading"
     >
-      <div className="shrink-0 border-b border-[#22221e]/25 p-3 sm:p-5">
-        <h2
-          id="public-information-heading"
-          className="flex items-center gap-2 text-xs tracking-[0.18em] text-[#625e55] uppercase"
-        >
-          <RadioIcon aria-hidden="true" className="size-4" /> Public table
-        </h2>
-        {isReconnecting ? (
-          <span aria-live="polite" className="sr-only">
-            Reconnecting live updates…
-          </span>
-        ) : null}
+      {isReconnecting ? (
+        <span aria-live="polite" className="sr-only">
+          Reconnecting live updates…
+        </span>
+      ) : null}
+      <div
+        className={cn(
+          'flex shrink-0 flex-nowrap items-center gap-1.5 border-b px-3 py-4 text-xs font-medium tracking-[0.16em] uppercase sm:gap-2 sm:px-5',
+          currentPeriod === 'night'
+            ? 'border-[#565968] bg-[#292b35] text-[#c9cad5] shadow-[0_1px_0_rgb(255_255_255/0.05)]'
+            : 'border-[#ded7c9] bg-[#f8f4eb] text-[#766f63]',
+        )}
+      >
+        <CurrentPeriodIcon aria-hidden="true" className="size-3.5" />
+        <span className="whitespace-nowrap">
+          Day {publicInformation.dayNumber} / {currentPeriod}
+        </span>
+        <GamePhaseTimer phase={publicInformation.phase} deadline={deadline} />
       </div>
       <MessageScrollerProvider autoScroll>
         <MessageScroller className="h-auto! flex-1!">
-          <MessageScrollerViewport className="h-auto! flex-1! p-3 text-sm sm:p-5">
-            <MessageScrollerContent>
+          <MessageScrollerViewport className="h-auto! flex-1! px-3 py-0 text-sm sm:px-5">
+            <MessageScrollerContent className="gap-0">
               {publicInformation.timeline.length === 0 ? (
                 <p className="mt-auto text-[#625e55]">
                   The table is waiting for the first public statement.
                 </p>
               ) : (
-                <MessageGroup>
-                  {map(publicInformation.timeline, (item) => {
-                    if (item.type === 'record') {
-                      return (
-                        <MessageScrollerItem key={item.id} messageId={item.id}>
-                          <GameRecordMarker
-                            completedVoteRecords={publicInformation.completedVoteRecords}
-                            outcome={item.outcome}
-                            participantNames={participantNames}
-                          />
-                        </MessageScrollerItem>
-                      );
-                    }
-                    const isCurrentParticipant =
-                      item.message.participantId === currentParticipantId;
-                    return (
-                      <MessageScrollerItem key={item.id} messageId={item.id}>
-                        <Message align={isCurrentParticipant ? 'end' : 'start'}>
-                          <MessageContent>
-                            <MessageHeader>
-                              {participantNames.get(item.message.participantId) ?? 'Participant'}
-                            </MessageHeader>
-                            <Bubble
-                              align={isCurrentParticipant ? 'end' : 'start'}
-                              variant={isCurrentParticipant ? 'tinted' : 'muted'}
-                            >
-                              <BubbleContent>{item.message.content}</BubbleContent>
-                            </Bubble>
-                          </MessageContent>
-                        </Message>
-                      </MessageScrollerItem>
-                    );
-                  })}
-                </MessageGroup>
+                map(timelineSegments, (segment) => {
+                  const isNight = segment.period === 'night';
+                  return (
+                    <section
+                      key={segment.id}
+                      aria-label={`Day ${segment.dayNumber} ${segment.period} records`}
+                      className={cn(
+                        '-mx-3 border-y px-3 py-4 sm:-mx-5 sm:px-5',
+                        isNight
+                          ? 'border-[#565968] bg-[#292b35] text-[#f7f2e8] shadow-[inset_0_1px_0_rgb(255_255_255/0.05)]'
+                          : 'border-[#ded7c9] bg-[#f8f4eb]',
+                      )}
+                    >
+                      <MessageGroup>
+                        {map(segment.items, (item) => {
+                          if (item.type === 'record') {
+                            return (
+                              <MessageScrollerItem key={item.id} messageId={item.id}>
+                                <GameRecordMarker
+                                  completedVoteRecords={publicInformation.completedVoteRecords}
+                                  isNight={isNight}
+                                  outcome={item.outcome}
+                                  participantNames={participantNames}
+                                />
+                              </MessageScrollerItem>
+                            );
+                          }
+                          const isCurrentParticipant =
+                            item.message.participantId === currentParticipantId;
+                          return (
+                            <MessageScrollerItem key={item.id} messageId={item.id}>
+                              <Message align={isCurrentParticipant ? 'end' : 'start'}>
+                                <MessageContent>
+                                  <MessageHeader
+                                    className={cn(isNight ? 'text-[#d8d7df]' : 'text-[#625e55]')}
+                                  >
+                                    {participantNames.get(item.message.participantId) ??
+                                      'Participant'}
+                                  </MessageHeader>
+                                  <Bubble
+                                    align={isCurrentParticipant ? 'end' : 'start'}
+                                    className={cn(
+                                      isNight &&
+                                        (isCurrentParticipant
+                                          ? '**:data-[slot=bubble-content]:border-[#7884a4]! **:data-[slot=bubble-content]:bg-[#4d5874]! **:data-[slot=bubble-content]:text-[#f7f2e8]!'
+                                          : '**:data-[slot=bubble-content]:border-[#565968]! **:data-[slot=bubble-content]:bg-[#383b47]! **:data-[slot=bubble-content]:text-[#f7f2e8]!'),
+                                    )}
+                                    variant={isCurrentParticipant ? 'tinted' : 'muted'}
+                                  >
+                                    <BubbleContent>{item.message.content}</BubbleContent>
+                                  </Bubble>
+                                </MessageContent>
+                              </Message>
+                            </MessageScrollerItem>
+                          );
+                        })}
+                      </MessageGroup>
+                    </section>
+                  );
+                })
               )}
             </MessageScrollerContent>
           </MessageScrollerViewport>
@@ -111,15 +188,6 @@ export function PublicDiscussionPanel({
         </MessageScroller>
       </MessageScrollerProvider>
       {shouldShowPlayerControls ? <Separator /> : null}
-      {shouldShowPlayerControls && publicInformation.voteStatus ? (
-        <div className="shrink-0 px-3 sm:px-5">
-          <VoteStatus
-            participants={publicInformation.participants}
-            voteStatus={publicInformation.voteStatus}
-            currentParticipantId={currentParticipantId}
-          />
-        </div>
-      ) : null}
       {controls}
     </section>
   );

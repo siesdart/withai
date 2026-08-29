@@ -13,12 +13,12 @@ export type StoredGameSessionEntity = {
   nextEventId: number;
   nextPublicSpeechAt: Dayjs | undefined;
   nextFinalDefenceAt: Dayjs | undefined;
-  nextPhaseTimeAdjustmentAt: Dayjs | undefined;
+  nextDiscussionTimeAdjustmentAt: Dayjs | undefined;
   lastAccessedAt: Dayjs;
   activeEventSubscribers: number;
   publicSpeechIdempotencyKeys: Map<string, IdempotencyRecord<MafiaGameSessionProjectionEntity>>;
   dayActionIdempotencyKeys: Map<string, IdempotencyRecord<MafiaGameSessionProjectionEntity>>;
-  phaseTimeAdjustmentIdempotencyKeys: Map<
+  discussionTimeAdjustmentIdempotencyKeys: Map<
     string,
     IdempotencyRecord<MafiaGameSessionProjectionEntity>
   >;

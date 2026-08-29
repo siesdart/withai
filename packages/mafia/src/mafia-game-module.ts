@@ -15,7 +15,6 @@ import { createParticipants, type MafiaPersonalInformation, type RandomInt } fro
 export type MafiaSessionInput = {
   sessionId: string;
   participantCount: number;
-  phaseDeadline: Date;
 };
 export type MafiaSessionInputError = {
   type: 'invalid-participant-count';
@@ -23,10 +22,11 @@ export type MafiaSessionInputError = {
 };
 
 const defaultDayDurations: MafiaDayDurations = {
-  dayDiscussionDurationMs: mafiaGameConfig.dayDiscussionDurationMs,
+  discussionDurationMs: mafiaGameConfig.discussionDurationMs,
   nominationDurationMs: mafiaGameConfig.nominationDurationMs,
   finalDefenceDurationMs: mafiaGameConfig.finalDefenceDurationMs,
   verdictDurationMs: mafiaGameConfig.verdictDurationMs,
+  nightDurationMs: mafiaGameConfig.nightDurationMs,
 };
 
 export class MafiaGameModule implements GameModule<
@@ -43,7 +43,6 @@ export class MafiaGameModule implements GameModule<
   create({
     sessionId,
     participantCount,
-    phaseDeadline,
   }: MafiaSessionInput): Result<MafiaGameSession, MafiaSessionInputError> {
     if (
       participantCount < mafiaGameConfig.minParticipantCount ||
@@ -53,7 +52,6 @@ export class MafiaGameModule implements GameModule<
     return ok(
       new MafiaGameSession(
         sessionId,
-        phaseDeadline,
         createParticipants(participantCount, this.randomIntExclusive),
         this.dayDurations,
       ),

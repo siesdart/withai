@@ -13,6 +13,10 @@
 - Use `/design-taste-frontend` and `/gpt-taste` as the only sources of design rules.
 - Since this application is primarily intended for mobile, prioritize a mobile-first approach when designing the UI.
 
+## Tailwind CSS
+
+- When using conditional statements inside className, always use the `cn` function from the `ui` package to place the common class first, followed by the conditional class.
+
 ## shadcn/ui: ALWAYS read docs before coding
 
 - Before any shadcn/ui work, find and read the relevant doc in `/shadcn`.

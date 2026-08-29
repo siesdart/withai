@@ -1,19 +1,14 @@
 import { useMutation } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
-import { type MafiaGameProjection, MafiaGameSessionClient } from '../../api/client';
+import { MafiaGameSessionClient } from '../../api/client';
 import { gameSessionMutationOptions } from '../options/game-session-mutation-options';
 import { useCooldown } from '../ui/use-cooldown';
 
-type PhaseTimeAdjustment = 10 | -10;
-type ActiveMafiaPhase = Exclude<MafiaGameProjection['public']['phase'], 'completed'>;
-const phaseTimeAdjustmentCooldownMs = 1_000;
+type DiscussionTimeAdjustmentSeconds = 10 | -10;
+const discussionTimeAdjustmentCooldownMs = 1_000;
 
-export function usePhaseTimeAdjustment(
-  sessionId: string,
-  expectedPhase: ActiveMafiaPhase,
-  expectedPhaseDeadline: string,
-) {
+export function useDiscussionTimeAdjustment(sessionId: string, expectedDeadline: string) {
   const cooldown = useCooldown();
   const client = new MafiaGameSessionClient(sessionId);
   const { isPending, mutate } = useMutation(
@@ -21,40 +16,31 @@ export function usePhaseTimeAdjustment(
       sessionId,
       mutationFn: ({
         adjustmentSeconds,
-        expectedPhase: requestPhase,
-        expectedPhaseDeadline: requestPhaseDeadline,
+        expectedDeadline: requestDeadline,
         idempotencyKey,
       }: {
-        adjustmentSeconds: PhaseTimeAdjustment;
-        expectedPhase: ActiveMafiaPhase;
-        expectedPhaseDeadline: string;
+        adjustmentSeconds: DiscussionTimeAdjustmentSeconds;
+        expectedDeadline: string;
         idempotencyKey: string;
-      }) =>
-        client.adjustPhaseTime(
-          adjustmentSeconds,
-          requestPhase,
-          requestPhaseDeadline,
-          idempotencyKey,
-        ),
+      }) => client.adjustDiscussionTime(adjustmentSeconds, requestDeadline, idempotencyKey),
       onRateLimited: cooldown.startCooldown,
-      onSuccess: () => cooldown.startCooldown(phaseTimeAdjustmentCooldownMs),
+      onSuccess: () => cooldown.startCooldown(discussionTimeAdjustmentCooldownMs),
     }),
   );
 
   const adjust = useCallback(
-    (adjustmentSeconds: PhaseTimeAdjustment) => {
+    (adjustmentSeconds: DiscussionTimeAdjustmentSeconds) => {
       if (isPending || cooldown.isCoolingDown) {
         return;
       }
 
       mutate({
         adjustmentSeconds,
-        expectedPhase,
-        expectedPhaseDeadline,
+        expectedDeadline,
         idempotencyKey: crypto.randomUUID(),
       });
     },
-    [cooldown.isCoolingDown, expectedPhase, expectedPhaseDeadline, isPending, mutate],
+    [cooldown.isCoolingDown, expectedDeadline, isPending, mutate],
   );
 
   const adjustMinus10 = useCallback(() => adjust(-10), [adjust]);

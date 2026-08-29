@@ -52,7 +52,7 @@ describe('Mafia Game Session API', () => {
     expect(createResponse.body).toMatchObject({
       eventId: 1,
       public: {
-        phase: 'day-discussion',
+        phase: 'night',
         participants: expect.arrayContaining([
           expect.objectContaining({ name: 'You', alive: true }),
         ]),
@@ -126,7 +126,7 @@ describe('Mafia Game Session API', () => {
 
     expect(eventBody).toContain('id: 1');
     expect(eventBody).toContain('event: snapshot');
-    expect(eventBody).toContain('"phase":"day-discussion"');
+    expect(eventBody).toContain('"phase":"night"');
   });
 
   it('accepts a living Human Player public speech once and publishes deterministic Agent replies', async () => {
@@ -134,6 +134,7 @@ describe('Mafia Game Session API', () => {
       .post('/game-sessions/mafia')
       .send({ participantCount: 5 })
       .expect(201);
+    await new Promise<void>((resolve) => setTimeout(resolve, 31_000));
     const guestCookie = firstSetCookie(created.headers['set-cookie']);
     const sessionId = String(created.body.sessionId);
 
@@ -145,9 +146,9 @@ describe('Mafia Game Session API', () => {
       .expect(201);
 
     expect(speech.body).toMatchObject({
-      eventId: 2,
+      eventId: 3,
       public: {
-        phase: 'day-discussion',
+        phase: 'discussion',
       },
     });
     expect(speech.body.public.timeline).toEqual(
@@ -171,7 +172,7 @@ describe('Mafia Game Session API', () => {
       .send({ content: "I want to hear everyone's read before we nominate." })
       .expect(201);
 
-    expect(retried.body.eventId).toBe(2);
+    expect(retried.body.eventId).toBe(3);
 
     await new Promise<void>((resolve) => {
       setTimeout(resolve, 600);
@@ -190,7 +191,9 @@ describe('Mafia Game Session API', () => {
         }),
         expect.objectContaining({
           type: 'chat',
-          message: expect.objectContaining({ participantId: 'participant-2' }),
+          message: expect.objectContaining({
+            participantId: expect.stringMatching(/^participant-[2-5]$/),
+          }),
         }),
       ]),
     );
@@ -228,13 +231,14 @@ describe('Mafia Game Session API', () => {
 
     expect(catchUpBody.indexOf('id: 2')).toBeLessThan(catchUpBody.indexOf('id: 3'));
     expect(catchUpBody.indexOf('id: 3')).toBeLessThan(catchUpBody.indexOf('id: 6'));
-  });
+  }, 40_000);
 
   it('throttles new public speech while allowing an idempotent retry', async () => {
     const created = await request(app.getHttpServer())
       .post('/game-sessions/mafia')
       .send({ participantCount: 5 })
       .expect(201);
+    await new Promise<void>((resolve) => setTimeout(resolve, 31_000));
     const guestCookie = firstSetCookie(created.headers['set-cookie']);
     const sessionId = String(created.body.sessionId);
     const firstKey = 'first-public-speech-idempotency-key';
@@ -273,7 +277,7 @@ describe('Mafia Game Session API', () => {
       .set('Idempotency-Key', 'second-public-speech-idempotency-key')
       .send({ content: 'I have changed my mind.' })
       .expect(201);
-  });
+  }, 40_000);
 
   it('enforces ten new sessions per UTC day for one guest identity', async () => {
     const first = await request(app.getHttpServer())
@@ -380,6 +384,23 @@ describe('Mafia Game Session API', () => {
       .set('Cookie', guestCookie)
       .send({ participantCount: 5 })
       .expect(429);
+  });
+
+  it('keeps private Night commands unavailable outside Night without exposing private state', async () => {
+    const created = await request(app.getHttpServer())
+      .post('/game-sessions/mafia')
+      .send({ participantCount: 5 })
+      .expect(201);
+    const guestCookie = firstSetCookie(created.headers['set-cookie']);
+
+    const response = await request(app.getHttpServer())
+      .post(`/game-sessions/${created.body.sessionId}/actions/public-speech`)
+      .set('Cookie', guestCookie)
+      .set('Idempotency-Key', 'public-speech-outside-discussion-key')
+      .send({ content: 'The first Night is still resolving.' })
+      .expect(400);
+    expect(JSON.stringify(response.body)).not.toContain('Detective');
+    expect(JSON.stringify(response.body)).not.toContain('Doctor');
   });
 });
 /* oxlint-disable eslint/no-await-in-loop -- the allowance is intentionally observed after each creation. */

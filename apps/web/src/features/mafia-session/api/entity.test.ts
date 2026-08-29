@@ -10,7 +10,7 @@ describe('parseMafiaGameProjection', () => {
         sessionId: '2536c51f-496b-41af-8934-446c2eb85374',
         public: {
           dayNumber: 1,
-          phase: 'day-discussion',
+          phase: 'discussion',
           phaseDeadline: '2026-08-28T11:32:16.541Z',
           participants: [{ id: 'participant-1', name: 'You', alive: true }],
           timeline: [
@@ -22,7 +22,12 @@ describe('parseMafiaGameProjection', () => {
           ],
           completedVoteRecords: [],
         },
-        personal: { participantId: 'participant-1', role: 'Mafia', allegiance: 'Mafia' },
+        personal: {
+          participantId: 'participant-1',
+          role: 'Mafia',
+          allegiance: 'Mafia',
+          knownRoles: [],
+        },
       }),
     );
 
@@ -30,7 +35,7 @@ describe('parseMafiaGameProjection', () => {
     if (result.isErr()) return;
 
     expect(result.value).toMatchObject({
-      public: { nominatedParticipantId: undefined, voteStatus: undefined },
+      public: { nominatedParticipantId: undefined },
       personal: { vote: undefined },
     });
   });

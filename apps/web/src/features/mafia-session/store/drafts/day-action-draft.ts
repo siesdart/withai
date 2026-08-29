@@ -5,7 +5,10 @@ import { type IdempotentDraft, nextIdempotentDraft } from './idempotent-draft';
 export type DayAction =
   | { type: 'nomination'; targetParticipantId: string }
   | { type: 'verdict'; vote: 'eliminate' | 'spare' }
-  | { type: 'final-defence'; content: string };
+  | { type: 'final-defence'; content: string }
+  | { type: 'mafia-target'; targetParticipantId: string }
+  | { type: 'doctor-protection'; targetParticipantId: string }
+  | { type: 'detective-investigation'; targetParticipantId: string };
 
 export type DayActionDraft = IdempotentDraft<DayAction>;
 
@@ -27,6 +30,23 @@ function isSameDayAction(action: DayAction, draft: DayActionDraft) {
     .with(
       { type: 'final-defence' },
       (next) => draft.type === 'final-defence' && next.content === draft.content,
+    )
+    .with(
+      { type: 'mafia-target' },
+      (next) =>
+        draft.type === 'mafia-target' && next.targetParticipantId === draft.targetParticipantId,
+    )
+    .with(
+      { type: 'doctor-protection' },
+      (next) =>
+        draft.type === 'doctor-protection' &&
+        next.targetParticipantId === draft.targetParticipantId,
+    )
+    .with(
+      { type: 'detective-investigation' },
+      (next) =>
+        draft.type === 'detective-investigation' &&
+        next.targetParticipantId === draft.targetParticipantId,
     )
     .exhaustive();
 }

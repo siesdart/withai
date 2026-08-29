@@ -5,7 +5,6 @@ import { Inject } from '@nestjs/common';
 import {
   MafiaGameModule,
   mafiaGameConfig,
-  type MafiaPhase,
   type MafiaProjectionError,
   type MafiaSessionInputError,
 } from '@repo/mafia';
@@ -39,10 +38,10 @@ export type GameSessionError =
   | { type: 'invalid-day-action' }
   | { type: 'day-action-idempotency-conflict' }
   | { type: 'day-action-rate-limited'; retryAfterMs: number }
-  | { type: 'phase-time-adjustment-idempotency-conflict' }
-  | { type: 'phase-time-adjustment-rate-limited'; retryAfterMs: number }
-  | { type: 'invalid-phase-time-adjustment' }
-  | { type: 'stale-phase-time-adjustment' }
+  | { type: 'discussion-time-adjustment-idempotency-conflict' }
+  | { type: 'discussion-time-adjustment-rate-limited'; retryAfterMs: number }
+  | { type: 'invalid-discussion-time-adjustment' }
+  | { type: 'stale-discussion-time-adjustment' }
   | { type: 'expired-phase'; phaseDeadline: string }
   | { type: 'dead-participant'; participantId: string };
 
@@ -134,7 +133,6 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     const gameSessionResult = this.mafiaModule.create({
       sessionId,
       participantCount,
-      phaseDeadline: new Date(Date.now() + mafiaGameConfig.dayDiscussionDurationMs),
     });
     if (gameSessionResult.isErr()) {
       return err({ type: 'invalid-mafia-session-input', cause: gameSessionResult.error });
@@ -151,12 +149,12 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       nextEventId: 0,
       nextPublicSpeechAt: undefined,
       nextFinalDefenceAt: undefined,
-      nextPhaseTimeAdjustmentAt: undefined,
+      nextDiscussionTimeAdjustmentAt: undefined,
       lastAccessedAt: dayjs(),
       activeEventSubscribers: 0,
       publicSpeechIdempotencyKeys: new Map(),
       dayActionIdempotencyKeys: new Map(),
-      phaseTimeAdjustmentIdempotencyKeys: new Map(),
+      discussionTimeAdjustmentIdempotencyKeys: new Map(),
       phaseTimer: undefined,
       agentFinalDefenceTimer: undefined,
     };
@@ -170,6 +168,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       );
     }
     this.guestSessionCounts.set(countKey, count + 1);
+    this.submitAgentDayActions(session);
 
     return this.publishProjection(session)
       .andTee(() => this.schedulePhaseTransition(session))
@@ -264,6 +263,12 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
               type: 'invalid-public-speech' as const,
             }))
             .with({ type: 'invalid-target' }, () => ({ type: 'invalid-public-speech' as const }))
+            .with({ type: 'invalid-night-action' }, () => ({
+              type: 'invalid-public-speech' as const,
+            }))
+            .with({ type: 'night-action-already-submitted' }, () => ({
+              type: 'invalid-public-speech' as const,
+            }))
             .exhaustive();
           return err<MafiaGameSessionProjectionEntity, GameSessionError>(error);
         }
@@ -306,20 +311,70 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
-  adjustPhaseTime(
+  submitMafiaTarget(
+    sessionId: string,
+    cookie: string | undefined,
+    targetParticipantId: string,
+    idempotencyKey: string,
+  ) {
+    return this.submitDayAction(
+      sessionId,
+      cookie,
+      `mafia-target:${targetParticipantId}`,
+      idempotencyKey,
+      (session) =>
+        session.gameSession.submitMafiaTarget(session.humanParticipantId, targetParticipantId),
+    );
+  }
+
+  submitDoctorProtection(
+    sessionId: string,
+    cookie: string | undefined,
+    targetParticipantId: string,
+    idempotencyKey: string,
+  ) {
+    return this.submitDayAction(
+      sessionId,
+      cookie,
+      `doctor-protection:${targetParticipantId}`,
+      idempotencyKey,
+      (session) =>
+        session.gameSession.submitDoctorProtection(session.humanParticipantId, targetParticipantId),
+    );
+  }
+
+  submitDetectiveInvestigation(
+    sessionId: string,
+    cookie: string | undefined,
+    targetParticipantId: string,
+    idempotencyKey: string,
+  ) {
+    return this.submitDayAction(
+      sessionId,
+      cookie,
+      `detective-investigation:${targetParticipantId}`,
+      idempotencyKey,
+      (session) =>
+        session.gameSession.submitDetectiveInvestigation(
+          session.humanParticipantId,
+          targetParticipantId,
+        ),
+    );
+  }
+
+  adjustDiscussionTime(
     sessionId: string,
     cookie: string | undefined,
     adjustmentSeconds: 10 | -10,
-    expectedPhase: Exclude<MafiaPhase, 'completed'>,
-    expectedPhaseDeadline: string,
+    expectedDeadline: string,
     idempotencyKey: string,
   ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
-    const fingerprint = `${adjustmentSeconds}:${expectedPhase}:${expectedPhaseDeadline}`;
+    const fingerprint = `${adjustmentSeconds}:${expectedDeadline}`;
     return this.runIdempotentProjectionAction(sessionId, cookie, {
       idempotencyKey,
       fingerprint,
-      conflict: { type: 'phase-time-adjustment-idempotency-conflict' },
-      records: (session) => session.phaseTimeAdjustmentIdempotencyKeys,
+      conflict: { type: 'discussion-time-adjustment-idempotency-conflict' },
+      records: (session) => session.discussionTimeAdjustmentIdempotencyKeys,
       submit: (session) => {
         const currentProjection = session.gameSession.projectionFor(
           session.humanParticipantId,
@@ -331,25 +386,27 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
             cause: currentProjection.error,
           });
         }
-        if (
-          currentProjection.value.public.phase !== expectedPhase ||
-          currentProjection.value.public.phaseDeadline !== expectedPhaseDeadline
-        ) {
+        if (currentProjection.value.public.phase !== 'discussion') {
           return err<MafiaGameSessionProjectionEntity, GameSessionError>({
-            type: 'stale-phase-time-adjustment',
+            type: 'invalid-discussion-time-adjustment',
+          });
+        }
+        if (currentProjection.value.public.phaseDeadline !== expectedDeadline) {
+          return err<MafiaGameSessionProjectionEntity, GameSessionError>({
+            type: 'stale-discussion-time-adjustment',
           });
         }
 
         const now = dayjs();
-        const retryAfterMs = cooldownRetryAfterMs(session.nextPhaseTimeAdjustmentAt, now);
+        const retryAfterMs = cooldownRetryAfterMs(session.nextDiscussionTimeAdjustmentAt, now);
         if (retryAfterMs) {
           return err<MafiaGameSessionProjectionEntity, GameSessionError>({
-            type: 'phase-time-adjustment-rate-limited',
+            type: 'discussion-time-adjustment-rate-limited',
             retryAfterMs,
           });
         }
 
-        const adjustment = session.gameSession.adjustPhaseTime(
+        const adjustment = session.gameSession.adjustDiscussionTime(
           session.humanParticipantId,
           adjustmentSeconds,
           now.toDate(),
@@ -367,8 +424,10 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
                 { type: 'invalid-phase' },
                 { type: 'not-nominated-participant' },
                 { type: 'invalid-target' },
+                { type: 'invalid-night-action' },
+                { type: 'night-action-already-submitted' },
                 { type: 'invalid-public-speech' },
-                () => ({ type: 'invalid-phase-time-adjustment' as const }),
+                () => ({ type: 'invalid-discussion-time-adjustment' as const }),
               )
               .exhaustive(),
           );
@@ -383,7 +442,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         );
 
         return this.publishProjection(session).andTee(() => {
-          session.nextPhaseTimeAdjustmentAt = now.add(
+          session.nextDiscussionTimeAdjustmentAt = now.add(
             gameSessionsConfig.humanActionCooldownMs,
             'millisecond',
           );
@@ -606,7 +665,10 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     session.phaseTimer = setTimeout(() => {
       session.gameSession.advanceDayPhase(new Date()).match(
         (result) => {
-          if (result.type === 'not-due') return;
+          if (result.type === 'not-due') {
+            this.schedulePhaseTransition(session);
+            return;
+          }
           this.submitAgentDayActions(session);
           this.publishProjection(session).match(
             () => this.schedulePhaseTransition(session),
@@ -645,6 +707,25 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
           participantId,
           randomInt(2) === 0 ? 'eliminate' : 'spare',
         );
+      }
+    }
+    if (projection.value.public.phase === 'night') {
+      const livingParticipantIds = pipe(
+        projection.value.public.participants,
+        filterValues(({ alive }) => alive),
+        map(({ id }) => id),
+      );
+      for (const participantId of agentIds) {
+        const targetParticipantIds = filterValues(
+          livingParticipantIds,
+          (targetParticipantId) => targetParticipantId !== participantId,
+        );
+        if (targetParticipantIds.length === 0) continue;
+        const targetParticipantId = targetParticipantIds[randomInt(targetParticipantIds.length)];
+        if (!targetParticipantId) continue;
+        session.gameSession.submitMafiaTarget(participantId, targetParticipantId);
+        session.gameSession.submitDoctorProtection(participantId, targetParticipantId);
+        session.gameSession.submitDetectiveInvestigation(participantId, targetParticipantId);
       }
     }
     if (projection.value.public.phase === 'final-defence') {

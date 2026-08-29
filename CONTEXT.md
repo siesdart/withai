@@ -25,7 +25,7 @@ Information visible only to the Participant it belongs to, including that Partic
 _Avoid_: Secret (when referring to a role itself)
 
 **Public Information**:
-Information visible to Participants during a Game Session, including public chat messages, game phase, living Participants, vote status, and announced outcomes. It never includes an in-progress Vote Choice.
+Information visible to Participants during a Game Session, including public chat messages, game phase, living Participants, and announced outcomes. It never includes an in-progress Vote Choice.
 _Avoid_: Shared state
 
 **Allegiance Reveal**:
@@ -54,8 +54,8 @@ _Avoid_: Team, faction
 A rules-defined period of a Game Session that determines which actions and public information are available.
 _Avoid_: Turn (unless referring to one Participant's action opportunity)
 
-**Phase Time Adjustment**:
-A living Human Player's change of the active Phase's remaining duration by a fixed amount. Each accepted adjustment is recorded as Public Information, is applied to the Phase deadline, and may cause the Phase to resolve immediately. An Eliminated Human Player cannot make a Phase Time Adjustment.
+**Discussion Time Adjustment**:
+A living Human Player's change of the Discussion Phase's remaining duration by a fixed amount. Each accepted adjustment is recorded as Public Information, is applied to the Discussion deadline, and may cause the Phase to resolve immediately. An Eliminated Human Player cannot make a Discussion Time Adjustment.
 _Avoid_: Pause, skip
 
 **Day**:
@@ -100,10 +100,6 @@ _Avoid_: Ballot, selection
 
 **Aggregate Vote Tally**:
 The publicly announced count for each available Vote Choice after a Nomination or Verdict resolves. It never identifies which Participant selected a choice.
-_Avoid_: Vote reveal, ballot status
-
-**Vote Status**:
-The Public Information that a living Participant has submitted a vote in the active Nomination or Verdict, without revealing that Participant's Vote Choice.
 _Avoid_: Vote reveal, ballot status
 
 **Vote Amendment**:

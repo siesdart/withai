@@ -12,7 +12,6 @@ export type {
   MafiaPublicChatMessage,
   MafiaPublicInformation,
   MafiaPublicOutcome,
-  MafiaPublicVoteStatus,
   MafiaPublicTimelineItem,
   MafiaCompletedVoteRecord,
 } from './mafia-game-session';

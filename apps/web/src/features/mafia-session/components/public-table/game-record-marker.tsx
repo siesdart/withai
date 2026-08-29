@@ -1,4 +1,5 @@
 import { Marker, MarkerContent, MarkerIcon } from '@repo/ui/components/marker';
+import { cn } from '@repo/ui/lib/utils';
 import { ScrollTextIcon } from 'lucide-react';
 import { map } from 'remeda';
 import { match } from 'ts-pattern';
@@ -12,6 +13,7 @@ type GameRecordMarkerProps = {
   >['outcome'];
   completedVoteRecords: MafiaGameProjection['public']['completedVoteRecords'];
   participantNames: Map<string, string>;
+  isNight?: boolean;
 };
 
 const outcomeCopy = (
@@ -45,14 +47,14 @@ const outcomeCopy = (
         .exhaustive();
       return `Day ${value.dayNumber}: ${name} ${result}.`;
     })
-    .with({ type: 'day-changed' }, (value) => `Day ${value.dayNumber} began.`)
+    .with({ type: 'day-changed' }, (value) => `Day ${value.dayNumber}: day has begun.`)
     .with(
-      { type: 'phase-time-adjusted' },
+      { type: 'discussion-time-adjusted' },
       (value) =>
-        `Day ${value.dayNumber}: ${value.adjustmentSeconds > 0 ? 'added' : 'removed'} 10 seconds from the ${phaseLabel(value.phase)} timer.`,
+        `Day ${value.dayNumber}: ${value.adjustmentSeconds > 0 ? 'added' : 'removed'} 10 seconds from the timer.`,
     )
     .with(
-      { type: 'phase-changed', phase: 'day-discussion' },
+      { type: 'phase-changed', phase: 'discussion' },
       (value) => `Day ${value.dayNumber}: discussion phase started.`,
     )
     .with(
@@ -67,6 +69,10 @@ const outcomeCopy = (
       { type: 'phase-changed', phase: 'verdict' },
       (value) => `Day ${value.dayNumber}: verdict phase started.`,
     )
+    .with(
+      { type: 'phase-changed', phase: 'night' },
+      (value) => `Day ${value.dayNumber}: night has begun.`,
+    )
     .with({ type: 'phase-changed', phase: 'completed' }, () => 'The game is complete.')
     .with(
       { type: 'allegiance-reveal' },
@@ -74,14 +80,19 @@ const outcomeCopy = (
         `${participantNames.get(value.participantId) ?? 'Participant'} was ${value.allegiance}.`,
     )
     .with({ type: 'victory' }, (value) => `${value.allegiance} team wins.`)
-    .exhaustive();
-
-const phaseLabel = (phase: Exclude<MafiaGameProjection['public']['phase'], 'completed'>) =>
-  match(phase)
-    .with('day-discussion', () => 'discussion')
-    .with('nomination', () => 'nomination')
-    .with('final-defence', () => 'final defence')
-    .with('verdict', () => 'verdict')
+    .with(
+      { type: 'night-resolved', result: 'protected' },
+      (value) => `Day ${value.dayNumber}: Doctor saved the targeted Participant overnight.`,
+    )
+    .with(
+      { type: 'night-resolved', result: 'no-death' },
+      (value) => `Day ${value.dayNumber}: no Participant was eliminated overnight.`,
+    )
+    .with(
+      { type: 'night-resolved', result: 'participant-eliminated' },
+      (value) =>
+        `Day ${value.dayNumber}: ${participantNames.get(value.participantId ?? '') ?? 'A participant'} was eliminated overnight.`,
+    )
     .exhaustive();
 
 const nominationVoteTotals = (
@@ -98,9 +109,16 @@ export function GameRecordMarker({
   outcome,
   completedVoteRecords,
   participantNames,
+  isNight = false,
 }: GameRecordMarkerProps) {
   return (
-    <div className="my-4">
+    <div
+      className={cn(
+        'my-4',
+        isNight &&
+          'text-[#c9cad5] **:data-[slot=marker]:text-[#c9cad5] [&_[data-slot=marker]::after]:bg-[#565968] [&_[data-slot=marker]::before]:bg-[#565968]',
+      )}
+    >
       <Marker variant="separator">
         <MarkerIcon>
           <ScrollTextIcon />
@@ -120,7 +138,7 @@ export function GameRecordMarker({
         </MarkerContent>
       </Marker>
       {outcome.type === 'victory' && completedVoteRecords.length > 0 ? (
-        <details className="mt-2 text-xs text-[#625e55]">
+        <details className={cn('mt-2 text-xs', isNight ? 'text-[#c9cad5]' : 'text-[#625e55]')}>
           <summary className="cursor-pointer font-medium">View every vote</summary>
           <div className="mt-2 flex flex-col gap-3">
             {map(completedVoteRecords, (record) => (

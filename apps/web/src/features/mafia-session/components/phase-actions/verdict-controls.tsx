@@ -18,16 +18,9 @@ export function VerdictControls({
 }: VerdictControlsProps) {
   return (
     <div className="flex shrink-0 flex-col gap-3 p-3 sm:p-5">
-      <div>
-        <h3 className="text-base font-medium">
-          Verdict for {nominatedParticipantName ?? 'the nominee'}
-        </h3>
-        <p className="mt-1 text-sm text-[#625e55]">
-          {personalVote?.phase === 'verdict'
-            ? `Your current verdict is ${personalVote.vote}. You can change it until the deadline.`
-            : 'Choose whether to eliminate or spare the nominated participant.'}
-        </p>
-      </div>
+      <h3 className="text-base font-medium">
+        Verdict for {nominatedParticipantName ?? 'the nominee'}
+      </h3>
       <div className="flex gap-2">
         <Button
           disabled={disabled}

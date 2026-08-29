@@ -14,8 +14,8 @@ export type UsePublicSpeechResult = {
   isPending: boolean;
   isThrottled: boolean;
   retryAfterSeconds: number | undefined;
-  onContentChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
-  submit: (event: React.SyntheticEvent<HTMLFormElement, SubmitEvent>) => void;
+  onContentChange: (content: string) => void;
+  submit: () => void;
 };
 
 export function usePublicSpeech(sessionId: string): UsePublicSpeechResult {
@@ -39,14 +39,13 @@ export function usePublicSpeech(sessionId: string): UsePublicSpeechResult {
   );
 
   const onContentChange = useCallback(
-    (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-      setPublicSpeechContent(event.target.value);
+    (content: string) => {
+      setPublicSpeechContent(content);
     },
     [setPublicSpeechContent],
   );
 
-  const submit = (event: React.SyntheticEvent<HTMLFormElement, SubmitEvent>) => {
-    event.preventDefault();
+  const submit = () => {
     if (!publicSpeechDraft || mutation.isPending || cooldown.isCoolingDown) {
       return;
     }

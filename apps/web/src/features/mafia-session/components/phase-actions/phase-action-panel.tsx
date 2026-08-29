@@ -2,7 +2,7 @@ import { cn } from '@repo/ui/lib/utils';
 import { match } from 'ts-pattern';
 
 import type { PhasePanel } from '../control-room/phase-interaction';
-import { DiscussionTimeControls } from '../game-information/discussion-time-controls';
+import { DiscussionTimeControls } from './discussion-time-controls';
 import { FinalDefenceForm } from './final-defence-form';
 import { PublicSpeechForm } from './public-speech-form';
 import { VerdictControls } from './verdict-controls';

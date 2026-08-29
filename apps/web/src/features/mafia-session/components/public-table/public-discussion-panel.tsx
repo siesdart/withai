@@ -15,8 +15,8 @@ import { map, reduce } from 'remeda';
 import type { MafiaGameProjection } from '../../api/client';
 import type { UseDeadlineCountdownResult } from '../../hooks/ui/use-deadline-countdown';
 import type { PhasePanel } from '../control-room/phase-interaction';
-import { GamePhaseTimer } from '../game-information/game-phase-timer';
 import { PhaseActionPanel } from '../phase-actions/phase-action-panel';
+import { GamePhaseTimer } from './game-phase-timer';
 import { GameRecordMarker } from './game-record-marker';
 
 type PublicDiscussionPanelProps = {

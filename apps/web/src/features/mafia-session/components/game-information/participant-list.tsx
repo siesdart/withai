@@ -4,14 +4,8 @@ import { cn } from '@repo/ui/lib/utils';
 import { map } from 'remeda';
 
 import type { MafiaGameProjection } from '../../api/client';
+import type { ParticipantSelection } from '../control-room/phase-interaction';
 import { ParticipantItem } from './participant-item';
-
-export type ParticipantSelection = {
-  actionLabel: string;
-  disabled: boolean;
-  onSelect: (participantId: string) => void;
-  selectedParticipantId: string | undefined;
-};
 
 const participantItemLayoutClassName =
   'h-full min-h-0 w-full flex-col items-start justify-start gap-1 border border-transparent bg-clip-padding bg-[#ded6c8] px-2 py-2.5 text-left text-xs font-medium whitespace-nowrap lg:min-h-12 lg:flex-row lg:items-center lg:justify-between lg:gap-3';

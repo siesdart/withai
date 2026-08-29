@@ -8,23 +8,23 @@ import {
   MessageScrollerProvider,
   MessageScrollerViewport,
 } from '@repo/ui/components/message-scroller';
-import { Separator } from '@repo/ui/components/separator';
 import { cn } from '@repo/ui/lib/utils';
 import { MoonIcon, SunIcon } from 'lucide-react';
 import { map, reduce } from 'remeda';
 
 import type { MafiaGameProjection } from '../../api/client';
 import type { UseDeadlineCountdownResult } from '../../hooks/ui/use-deadline-countdown';
+import type { PhasePanel } from '../control-room/phase-interaction';
 import { GamePhaseTimer } from '../game-information/game-phase-timer';
+import { PhaseActionPanel } from '../phase-actions/phase-action-panel';
 import { GameRecordMarker } from './game-record-marker';
 
 type PublicDiscussionPanelProps = {
   publicInformation: MafiaGameProjection['public'];
   currentParticipantId: string;
-  currentParticipantAlive: boolean;
   isReconnecting: boolean;
   deadline: UseDeadlineCountdownResult;
-  controls: React.ReactNode;
+  phasePanel: PhasePanel;
 };
 
 type TimelineItem = MafiaGameProjection['public']['timeline'][number];
@@ -68,16 +68,13 @@ const groupTimelineByPeriod = (timeline: readonly TimelineItem[]): TimelineSegme
 export function PublicDiscussionPanel({
   publicInformation,
   currentParticipantId,
-  currentParticipantAlive,
   isReconnecting,
   deadline,
-  controls,
+  phasePanel,
 }: PublicDiscussionPanelProps) {
   const participantNames = new Map(
     map(publicInformation.participants, (participant) => [participant.id, participant.name]),
   );
-  const shouldShowPlayerControls =
-    currentParticipantAlive && publicInformation.phase !== 'completed';
   const timelineSegments = groupTimelineByPeriod(publicInformation.timeline);
   const currentPeriod = publicInformation.phase === 'night' ? 'night' : 'day';
   const CurrentPeriodIcon = currentPeriod === 'night' ? MoonIcon : SunIcon;
@@ -187,8 +184,7 @@ export function PublicDiscussionPanel({
           </MessageScrollerButton>
         </MessageScroller>
       </MessageScrollerProvider>
-      {shouldShowPlayerControls ? <Separator /> : null}
-      {controls}
+      <PhaseActionPanel panel={phasePanel} />
     </section>
   );
 }

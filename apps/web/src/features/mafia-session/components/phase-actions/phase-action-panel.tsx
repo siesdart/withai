@@ -1,62 +1,31 @@
 import { cn } from '@repo/ui/lib/utils';
-import { find } from 'remeda';
 import { match } from 'ts-pattern';
 
-import type { MafiaGameProjection } from '../../api/client';
-import type { UseGameActionResult } from '../../hooks/actions/use-game-action';
+import type { PhasePanel } from '../control-room/phase-interaction';
 import { DiscussionTimeControls } from '../game-information/discussion-time-controls';
 import { FinalDefenceForm } from './final-defence-form';
 import { PublicSpeechForm } from './public-speech-form';
 import { VerdictControls } from './verdict-controls';
 
-type PhaseActionPanelProps = {
-  sessionId: string;
-  snapshot: MafiaGameProjection;
-  currentParticipantAlive: boolean;
-  isPhaseExpired: boolean;
-  gameAction: UseGameActionResult;
-};
-
-export function PhaseActionPanel({
-  sessionId,
-  snapshot,
-  currentParticipantAlive,
-  isPhaseExpired,
-  gameAction,
-}: PhaseActionPanelProps) {
-  if (snapshot.public.phase === 'completed') {
-    return (
+export function PhaseActionPanel({ panel }: { panel: PhasePanel }) {
+  return match(panel)
+    .with({ type: 'completed' }, () => (
       <div className="shrink-0 p-3 text-sm text-[#625e55] sm:p-5">
         You are now observing the completed game. The full vote record is available below.
       </div>
-    );
-  }
-
-  if (!currentParticipantAlive) {
-    return (
+    ))
+    .with({ type: 'observer' }, () => (
       <div className="shrink-0 border-t border-[#22221e]/25 p-3 text-sm text-[#625e55] sm:p-5">
         You are out of the game. You can continue to observe each phase and its results.
       </div>
-    );
-  }
-
-  const actionDisabled = gameAction.isSubmissionBlocked || isPhaseExpired;
-  const nominatedParticipant = find(
-    snapshot.public.participants,
-    (participant) => participant.id === snapshot.public.nominatedParticipantId,
-  );
-
-  return match(snapshot.public.phase)
-    .with('discussion', () => (
+    ))
+    .with({ type: 'discussion' }, (p) => (
       <div className="flex shrink-0 flex-col">
-        <DiscussionTimeControls
-          phaseDeadline={snapshot.public.phaseDeadline}
-          sessionId={sessionId}
-        />
-        <PublicSpeechForm disabled={actionDisabled} gameAction={gameAction} />
+        <DiscussionTimeControls phaseDeadline={p.phaseDeadline} sessionId={p.sessionId} />
+        <PublicSpeechForm disabled={p.disabled} gameAction={p.gameAction} />
       </div>
     ))
-    .with('nomination', () => (
+    .with({ type: 'nomination' }, () => (
       <div className="shrink-0 p-3 sm:p-5">
         <h3 className="text-base font-medium">Choose a nominee</h3>
         <p className="mt-1 text-sm text-[#625e55]">
@@ -64,37 +33,33 @@ export function PhaseActionPanel({
         </p>
       </div>
     ))
-    .with('final-defence', () => {
-      const isCurrentParticipantNominated =
-        snapshot.public.nominatedParticipantId === snapshot.personal.participantId;
-      return (
-        <div className="shrink-0">
-          <div className={cn('p-3 sm:p-5', isCurrentParticipantNominated && 'pb-0 sm:pb-0')}>
-            <h3 className="text-base font-medium">Final defence</h3>
-            <p className="mt-1 text-sm text-[#625e55]">
-              {nominatedParticipant
-                ? `${nominatedParticipant.name} is nominated and has the floor.`
-                : 'The nominated participant is preparing a final defence.'}
-            </p>
-          </div>
-          {isCurrentParticipantNominated ? (
-            <FinalDefenceForm disabled={actionDisabled} gameAction={gameAction} />
-          ) : null}
+    .with({ type: 'final-defence' }, (p) => (
+      <div className="shrink-0">
+        <div className={cn('p-3 sm:p-5', p.isCurrentParticipantNominated && 'pb-0 sm:pb-0')}>
+          <h3 className="text-base font-medium">Final defence</h3>
+          <p className="mt-1 text-sm text-[#625e55]">
+            {p.nominatedParticipantName
+              ? `${p.nominatedParticipantName} is nominated and has the floor.`
+              : 'The nominated participant is preparing a final defence.'}
+          </p>
         </div>
-      );
-    })
-    .with('verdict', () => (
+        {p.isCurrentParticipantNominated ? (
+          <FinalDefenceForm disabled={p.disabled} gameAction={p.gameAction} />
+        ) : null}
+      </div>
+    ))
+    .with({ type: 'verdict' }, (p) => (
       <VerdictControls
-        disabled={actionDisabled}
-        nominatedParticipantName={nominatedParticipant?.name}
-        personalVote={snapshot.personal.vote}
-        gameAction={gameAction}
+        disabled={p.disabled}
+        nominatedParticipantName={p.nominatedParticipantName}
+        personalVote={p.personalVote}
+        gameAction={p.gameAction}
       />
     ))
-    .with('night', () => (
+    .with({ type: 'night' }, (p) => (
       <div className="shrink-0 p-3 sm:p-5">
         <h3 className="text-base font-medium">
-          {match(snapshot.personal.role)
+          {match(p.role)
             .with('Mafia', () => 'Choose a target')
             .with('Doctor', () => 'Choose someone to protect')
             .with('Detective', () => 'Choose someone to investigate')
@@ -102,7 +67,7 @@ export function PhaseActionPanel({
             .exhaustive()}
         </h3>
         <p className="mt-1 text-sm text-[#625e55]">
-          {snapshot.personal.role === 'Citizen'
+          {p.role === 'Citizen'
             ? 'Wait for dawn.'
             : 'Select an alive participant from the participant list.'}
         </p>

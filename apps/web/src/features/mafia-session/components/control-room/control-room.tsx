@@ -1,62 +1,24 @@
-/* oxlint-disable react-perf/jsx-no-jsx-as-prop, react-perf/jsx-no-new-function-as-prop -- session-owned actions are adapted into a semantic child contract at this composition boundary. */
 import { UsersIcon } from 'lucide-react';
 import { filter } from 'remeda';
-import { match } from 'ts-pattern';
 
 import { useGameAction } from '../../hooks/actions/use-game-action';
 import { useGameSessionSnapshot } from '../../hooks/sync/use-game-session-snapshot';
 import { useGameSessionSubscription } from '../../hooks/sync/use-game-session-subscription';
 import { useDeadlineCountdown } from '../../hooks/ui/use-deadline-countdown';
 import { ParticipantList } from '../game-information/participant-list';
-import { PhaseActionPanel } from '../phase-actions/phase-action-panel';
 import { PublicDiscussionPanel } from '../public-table/public-discussion-panel';
+import { createPhaseInteraction } from './phase-interaction';
 
 export function ControlRoom({ sessionId }: { sessionId: string }) {
   const { snapshot } = useGameSessionSnapshot(sessionId);
   const { isReconnecting } = useGameSessionSubscription(sessionId);
   const gameAction = useGameAction(sessionId);
   const deadline = useDeadlineCountdown(snapshot.public.phaseDeadline);
-  const currentParticipantAlive = snapshot.public.participants.some(
-    (participant) => participant.id === snapshot.personal.participantId && participant.alive,
-  );
-  const actionDisabled =
-    !currentParticipantAlive || gameAction.isSubmissionBlocked || deadline.isExpired;
-  const participantSelection = match({
-    phase: snapshot.public.phase,
-    role: snapshot.personal.role,
-  })
-    .with({ phase: 'nomination' }, () => ({
-      actionLabel: 'Nominate',
-      disabled: actionDisabled,
-      onSelect: (targetParticipantId: string) =>
-        gameAction.submit({ type: 'nomination', targetParticipantId }),
-      selectedParticipantId:
-        snapshot.personal.vote?.phase === 'nomination'
-          ? snapshot.personal.vote.targetParticipantId
-          : undefined,
-    }))
-    .with({ phase: 'night', role: 'Mafia' }, () => ({
-      actionLabel: 'Target',
-      disabled: actionDisabled,
-      onSelect: (targetParticipantId: string) =>
-        gameAction.submit({ type: 'mafia-target', targetParticipantId }),
-      selectedParticipantId: snapshot.personal.nightAction?.targetParticipantId,
-    }))
-    .with({ phase: 'night', role: 'Doctor' }, () => ({
-      actionLabel: 'Protect',
-      disabled: actionDisabled,
-      onSelect: (targetParticipantId: string) =>
-        gameAction.submit({ type: 'doctor-protection', targetParticipantId }),
-      selectedParticipantId: snapshot.personal.nightAction?.targetParticipantId,
-    }))
-    .with({ phase: 'night', role: 'Detective' }, () => ({
-      actionLabel: 'Investigate',
-      disabled: actionDisabled || snapshot.personal.nightAction !== undefined,
-      onSelect: (targetParticipantId: string) =>
-        gameAction.submit({ type: 'detective-investigation', targetParticipantId }),
-      selectedParticipantId: snapshot.personal.nightAction?.targetParticipantId,
-    }))
-    .otherwise(() => undefined);
+  const { panel, participantSelection } = createPhaseInteraction({
+    snapshot,
+    isPhaseExpired: deadline.isExpired,
+    gameAction,
+  });
 
   return (
     <main className="flex h-dvh flex-col overflow-hidden bg-[#e9e3d6] px-4 py-3 text-[#22221e] sm:px-8 sm:py-5">
@@ -75,19 +37,10 @@ export function ControlRoom({ sessionId }: { sessionId: string }) {
       <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col gap-3 py-3 lg:grid lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-5 lg:py-6">
         <PublicDiscussionPanel
           currentParticipantId={snapshot.personal.participantId}
-          currentParticipantAlive={currentParticipantAlive}
           isReconnecting={isReconnecting}
           deadline={deadline}
           publicInformation={snapshot.public}
-          controls={
-            <PhaseActionPanel
-              sessionId={sessionId}
-              snapshot={snapshot}
-              currentParticipantAlive={currentParticipantAlive}
-              isPhaseExpired={deadline.isExpired}
-              gameAction={gameAction}
-            />
-          }
+          phasePanel={panel}
         />
 
         <aside

@@ -34,6 +34,7 @@ import { match } from 'ts-pattern';
 
 import { retryAfterSeconds } from './cooldown/cooldown';
 import { CreateDiscussionTimeAdjustmentDto } from './dto/create-discussion-time-adjustment.dto';
+import { CreateMafiaChatDto } from './dto/create-mafia-chat.dto';
 import { CreateMafiaSessionDto } from './dto/create-mafia-session.dto';
 import { CreateNominationDto } from './dto/create-nomination.dto';
 import { CreatePublicSpeechDto } from './dto/create-public-speech.dto';
@@ -137,6 +138,30 @@ export class GameSessionsController {
   ) {
     return this.resolveGameSessionResult(
       this.gameSessionsService.submitPublicSpeech(
+        sessionId,
+        request.headers.cookie,
+        body.content,
+        idempotencyKey,
+      ),
+      response,
+    );
+  }
+
+  @Post(':sessionId/actions/mafia-chat')
+  @ApiOperation({ summary: 'Submit a private Mafia Chat statement during Night' })
+  @ApiCookieAuth('withai_guest')
+  @ApiBody({ type: CreateMafiaChatDto })
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  @ApiCreatedResponse({ type: MafiaGameSessionProjectionEntity })
+  submitMafiaChat(
+    @Param('sessionId') sessionId: string,
+    @Body() body: CreateMafiaChatDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+    @RequiredIdempotencyKey() idempotencyKey: string,
+  ) {
+    return this.resolveGameSessionResult(
+      this.gameSessionsService.submitMafiaChat(
         sessionId,
         request.headers.cookie,
         body.content,
@@ -446,6 +471,14 @@ export class GameSessionsController {
           ),
       )
       .with(
+        { type: 'mafia-chat-idempotency-conflict' },
+        () =>
+          new HttpException(
+            'The Idempotency-Key was already used with a different action.',
+            HttpStatus.CONFLICT,
+          ),
+      )
+      .with(
         { type: 'public-speech-rate-limited' },
         () =>
           new HttpException(
@@ -456,6 +489,10 @@ export class GameSessionsController {
       .with(
         { type: 'invalid-public-speech' },
         () => new BadRequestException('This public action is not permitted.'),
+      )
+      .with(
+        { type: 'invalid-mafia-chat' },
+        () => new BadRequestException('This Mafia Chat action is not permitted.'),
       )
       .with(
         { type: 'invalid-day-action' },

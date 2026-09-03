@@ -14,10 +14,14 @@ const MafiaPhaseSchema = v.picklist([
 const MafiaRoleSchema = v.picklist(['Mafia', 'Detective', 'Doctor', 'Citizen'] as const);
 const MafiaAllegianceSchema = v.picklist(['Mafia', 'Citizen'] as const);
 const MafiaParticipantSchema = v.object({ id: v.string(), name: v.string(), alive: v.boolean() });
+const MafiaChatMessageSchema = v.object({
+  dayNumber: v.number(),
+  participantId: v.string(),
+  content: v.string(),
+});
 const NominationVoteCountSchema = v.object({ participantId: v.string(), voteCount: v.number() });
 const PublicOutcomeSchema = v.variant('type', [
   v.object({
-    id: v.string(),
     type: v.literal('nomination-resolved'),
     dayNumber: v.number(),
     result: v.picklist(['nominated', 'nomination-tie', 'no-nomination'] as const),
@@ -26,7 +30,6 @@ const PublicOutcomeSchema = v.variant('type', [
     voteCounts: v.array(NominationVoteCountSchema),
   }),
   v.object({
-    id: v.string(),
     type: v.literal('verdict-resolved'),
     dayNumber: v.number(),
     participantId: v.string(),
@@ -35,41 +38,45 @@ const PublicOutcomeSchema = v.variant('type', [
     spareVotes: v.number(),
     requiredEliminateVotes: v.number(),
   }),
-  v.object({ id: v.string(), type: v.literal('day-changed'), dayNumber: v.number() }),
+  v.object({ type: v.literal('day-changed'), dayNumber: v.number() }),
   v.object({
-    id: v.string(),
     type: v.literal('discussion-time-adjusted'),
     dayNumber: v.number(),
     adjustmentSeconds: v.picklist([10, -10] as const),
   }),
   v.object({
-    id: v.string(),
     type: v.literal('phase-changed'),
     dayNumber: v.number(),
     phase: MafiaPhaseSchema,
   }),
   v.object({
-    id: v.string(),
     type: v.literal('allegiance-reveal'),
     participantId: v.string(),
     allegiance: MafiaAllegianceSchema,
   }),
-  v.object({ id: v.string(), type: v.literal('victory'), allegiance: MafiaAllegianceSchema }),
+  v.object({ type: v.literal('victory'), allegiance: MafiaAllegianceSchema }),
   v.object({
-    id: v.string(),
     type: v.literal('night-resolved'),
     dayNumber: v.number(),
     result: v.picklist(['no-death', 'protected', 'participant-eliminated'] as const),
     participantId: v.optional(v.string()),
   }),
 ]);
-const PublicTimelineItemSchema = v.variant('type', [
+const PublicTimelineItemVariants = [
   v.object({
     id: v.string(),
     type: v.literal('chat'),
-    message: v.object({ id: v.string(), participantId: v.string(), content: v.string() }),
+    message: v.object({ participantId: v.string(), content: v.string() }),
   }),
   v.object({ id: v.string(), type: v.literal('record'), outcome: PublicOutcomeSchema }),
+];
+const PersonalTimelineItemSchema = v.variant('type', [
+  ...PublicTimelineItemVariants,
+  v.object({
+    id: v.string(),
+    type: v.literal('mafia-chat'),
+    message: MafiaChatMessageSchema,
+  }),
 ]);
 const CompletedVoteRecordSchema = v.object({
   id: v.string(),
@@ -97,13 +104,13 @@ const CompletedNightActionRecordSchema = v.object({
 const MafiaGameProjectionPayloadSchema = v.object({
   eventId: v.number(),
   sessionId: v.string(),
+  timeline: v.array(PersonalTimelineItemSchema),
   public: v.object({
     dayNumber: v.number(),
     phase: MafiaPhaseSchema,
     phaseDeadline: v.string(),
     participants: v.array(MafiaParticipantSchema),
     nominatedParticipantId: v.optional(v.string()),
-    timeline: v.array(PublicTimelineItemSchema),
     completedRecords: v.object({
       voteRecords: v.array(CompletedVoteRecordSchema),
       nightActionRecords: v.array(CompletedNightActionRecordSchema),
@@ -138,7 +145,7 @@ const MafiaGameProjectionPayloadSchema = v.object({
 
 type ParsedMafiaGameProjection = v.InferOutput<typeof MafiaGameProjectionPayloadSchema>;
 type MafiaPublicOutcome = Extract<
-  MafiaGameProjection['public']['timeline'][number],
+  MafiaGameProjection['timeline'][number],
   { type: 'record' }
 >['outcome'];
 
@@ -153,12 +160,12 @@ function normalizePublicOutcome(
 function normalizeMafiaGameProjection(projection: ParsedMafiaGameProjection): MafiaGameProjection {
   return {
     ...projection,
+    timeline: map(projection.timeline, (item) =>
+      item.type === 'record' ? { ...item, outcome: normalizePublicOutcome(item.outcome) } : item,
+    ),
     public: {
       ...projection.public,
       nominatedParticipantId: projection.public.nominatedParticipantId,
-      timeline: map(projection.public.timeline, (item) =>
-        item.type === 'record' ? { ...item, outcome: normalizePublicOutcome(item.outcome) } : item,
-      ),
       completedRecords: {
         voteRecords: projection.public.completedRecords.voteRecords,
         nightActionRecords: map(

@@ -29,7 +29,12 @@ export type PhasePanel =
       personalVote: MafiaGameProjection['personal']['vote'];
       gameAction: UseGameActionResult;
     }
-  | { type: 'night'; role: MafiaGameProjection['personal']['role'] };
+  | {
+      type: 'night';
+      role: MafiaGameProjection['personal']['role'];
+      disabled: boolean;
+      gameAction: UseGameActionResult;
+    };
 
 export type ParticipantSelection = {
   actionLabel: string;
@@ -135,7 +140,7 @@ export function createPhaseInteraction({
       ),
     )
     .with({ phase: 'night', role: 'Citizen' }, () => ({
-      panel: { type: 'night' as const, role: 'Citizen' as const },
+      panel: { type: 'night' as const, role: 'Citizen' as const, disabled, gameAction },
       participantSelection: undefined,
     }))
     .exhaustive();
@@ -148,7 +153,7 @@ function nightInteraction(
   gameAction: UseGameActionResult,
 ): PhaseInteraction {
   return {
-    panel: { type: 'night', role },
+    panel: { type: 'night', role, disabled, gameAction },
     participantSelection: {
       actionLabel: nightActionLabel(role),
       disabled,

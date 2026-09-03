@@ -4,6 +4,7 @@ import { type IdempotentDraft, nextIdempotentDraft } from './idempotent-draft';
 
 export type GameAction =
   | { type: 'public-speech'; content: string }
+  | { type: 'mafia-chat'; content: string }
   | { type: 'nomination'; targetParticipantId: string }
   | { type: 'verdict'; vote: 'eliminate' | 'spare' }
   | { type: 'final-defence'; content: string }
@@ -26,7 +27,12 @@ export function nextGameActionDraft(
 
 function isEmptyMessage(action: GameAction) {
   return match(action)
-    .with({ type: 'public-speech' }, { type: 'final-defence' }, ({ content }) => !content.trim())
+    .with(
+      { type: 'public-speech' },
+      { type: 'mafia-chat' },
+      { type: 'final-defence' },
+      ({ content }) => !content.trim(),
+    )
     .otherwise(() => false);
 }
 
@@ -35,6 +41,10 @@ function isSameGameAction(action: GameAction, draft: GameActionDraft) {
     .with(
       { type: 'public-speech' },
       (next) => draft.type === 'public-speech' && next.content === draft.content,
+    )
+    .with(
+      { type: 'mafia-chat' },
+      (next) => draft.type === 'mafia-chat' && next.content === draft.content,
     )
     .with(
       { type: 'nomination' },

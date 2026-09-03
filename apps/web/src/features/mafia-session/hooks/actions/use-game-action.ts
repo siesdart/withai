@@ -78,6 +78,9 @@ function submitGameAction(client: MafiaGameSessionClient, action: GameActionDraf
     .with({ type: 'public-speech' }, (draft) =>
       client.submitPublicSpeech(draft.content, draft.idempotencyKey),
     )
+    .with({ type: 'mafia-chat' }, (draft) =>
+      client.submitMafiaChat(draft.content, draft.idempotencyKey),
+    )
     .with({ type: 'nomination' }, (draft) =>
       client.submitNomination(draft.targetParticipantId, draft.idempotencyKey),
     )

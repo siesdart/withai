@@ -17,6 +17,7 @@ export type StoredGameSessionEntity = {
   lastAccessedAt: Dayjs;
   activeEventSubscribers: number;
   publicSpeechIdempotencyKeys: Map<string, IdempotencyRecord<MafiaGameSessionProjectionEntity>>;
+  mafiaChatIdempotencyKeys: Map<string, IdempotencyRecord<MafiaGameSessionProjectionEntity>>;
   dayActionIdempotencyKeys: Map<string, IdempotencyRecord<MafiaGameSessionProjectionEntity>>;
   discussionTimeAdjustmentIdempotencyKeys: Map<
     string,
@@ -24,4 +25,5 @@ export type StoredGameSessionEntity = {
   >;
   phaseTimer: NodeJS.Timeout | undefined;
   agentFinalDefenceTimer: NodeJS.Timeout | undefined;
+  mafiaTargetFallbackTimer: NodeJS.Timeout | undefined;
 };

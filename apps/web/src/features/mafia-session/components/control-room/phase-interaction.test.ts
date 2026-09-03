@@ -11,6 +11,7 @@ function projection(): MafiaGameProjection {
   return {
     eventId: 1,
     sessionId: 'session-1',
+    timeline: [],
     public: {
       dayNumber: 1,
       phase: 'discussion',
@@ -20,7 +21,6 @@ function projection(): MafiaGameProjection {
         { id: targetParticipantId, name: 'Mina', alive: true },
       ],
       nominatedParticipantId: undefined,
-      timeline: [],
       completedRecords: { voteRecords: [], nightActionRecords: [] },
     },
     personal: {

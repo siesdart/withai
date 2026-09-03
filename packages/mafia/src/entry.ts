@@ -25,3 +25,4 @@ export type {
   MafiaRole,
   RandomInt,
 } from './participants';
+export type { MafiaChatMessage, MafiaPersonalTimelineItem } from './timeline';

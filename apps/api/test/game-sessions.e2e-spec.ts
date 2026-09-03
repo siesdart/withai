@@ -151,7 +151,7 @@ describe('Mafia Game Session API', () => {
         phase: 'discussion',
       },
     });
-    expect(speech.body.public.timeline).toEqual(
+    expect(speech.body.timeline).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           type: 'chat',
@@ -183,7 +183,7 @@ describe('Mafia Game Session API', () => {
       .set('Cookie', guestCookie)
       .expect(200);
 
-    expect(snapshot.body.public.timeline).toEqual(
+    expect(snapshot.body.timeline).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           type: 'chat',

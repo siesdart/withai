@@ -7,10 +7,7 @@ import { match } from 'ts-pattern';
 import type { MafiaGameProjection } from '../../api/client';
 
 type GameRecordMarkerProps = {
-  outcome: Extract<
-    MafiaGameProjection['public']['timeline'][number],
-    { type: 'record' }
-  >['outcome'];
+  outcome: Extract<MafiaGameProjection['timeline'][number], { type: 'record' }>['outcome'];
   completedRecords: MafiaGameProjection['public']['completedRecords'];
   participantNames: Map<string, string>;
   isNight?: boolean;

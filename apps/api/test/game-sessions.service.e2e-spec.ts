@@ -12,8 +12,11 @@ describe('GameSessionsService', () => {
   it('recovers an expired phase when its timer was missed before a snapshot is read', () => {
     jest.useFakeTimers({ now: new Date('2026-08-27T17:11:51.000Z') });
     const service = new GameSessionsService({
-      decide: () => ({ type: 'remain-silent' }),
+      decidePublicSpeech: () => ({ type: 'remain-silent' }),
       decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
     });
     const created = service.createMafiaSession(undefined, 5, undefined);
 
@@ -35,8 +38,11 @@ describe('GameSessionsService', () => {
   it('retries a phase timer that fires before its deadline', () => {
     jest.useFakeTimers({ now: new Date('2026-08-27T17:11:51.000Z') });
     const service = new GameSessionsService({
-      decide: () => ({ type: 'remain-silent' }),
+      decidePublicSpeech: () => ({ type: 'remain-silent' }),
       decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
     });
     const created = service.createMafiaSession(undefined, 5, undefined);
     if (created.isErr()) throw new Error('Expected a session.');
@@ -57,8 +63,11 @@ describe('GameSessionsService', () => {
   it('throttles Discussion Time Adjustments while allowing an idempotent retry', () => {
     jest.useFakeTimers({ now: new Date('2026-08-27T17:11:51.000Z') });
     const service = new GameSessionsService({
-      decide: () => ({ type: 'remain-silent' }),
+      decidePublicSpeech: () => ({ type: 'remain-silent' }),
       decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
     });
     const created = service.createMafiaSession(undefined, 5, undefined);
     if (created.isErr()) throw new Error('Expected a session.');
@@ -114,8 +123,11 @@ describe('GameSessionsService', () => {
   it('rejects a Discussion Time Adjustment for a stale Phase deadline', () => {
     jest.useFakeTimers({ now: new Date('2026-08-27T17:11:51.000Z') });
     const service = new GameSessionsService({
-      decide: () => ({ type: 'remain-silent' }),
+      decidePublicSpeech: () => ({ type: 'remain-silent' }),
       decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
     });
     const created = service.createMafiaSession(undefined, 5, undefined);
     if (created.isErr()) throw new Error('Expected a session.');

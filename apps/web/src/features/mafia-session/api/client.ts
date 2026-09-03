@@ -47,6 +47,17 @@ export class MafiaGameSessionClient {
     );
   }
 
+  submitMafiaChat(
+    content: string,
+    idempotencyKey: string,
+  ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
+    return MafiaGameSessionClient.#postProjection(
+      `${this.#sessionId}/actions/mafia-chat`,
+      { content },
+      idempotencyKey,
+    );
+  }
+
   submitNomination(
     targetParticipantId: string,
     idempotencyKey: string,

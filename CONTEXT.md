@@ -70,6 +70,10 @@ _Avoid_: Round
 The ordered conversation visible to all living Participants during a Game Session.
 _Avoid_: Group chat, chat room
 
+**Mafia Night Chat**:
+The ordered private conversation among Mafia Participants in a Game Session, structurally equivalent to Public Chat but restricted to the Mafia. Living Mafia may read it at all times and send messages during Night, while Eliminated Mafia may only read it.
+_Avoid_: Secret chat, Mafia channel
+
 **Speech Decision**:
 An Agent's private decision to respond or remain silent after a Public Chat event.
 _Avoid_: Auto-reply

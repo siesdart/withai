@@ -7,13 +7,13 @@ function projection(eventId: number): MafiaGameProjection {
   return {
     eventId,
     sessionId: 'session-1',
+    timeline: [],
     public: {
       dayNumber: 1,
       phase: 'discussion',
       phaseDeadline: '2026-08-27T00:02:00.000Z',
       participants: [],
       nominatedParticipantId: undefined,
-      timeline: [],
       completedRecords: { voteRecords: [], nightActionRecords: [] },
     },
     personal: {

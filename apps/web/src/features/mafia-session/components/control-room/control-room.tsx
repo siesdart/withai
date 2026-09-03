@@ -39,8 +39,10 @@ export function ControlRoom({ sessionId }: { sessionId: string }) {
           currentParticipantId={snapshot.personal.participantId}
           isReconnecting={isReconnecting}
           deadline={deadline}
+          knownRoles={snapshot.personal.knownRoles}
           publicInformation={snapshot.public}
           phasePanel={panel}
+          timeline={snapshot.timeline}
         />
 
         <aside

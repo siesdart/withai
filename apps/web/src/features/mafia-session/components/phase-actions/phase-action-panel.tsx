@@ -4,6 +4,7 @@ import { match } from 'ts-pattern';
 import type { PhasePanel } from '../control-room/phase-interaction';
 import { DiscussionTimeControls } from './discussion-time-controls';
 import { FinalDefenceForm } from './final-defence-form';
+import { MafiaChatForm } from './mafia-chat-form';
 import { PublicSpeechForm } from './public-speech-form';
 import { VerdictControls } from './verdict-controls';
 
@@ -57,7 +58,12 @@ export function PhaseActionPanel({ panel }: { panel: PhasePanel }) {
       />
     ))
     .with({ type: 'night' }, (p) => (
-      <div className="shrink-0 p-3 sm:p-5">
+      <div
+        className={cn(
+          'shrink-0 p-3 sm:p-5',
+          p.role === 'Mafia' && 'border-[#565968] bg-[#292b35] text-[#f7f2e8]',
+        )}
+      >
         <h3 className="text-base font-medium">
           {match(p.role)
             .with('Mafia', () => 'Choose a target')
@@ -66,11 +72,14 @@ export function PhaseActionPanel({ panel }: { panel: PhasePanel }) {
             .with('Citizen', () => 'Night actions are private')
             .exhaustive()}
         </h3>
-        <p className="mt-1 text-sm text-[#625e55]">
+        <p className={cn('mt-1 text-sm', p.role === 'Mafia' ? 'text-[#d8d7df]' : 'text-[#625e55]')}>
           {p.role === 'Citizen'
             ? 'Wait for dawn.'
             : 'Select an alive participant from the participant list.'}
         </p>
+        {p.role === 'Mafia' ? (
+          <MafiaChatForm disabled={p.disabled} gameAction={p.gameAction} />
+        ) : null}
       </div>
     ))
     .exhaustive();

@@ -21,20 +21,33 @@ import { GameRecordMarker } from './game-record-marker';
 
 type PublicDiscussionPanelProps = {
   publicInformation: MafiaGameProjection['public'];
+  knownRoles: MafiaGameProjection['personal']['knownRoles'];
+  timeline: MafiaGameProjection['timeline'];
   currentParticipantId: string;
   isReconnecting: boolean;
   deadline: UseDeadlineCountdownResult;
   phasePanel: PhasePanel;
 };
 
-type TimelineItem = MafiaGameProjection['public']['timeline'][number];
+type TimelineItem = MafiaGameProjection['timeline'][number];
 type TimelinePeriod = 'day' | 'night';
-type TimelineSegment = {
+type SegmentedTimeline = {
   id: string;
   dayNumber: number;
   items: TimelineItem[];
   period: TimelinePeriod;
 };
+
+type KnownRole = MafiaGameProjection['personal']['knownRoles'][number]['role'];
+
+const participantNameClassName = (role: KnownRole | undefined, isNight: boolean) =>
+  role
+    ? role === 'Mafia'
+      ? 'text-[#dc2626]'
+      : 'text-[#16a34a]'
+    : isNight
+      ? 'text-[#d8d7df]'
+      : 'text-[#625e55]';
 
 const periodFor = (item: TimelineItem, currentPeriod: TimelinePeriod): TimelinePeriod => {
   if (item.type !== 'record') return currentPeriod;
@@ -46,7 +59,7 @@ const periodFor = (item: TimelineItem, currentPeriod: TimelinePeriod): TimelineP
 const dayNumberFor = (item: TimelineItem, currentDayNumber: number) =>
   item.type === 'record' && 'dayNumber' in item.outcome ? item.outcome.dayNumber : currentDayNumber;
 
-const groupTimelineByPeriod = (timeline: readonly TimelineItem[]): TimelineSegment[] =>
+const groupTimelineByPeriod = (timeline: readonly TimelineItem[]): SegmentedTimeline[] =>
   reduce(
     timeline,
     (segments, item) => {
@@ -62,20 +75,25 @@ const groupTimelineByPeriod = (timeline: readonly TimelineItem[]): TimelineSegme
       previousSegment.items.push(item);
       return segments;
     },
-    [] as TimelineSegment[],
+    [] as SegmentedTimeline[],
   );
 
 export function PublicDiscussionPanel({
   publicInformation,
+  knownRoles,
   currentParticipantId,
   isReconnecting,
   deadline,
   phasePanel,
+  timeline,
 }: PublicDiscussionPanelProps) {
-  const participantNames = new Map(
+  const participantMap = new Map(
     map(publicInformation.participants, (participant) => [participant.id, participant.name]),
   );
-  const timelineSegments = groupTimelineByPeriod(publicInformation.timeline);
+  const knownRolesMap = new Map(
+    map(knownRoles, ({ participantId, role }) => [participantId, role] as const),
+  );
+  const timelineSegments = groupTimelineByPeriod(timeline);
   const currentPeriod = publicInformation.phase === 'night' ? 'night' : 'day';
   const CurrentPeriodIcon = currentPeriod === 'night' ? MoonIcon : SunIcon;
 
@@ -107,7 +125,7 @@ export function PublicDiscussionPanel({
         <MessageScroller className="h-auto! flex-1!">
           <MessageScrollerViewport className="h-auto! flex-1! px-3 py-0 text-sm sm:px-5">
             <MessageScrollerContent className="gap-0">
-              {publicInformation.timeline.length === 0 ? (
+              {timeline.length === 0 ? (
                 <p className="mt-auto text-[#625e55]">
                   The table is waiting for the first public statement.
                 </p>
@@ -134,8 +152,37 @@ export function PublicDiscussionPanel({
                                   completedRecords={publicInformation.completedRecords}
                                   isNight={isNight}
                                   outcome={item.outcome}
-                                  participantNames={participantNames}
+                                  participantNames={participantMap}
                                 />
+                              </MessageScrollerItem>
+                            );
+                          }
+                          if (item.type === 'mafia-chat') {
+                            const isCurrentParticipant =
+                              item.message.participantId === currentParticipantId;
+                            return (
+                              <MessageScrollerItem key={item.id} messageId={item.id}>
+                                <Message align={isCurrentParticipant ? 'end' : 'start'}>
+                                  <MessageContent>
+                                    <MessageHeader
+                                      className={participantNameClassName(
+                                        knownRolesMap.get(item.message.participantId),
+                                        isNight,
+                                      )}
+                                    >
+                                      {participantMap.get(item.message.participantId) ?? 'Mafia'}
+                                    </MessageHeader>
+                                    <Bubble
+                                      align={isCurrentParticipant ? 'end' : 'start'}
+                                      className={cn(
+                                        '**:data-[slot=bubble-content]:border-[#7884a4]! **:data-[slot=bubble-content]:bg-[#4d5874]! **:data-[slot=bubble-content]:text-[#f7f2e8]!',
+                                      )}
+                                      variant={isCurrentParticipant ? 'tinted' : 'muted'}
+                                    >
+                                      <BubbleContent>{item.message.content}</BubbleContent>
+                                    </Bubble>
+                                  </MessageContent>
+                                </Message>
                               </MessageScrollerItem>
                             );
                           }
@@ -146,18 +193,24 @@ export function PublicDiscussionPanel({
                               <Message align={isCurrentParticipant ? 'end' : 'start'}>
                                 <MessageContent>
                                   <MessageHeader
-                                    className={cn(isNight ? 'text-[#d8d7df]' : 'text-[#625e55]')}
+                                    className={participantNameClassName(
+                                      knownRolesMap.get(item.message.participantId),
+                                      isNight,
+                                    )}
                                   >
-                                    {participantNames.get(item.message.participantId) ??
+                                    {participantMap.get(item.message.participantId) ??
                                       'Participant'}
                                   </MessageHeader>
                                   <Bubble
                                     align={isCurrentParticipant ? 'end' : 'start'}
                                     className={cn(
-                                      isNight &&
-                                        (isCurrentParticipant
+                                      isNight
+                                        ? isCurrentParticipant
                                           ? '**:data-[slot=bubble-content]:border-[#7884a4]! **:data-[slot=bubble-content]:bg-[#4d5874]! **:data-[slot=bubble-content]:text-[#f7f2e8]!'
-                                          : '**:data-[slot=bubble-content]:border-[#565968]! **:data-[slot=bubble-content]:bg-[#383b47]! **:data-[slot=bubble-content]:text-[#f7f2e8]!'),
+                                          : '**:data-[slot=bubble-content]:border-[#565968]! **:data-[slot=bubble-content]:bg-[#383b47]! **:data-[slot=bubble-content]:text-[#f7f2e8]!'
+                                        : isCurrentParticipant
+                                          ? '**:data-[slot=bubble-content]:border-[#62594e]! **:data-[slot=bubble-content]:bg-[#393833]! **:data-[slot=bubble-content]:text-[#f8f4eb]! **:data-[slot=bubble-content]:shadow-[0_2px_0_rgb(34_34_30/0.16)]'
+                                          : '**:data-[slot=bubble-content]:border-[#b8aa96]! **:data-[slot=bubble-content]:bg-[#fffaf2]! **:data-[slot=bubble-content]:text-[#38332c]! **:data-[slot=bubble-content]:shadow-[0_2px_0_rgb(34_34_30/0.08)]',
                                     )}
                                     variant={isCurrentParticipant ? 'tinted' : 'muted'}
                                   >

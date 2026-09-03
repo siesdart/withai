@@ -103,6 +103,62 @@ describe('MafiaGameModule', () => {
     ]);
   });
 
+  it('keeps Mafia Chat private while allowing Mafia to retain it after Night', () => {
+    const gameModule = new MafiaGameModule(() => 0, {
+      discussionDurationMs: 10,
+      nominationDurationMs: 10,
+      finalDefenceDurationMs: 10,
+      verdictDurationMs: 10,
+      nightDurationMs: 1,
+    });
+    const sessionResult = gameModule.create({
+      sessionId: 'session-mafia-chat',
+      participantCount: 5,
+    });
+    if (sessionResult.isErr()) throw new Error('Expected a valid Mafia Game Session.');
+
+    const session = sessionResult.value;
+    expect(
+      session.submitMafiaChat(
+        'participant-5',
+        'Focus on Mina.',
+        new Date('2026-08-25T23:59:59.999Z'),
+      ),
+    ).toMatchObject({ value: undefined });
+    const mafiaProjection = session.projectionFor('participant-5', 1);
+    const citizenProjection = session.projectionFor('participant-1', 1);
+    if (mafiaProjection.isErr() || citizenProjection.isErr())
+      throw new Error('Expected projections.');
+    expect(mafiaProjection.value.timeline).toContainEqual(
+      expect.objectContaining({
+        type: 'mafia-chat',
+        message: expect.objectContaining({
+          participantId: 'participant-5',
+          content: 'Focus on Mina.',
+        }),
+      }),
+    );
+    expect(map(mafiaProjection.value.timeline, (item) => item.id)).toEqual([
+      'timeline-1',
+      'timeline-2',
+    ]);
+    expect(mafiaProjection.value.timeline[1]).toEqual({
+      id: 'timeline-2',
+      type: 'mafia-chat',
+      message: { dayNumber: 1, participantId: 'participant-5', content: 'Focus on Mina.' },
+    });
+    expect(citizenProjection.value.timeline).not.toContainEqual(
+      expect.objectContaining({ type: 'mafia-chat' }),
+    );
+
+    session.advanceDayPhase(timeAt(1));
+    const daytimeMafiaProjection = session.projectionFor('participant-5', 2);
+    if (daytimeMafiaProjection.isErr()) throw new Error('Expected a Mafia projection.');
+    expect(daytimeMafiaProjection.value.timeline).toContainEqual(
+      expect.objectContaining({ type: 'mafia-chat' }),
+    );
+  });
+
   it('allows a Detective to investigate only one participant per Night', () => {
     jest.setSystemTime(timeAt(0));
     const gameModule = new MafiaGameModule(() => 0, {
@@ -189,7 +245,7 @@ describe('MafiaGameModule', () => {
     const projectionResult = session.projectionFor('participant-1', 2);
     if (projectionResult.isErr()) throw new Error('Expected a projection.');
     const outcomes = pipe(
-      projectionResult.value.public.timeline,
+      projectionResult.value.timeline,
       filter((item) => item.type === 'record'),
       map((item) => item.outcome.type),
     );
@@ -323,7 +379,7 @@ describe('MafiaGameModule', () => {
     });
     const tiedNominationProjection = session.projectionFor('participant-1', 3);
     if (tiedNominationProjection.isErr()) throw new Error('Expected a projection.');
-    expect(tiedNominationProjection.value.public.timeline).toEqual(
+    expect(tiedNominationProjection.value.timeline).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           type: 'record',
@@ -426,7 +482,7 @@ describe('MafiaGameModule', () => {
     const projectionResult = session.projectionFor('participant-1', 9);
     if (projectionResult.isErr()) throw new Error('Expected a projection.');
     const projection = projectionResult.value;
-    expect(projection.public.timeline).toEqual(
+    expect(projection.timeline).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           type: 'record',
@@ -456,7 +512,7 @@ describe('MafiaGameModule', () => {
         }),
       ]),
     );
-    expect(JSON.stringify(projection.public.timeline)).not.toContain('Detective');
+    expect(JSON.stringify(projection.timeline)).not.toContain('Detective');
   });
 
   it('resolves private Night actions with Doctor protection before beginning the next Day', () => {
@@ -525,7 +581,7 @@ describe('MafiaGameModule', () => {
     });
     const projection = session.projectionFor('participant-1', 10);
     if (projection.isErr()) throw new Error('Expected a projection.');
-    expect(projection.value.public.timeline).toEqual(
+    expect(projection.value.timeline).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           type: 'record',
@@ -542,8 +598,8 @@ describe('MafiaGameModule', () => {
     expect(projection.value.public.participants).toEqual(
       expect.arrayContaining([expect.objectContaining({ id: 'participant-4', alive: true })]),
     );
-    expect(JSON.stringify(projection.value.public.timeline)).not.toContain('Detective');
-    expect(JSON.stringify(projection.value.public.timeline)).not.toContain('Doctor');
+    expect(JSON.stringify(projection.value.timeline)).not.toContain('Detective');
+    expect(JSON.stringify(projection.value.timeline)).not.toContain('Doctor');
     expect(projection.value.public.completedRecords.nightActionRecords).toEqual([]);
 
     session.advanceDayPhase(new Date('2026-08-26T00:00:06.000Z'));
@@ -631,7 +687,7 @@ describe('MafiaGameModule', () => {
       { participantId: 'participant-4', role: 'Citizen' },
       { participantId: 'participant-1', role: 'Detective' },
     ]);
-    expect(projection.value.public.timeline).toEqual(
+    expect(projection.value.timeline).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           type: 'record',
@@ -650,7 +706,7 @@ describe('MafiaGameModule', () => {
       ]),
     );
     const recordOutcomeTypes = pipe(
-      projection.value.public.timeline,
+      projection.value.timeline,
       filter((item) => item.type === 'record'),
       map((item) => item.outcome.type),
     );
@@ -660,8 +716,8 @@ describe('MafiaGameModule', () => {
       'night-resolved',
       'allegiance-reveal',
     ]);
-    expect(JSON.stringify(projection.value.public.timeline)).not.toContain('Doctor');
-    expect(JSON.stringify(projection.value.public.timeline)).not.toContain('Detective');
+    expect(JSON.stringify(projection.value.timeline)).not.toContain('Doctor');
+    expect(JSON.stringify(projection.value.timeline)).not.toContain('Detective');
 
     session.advanceDayPhase(new Date('2026-08-26T00:00:06.000Z'));
     for (const participantId of ['participant-1', 'participant-2', 'participant-4']) {

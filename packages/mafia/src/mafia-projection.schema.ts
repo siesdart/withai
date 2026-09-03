@@ -82,6 +82,17 @@ const CompletedVoteRecordSchema = v.object({
     ]),
   ),
 });
+const CompletedNightActionSchema = v.object({
+  participantId: v.string(),
+  targetParticipantId: v.optional(v.string()),
+});
+const CompletedNightActionRecordSchema = v.object({
+  id: v.string(),
+  dayNumber: v.number(),
+  mafiaTargetParticipantId: v.optional(v.string()),
+  doctorActions: v.array(CompletedNightActionSchema),
+  detectiveActions: v.array(CompletedNightActionSchema),
+});
 
 const MafiaGameProjectionPayloadSchema = v.object({
   eventId: v.number(),
@@ -93,7 +104,10 @@ const MafiaGameProjectionPayloadSchema = v.object({
     participants: v.array(MafiaParticipantSchema),
     nominatedParticipantId: v.optional(v.string()),
     timeline: v.array(PublicTimelineItemSchema),
-    completedVoteRecords: v.array(CompletedVoteRecordSchema),
+    completedRecords: v.object({
+      voteRecords: v.array(CompletedVoteRecordSchema),
+      nightActionRecords: v.array(CompletedNightActionRecordSchema),
+    }),
   }),
   personal: v.object({
     participantId: v.string(),
@@ -145,6 +159,24 @@ function normalizeMafiaGameProjection(projection: ParsedMafiaGameProjection): Ma
       timeline: map(projection.public.timeline, (item) =>
         item.type === 'record' ? { ...item, outcome: normalizePublicOutcome(item.outcome) } : item,
       ),
+      completedRecords: {
+        voteRecords: projection.public.completedRecords.voteRecords,
+        nightActionRecords: map(
+          projection.public.completedRecords.nightActionRecords,
+          (record) => ({
+            ...record,
+            mafiaTargetParticipantId: record.mafiaTargetParticipantId,
+            doctorActions: map(record.doctorActions, (action) => ({
+              ...action,
+              targetParticipantId: action.targetParticipantId,
+            })),
+            detectiveActions: map(record.detectiveActions, (action) => ({
+              ...action,
+              targetParticipantId: action.targetParticipantId,
+            })),
+          }),
+        ),
+      },
     },
     personal: {
       ...projection.personal,

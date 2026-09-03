@@ -71,6 +71,21 @@ export type MafiaCompletedVoteRecord = {
     | { participantId: string; vote: 'eliminate' | 'spare' }
   >;
 };
+export type MafiaCompletedNightAction = {
+  participantId: string;
+  targetParticipantId: string | undefined;
+};
+export type MafiaCompletedNightActionRecord = {
+  id: string;
+  dayNumber: number;
+  mafiaTargetParticipantId: string | undefined;
+  doctorActions: ReadonlyArray<MafiaCompletedNightAction>;
+  detectiveActions: ReadonlyArray<MafiaCompletedNightAction>;
+};
+export type MafiaCompletedRecords = {
+  voteRecords: ReadonlyArray<MafiaCompletedVoteRecord>;
+  nightActionRecords: ReadonlyArray<MafiaCompletedNightActionRecord>;
+};
 export type MafiaPublicTimelineItem =
   | { id: string; type: 'chat'; message: MafiaPublicChatMessage }
   | { id: string; type: 'record'; outcome: MafiaPublicOutcome };
@@ -81,7 +96,7 @@ export type MafiaPublicInformation = {
   participants: ReadonlyArray<Omit<MafiaParticipant, 'role'>>;
   nominatedParticipantId: string | undefined;
   timeline: ReadonlyArray<MafiaPublicTimelineItem>;
-  completedVoteRecords: ReadonlyArray<MafiaCompletedVoteRecord>;
+  completedRecords: MafiaCompletedRecords;
 };
 export type MafiaProjectionError = { type: 'unknown-participant'; participantId: string };
 export type MafiaActionError =
@@ -123,6 +138,7 @@ export class MafiaGameSession implements GameModuleSession<
   private readonly detectiveInvestigations = new Map<string, string>();
   private readonly detectiveInvestigationHistory = new Map<string, Map<string, MafiaAllegiance>>();
   private readonly completedVoteRecords: MafiaCompletedVoteRecord[] = [];
+  private readonly completedNightActionRecords: MafiaCompletedNightActionRecord[] = [];
   private phase: MafiaPhase = 'night';
   private phaseDeadline: Date;
   private nominatedParticipantId: string | undefined;
@@ -408,6 +424,13 @@ export class MafiaGameSession implements GameModuleSession<
   private resolveNight(now: Date): MafiaDayPhaseResult {
     const targetParticipantId = this.mafiaTarget();
     const protectedParticipantId = [...this.doctorProtections.values()][0];
+    this.completedNightActionRecords.push({
+      id: `night-action-record-${this.completedNightActionRecords.length + 1}`,
+      dayNumber: this.dayNumber,
+      mafiaTargetParticipantId: targetParticipantId,
+      doctorActions: this.completedRoleActions('Doctor', this.doctorProtections),
+      detectiveActions: this.completedRoleActions('Detective', this.detectiveInvestigations),
+    });
     const result = !targetParticipantId
       ? ('no-death' as const)
       : targetParticipantId === protectedParticipantId
@@ -487,7 +510,13 @@ export class MafiaGameSession implements GameModuleSession<
       participants: map(this.participants, ({ id, name, alive }) => ({ id, name, alive })),
       nominatedParticipantId: this.nominatedParticipantId,
       timeline: [...this.timeline],
-      completedVoteRecords: this.phase === 'completed' ? [...this.completedVoteRecords] : [],
+      completedRecords:
+        this.phase === 'completed'
+          ? {
+              voteRecords: [...this.completedVoteRecords],
+              nightActionRecords: [...this.completedNightActionRecords],
+            }
+          : { voteRecords: [], nightActionRecords: [] },
     };
   }
   private personalVoteFor(participantId: string): MafiaPersonalInformation['vote'] {
@@ -557,6 +586,15 @@ export class MafiaGameSession implements GameModuleSession<
       left.localeCompare(right),
     );
     return targets[0];
+  }
+  private completedRoleActions(
+    role: Extract<MafiaParticipant['role'], 'Doctor' | 'Detective'>,
+    actions: ReadonlyMap<string, string>,
+  ): MafiaCompletedNightAction[] {
+    return map(
+      filter(this.participants, (participant) => participant.alive && participant.role === role),
+      ({ id }) => ({ participantId: id, targetParticipantId: actions.get(id) }),
+    );
   }
   private personalNightActionFor(participantId: string): MafiaPersonalInformation['nightAction'] {
     const mafiaTarget = this.mafiaTargets.get(participantId);

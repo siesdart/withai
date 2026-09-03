@@ -110,6 +110,10 @@ _Avoid_: Revote
 The complete list of Vote Choices from resolved Nominations and Verdicts. It becomes Public Information only when the Game Session is completed.
 _Avoid_: Audit log, vote history
 
+**Night Action Record**:
+The completed-only record of each Night's resolved Mafia target and each eligible Doctor's and Detective's submitted target or lack of action. It does not disclose a Detective's learned Allegiance.
+_Avoid_: Night vote, night history
+
 **Eliminated Participant**:
 A Participant no longer eligible to take game actions. An Eliminated Participant remains a spectator of Public Information and announced outcomes.
 _Avoid_: Dead player, observer

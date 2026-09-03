@@ -13,6 +13,9 @@ export type {
   MafiaPublicInformation,
   MafiaPublicOutcome,
   MafiaPublicTimelineItem,
+  MafiaCompletedNightAction,
+  MafiaCompletedNightActionRecord,
+  MafiaCompletedRecords,
   MafiaCompletedVoteRecord,
 } from './mafia-game-session';
 export type {

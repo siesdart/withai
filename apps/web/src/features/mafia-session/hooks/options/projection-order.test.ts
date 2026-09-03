@@ -14,7 +14,7 @@ function projection(eventId: number): MafiaGameProjection {
       participants: [],
       nominatedParticipantId: undefined,
       timeline: [],
-      completedVoteRecords: [],
+      completedRecords: { voteRecords: [], nightActionRecords: [] },
     },
     personal: {
       participantId: 'participant-1',

@@ -317,7 +317,7 @@ describe('MafiaGameModule', () => {
       phase: 'nomination',
       targetParticipantId: 'participant-2',
     });
-    expect(nominationProjection.value.public.completedVoteRecords).toEqual([]);
+    expect(nominationProjection.value.public.completedRecords.voteRecords).toEqual([]);
     expect(session.advanceDayPhase(new Date('2026-08-26T00:00:02.000Z'))).toMatchObject({
       value: { type: 'day-restarted', reason: 'nomination-tie' },
     });
@@ -442,13 +442,13 @@ describe('MafiaGameModule', () => {
         }),
       ]),
     );
-    expect(projection.public.completedVoteRecords).toEqual(
+    expect(projection.public.completedRecords.voteRecords).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ phase: 'nomination' }),
         expect.objectContaining({ phase: 'verdict' }),
       ]),
     );
-    expect(projection.public.completedVoteRecords[0]?.votes).toEqual(
+    expect(projection.public.completedRecords.voteRecords[0]?.votes).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           participantId: 'participant-1',
@@ -544,6 +544,44 @@ describe('MafiaGameModule', () => {
     );
     expect(JSON.stringify(projection.value.public.timeline)).not.toContain('Detective');
     expect(JSON.stringify(projection.value.public.timeline)).not.toContain('Doctor');
+    expect(projection.value.public.completedRecords.nightActionRecords).toEqual([]);
+
+    session.advanceDayPhase(new Date('2026-08-26T00:00:06.000Z'));
+    for (const participantId of ['participant-1', 'participant-2', 'participant-4']) {
+      session.submitNomination(
+        participantId,
+        'participant-5',
+        new Date('2026-08-26T00:00:06.000Z'),
+      );
+    }
+    session.advanceDayPhase(new Date('2026-08-26T00:00:07.000Z'));
+    session.advanceDayPhase(new Date('2026-08-26T00:00:08.000Z'));
+    for (const participantId of ['participant-1', 'participant-2', 'participant-4']) {
+      session.submitVerdict(participantId, 'eliminate', new Date('2026-08-26T00:00:08.000Z'));
+    }
+    expect(session.advanceDayPhase(new Date('2026-08-26T00:00:09.000Z'))).toMatchObject({
+      value: { type: 'game-completed', winner: 'Citizen' },
+    });
+    const completedProjection = session.projectionFor('participant-1', 11);
+    if (completedProjection.isErr()) throw new Error('Expected a projection.');
+    expect(completedProjection.value.public.completedRecords.nightActionRecords).toEqual([
+      {
+        id: 'night-action-record-1',
+        dayNumber: 1,
+        mafiaTargetParticipantId: undefined,
+        doctorActions: [{ participantId: 'participant-2', targetParticipantId: undefined }],
+        detectiveActions: [{ participantId: 'participant-1', targetParticipantId: undefined }],
+      },
+      {
+        id: 'night-action-record-2',
+        dayNumber: 2,
+        mafiaTargetParticipantId: 'participant-4',
+        doctorActions: [{ participantId: 'participant-2', targetParticipantId: 'participant-4' }],
+        detectiveActions: [
+          { participantId: 'participant-1', targetParticipantId: 'participant-5' },
+        ],
+      },
+    ]);
   });
 
   it('eliminates an unprotected Mafia target when Detective and Doctor actions are missing', () => {
@@ -624,5 +662,40 @@ describe('MafiaGameModule', () => {
     ]);
     expect(JSON.stringify(projection.value.public.timeline)).not.toContain('Doctor');
     expect(JSON.stringify(projection.value.public.timeline)).not.toContain('Detective');
+
+    session.advanceDayPhase(new Date('2026-08-26T00:00:06.000Z'));
+    for (const participantId of ['participant-1', 'participant-2', 'participant-4']) {
+      session.submitNomination(
+        participantId,
+        'participant-5',
+        new Date('2026-08-26T00:00:06.000Z'),
+      );
+    }
+    session.advanceDayPhase(new Date('2026-08-26T00:00:07.000Z'));
+    session.advanceDayPhase(new Date('2026-08-26T00:00:08.000Z'));
+    for (const participantId of ['participant-1', 'participant-2', 'participant-4']) {
+      session.submitVerdict(participantId, 'eliminate', new Date('2026-08-26T00:00:08.000Z'));
+    }
+    expect(session.advanceDayPhase(new Date('2026-08-26T00:00:09.000Z'))).toMatchObject({
+      value: { type: 'game-completed', winner: 'Citizen' },
+    });
+    const completedProjection = session.projectionFor('participant-1', 11);
+    if (completedProjection.isErr()) throw new Error('Expected a projection.');
+    expect(completedProjection.value.public.completedRecords.nightActionRecords).toEqual([
+      {
+        id: 'night-action-record-1',
+        dayNumber: 1,
+        mafiaTargetParticipantId: undefined,
+        doctorActions: [{ participantId: 'participant-2', targetParticipantId: undefined }],
+        detectiveActions: [{ participantId: 'participant-1', targetParticipantId: undefined }],
+      },
+      {
+        id: 'night-action-record-2',
+        dayNumber: 2,
+        mafiaTargetParticipantId: 'participant-4',
+        doctorActions: [{ participantId: 'participant-2', targetParticipantId: undefined }],
+        detectiveActions: [{ participantId: 'participant-1', targetParticipantId: undefined }],
+      },
+    ]);
   });
 });

@@ -1,7 +1,7 @@
 import { Marker, MarkerContent, MarkerIcon } from '@repo/ui/components/marker';
 import { cn } from '@repo/ui/lib/utils';
 import { ScrollTextIcon } from 'lucide-react';
-import { map } from 'remeda';
+import { filter, map, sort, unique } from 'remeda';
 import { match } from 'ts-pattern';
 
 import type { MafiaGameProjection } from '../../api/client';
@@ -11,7 +11,7 @@ type GameRecordMarkerProps = {
     MafiaGameProjection['public']['timeline'][number],
     { type: 'record' }
   >['outcome'];
-  completedVoteRecords: MafiaGameProjection['public']['completedVoteRecords'];
+  completedRecords: MafiaGameProjection['public']['completedRecords'];
   participantNames: Map<string, string>;
   isNight?: boolean;
 };
@@ -105,9 +105,28 @@ const nominationVoteTotals = (
       `${participantNames.get(participantId) ?? 'Participant'} ${voteCount}`,
   ).join(', ');
 
+const actionTargetCopy = (
+  action: MafiaGameProjection['public']['completedRecords']['nightActionRecords'][number]['doctorActions'][number],
+  participantNames: GameRecordMarkerProps['participantNames'],
+) =>
+  action.targetParticipantId
+    ? (participantNames.get(action.targetParticipantId) ?? 'Participant')
+    : 'no action';
+
+export const completedRecordDays = (
+  completedRecords: MafiaGameProjection['public']['completedRecords'],
+) =>
+  sort(
+    unique([
+      ...map(completedRecords.voteRecords, (record) => record.dayNumber),
+      ...map(completedRecords.nightActionRecords, (record) => record.dayNumber),
+    ]),
+    (left, right) => left - right,
+  );
+
 export function GameRecordMarker({
   outcome,
-  completedVoteRecords,
+  completedRecords,
   participantNames,
   isNight = false,
 }: GameRecordMarkerProps) {
@@ -137,26 +156,71 @@ export function GameRecordMarker({
           ) : null}
         </MarkerContent>
       </Marker>
-      {outcome.type === 'victory' && completedVoteRecords.length > 0 ? (
+      {outcome.type === 'victory' &&
+      (completedRecords.voteRecords.length > 0 ||
+        completedRecords.nightActionRecords.length > 0) ? (
         <details className={cn('mt-2 text-xs', isNight ? 'text-[#c9cad5]' : 'text-[#625e55]')}>
-          <summary className="cursor-pointer font-medium">View every vote</summary>
+          <summary className="cursor-pointer font-medium">View the full game record</summary>
           <div className="mt-2 flex flex-col gap-3">
-            {map(completedVoteRecords, (record) => (
-              <section key={record.id} className="border border-[#22221e]/25 p-2">
-                <p className="font-medium">
-                  Day {record.dayNumber} /{' '}
-                  {record.phase === 'nomination' ? 'Nomination' : 'Verdict'}
-                </p>
-                <ul className="mt-1 flex flex-col gap-1">
-                  {map(record.votes, (vote) => (
-                    <li key={vote.participantId}>
-                      {participantNames.get(vote.participantId) ?? 'Participant'}:{' '}
-                      {'targetParticipantId' in vote
-                        ? `nominated ${participantNames.get(vote.targetParticipantId) ?? 'Participant'}`
-                        : vote.vote}
-                    </li>
-                  ))}
-                </ul>
+            {map(completedRecordDays(completedRecords), (dayNumber) => (
+              <section key={dayNumber} className="border border-[#22221e]/25 p-2">
+                <p className="font-medium">Day {dayNumber}</p>
+                <div className="mt-1 flex flex-col gap-2">
+                  {map(
+                    filter(
+                      completedRecords.nightActionRecords,
+                      (record) => record.dayNumber === dayNumber,
+                    ),
+                    (record) => (
+                      <div key={record.id}>
+                        <p>Night actions</p>
+                        <ul className="mt-1 flex flex-col gap-1">
+                          <li>
+                            Mafia target:{' '}
+                            {record.mafiaTargetParticipantId
+                              ? (participantNames.get(record.mafiaTargetParticipantId) ??
+                                'Participant')
+                              : 'no target'}
+                          </li>
+                          {map(record.doctorActions, (action) => (
+                            <li key={`doctor-${action.participantId}`}>
+                              Doctor {participantNames.get(action.participantId) ?? 'Participant'}:{' '}
+                              {actionTargetCopy(action, participantNames)}
+                            </li>
+                          ))}
+                          {map(record.detectiveActions, (action) => (
+                            <li key={`detective-${action.participantId}`}>
+                              Detective{' '}
+                              {participantNames.get(action.participantId) ?? 'Participant'}:{' '}
+                              {actionTargetCopy(action, participantNames)}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ),
+                  )}
+                  {map(
+                    filter(
+                      completedRecords.voteRecords,
+                      (record) => record.dayNumber === dayNumber,
+                    ),
+                    (record) => (
+                      <div key={record.id}>
+                        <p>{record.phase === 'nomination' ? 'Nomination' : 'Verdict'}</p>
+                        <ul className="mt-1 flex flex-col gap-1">
+                          {map(record.votes, (vote) => (
+                            <li key={vote.participantId}>
+                              {participantNames.get(vote.participantId) ?? 'Participant'}:{' '}
+                              {'targetParticipantId' in vote
+                                ? `nominated ${participantNames.get(vote.targetParticipantId) ?? 'Participant'}`
+                                : vote.vote}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ),
+                  )}
+                </div>
               </section>
             ))}
           </div>

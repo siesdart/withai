@@ -20,7 +20,7 @@ describe('parseMafiaGameProjection', () => {
               outcome: { id: 'outcome-1', type: 'day-changed', dayNumber: 1 },
             },
           ],
-          completedVoteRecords: [],
+          completedRecords: { voteRecords: [], nightActionRecords: [] },
         },
         personal: {
           participantId: 'participant-1',

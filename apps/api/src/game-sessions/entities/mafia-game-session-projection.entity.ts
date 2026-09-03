@@ -3,7 +3,7 @@ import type {
   MafiaGameProjection,
   MafiaPersonalInformation,
   MafiaPublicInformation,
-  MafiaCompletedVoteRecord,
+  MafiaCompletedRecords,
   MafiaPublicTimelineItem,
 } from '@repo/mafia';
 
@@ -39,8 +39,8 @@ export class MafiaPublicInformationEntity implements MafiaPublicInformation {
   @ApiProperty({ type: 'array', items: { type: 'object' } })
   timeline!: ReadonlyArray<MafiaPublicTimelineItem>;
 
-  @ApiProperty({ type: 'array', items: { type: 'object' } })
-  completedVoteRecords!: ReadonlyArray<MafiaCompletedVoteRecord>;
+  @ApiProperty({ type: Object })
+  completedRecords!: MafiaCompletedRecords;
 }
 
 export class MafiaPersonalInformationEntity implements MafiaPersonalInformation {

@@ -131,7 +131,7 @@ export function PublicDiscussionPanel({
                             return (
                               <MessageScrollerItem key={item.id} messageId={item.id}>
                                 <GameRecordMarker
-                                  completedVoteRecords={publicInformation.completedVoteRecords}
+                                  completedRecords={publicInformation.completedRecords}
                                   isNight={isNight}
                                   outcome={item.outcome}
                                   participantNames={participantNames}

@@ -15,7 +15,7 @@ describe('DeterministicAgentSpeechGateway', () => {
         participants: [],
         nominatedParticipantId: 'participant-2',
         timeline: [],
-        completedVoteRecords: [],
+        completedRecords: { voteRecords: [], nightActionRecords: [] },
       },
       personal: {
         participantId: 'participant-2',

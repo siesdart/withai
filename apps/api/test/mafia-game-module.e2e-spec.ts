@@ -139,11 +139,11 @@ describe('MafiaGameModule', () => {
       }),
     );
     expect(map(mafiaProjection.value.timeline, (item) => item.id)).toEqual([
-      'timeline-1',
-      'timeline-2',
+      'record-1',
+      'mafia-chat-1',
     ]);
     expect(mafiaProjection.value.timeline[1]).toEqual({
-      id: 'timeline-2',
+      id: 'mafia-chat-1',
       type: 'mafia-chat',
       message: { dayNumber: 1, participantId: 'participant-5', content: 'Focus on Mina.' },
     });
@@ -152,11 +152,21 @@ describe('MafiaGameModule', () => {
     );
 
     session.advanceDayPhase(timeAt(1));
+    session.submitPublicSpeech('participant-1', 'I have a public read.', timeAt(1));
     const daytimeMafiaProjection = session.projectionFor('participant-5', 2);
-    if (daytimeMafiaProjection.isErr()) throw new Error('Expected a Mafia projection.');
+    const daytimeCitizenProjection = session.projectionFor('participant-1', 2);
+    if (daytimeMafiaProjection.isErr() || daytimeCitizenProjection.isErr())
+      throw new Error('Expected projections.');
     expect(daytimeMafiaProjection.value.timeline).toContainEqual(
       expect.objectContaining({ type: 'mafia-chat' }),
     );
+    expect(map(daytimeCitizenProjection.value.timeline, (item) => item.id)).toEqual([
+      'record-1',
+      'record-2',
+      'record-3',
+      'record-4',
+      'public-chat-1',
+    ]);
   });
 
   it('shares the last valid Mafia target and permits friendly fire', () => {

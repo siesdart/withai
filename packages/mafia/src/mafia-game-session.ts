@@ -94,6 +94,7 @@ export class MafiaGameSession implements GameModuleSession<
   MafiaProjectionError
 > {
   private readonly timeline: MafiaPersonalTimelineItem[] = [];
+  private readonly timelineItemCounts = new Map<MafiaPersonalTimelineItem['type'], number>();
   private readonly nominations = new Map<string, string>();
   private readonly verdicts = new Map<string, 'eliminate' | 'spare'>();
   private mafiaTargetParticipantId: string | undefined;
@@ -191,7 +192,7 @@ export class MafiaGameSession implements GameModuleSession<
       )
       .map(() => {
         this.timeline.push({
-          id: `timeline-${this.timeline.length + 1}`,
+          id: this.nextTimelineItemId('mafia-chat'),
           type: 'mafia-chat',
           message: { dayNumber: this.dayNumber, participantId, content: content.trim() },
         });
@@ -330,7 +331,7 @@ export class MafiaGameSession implements GameModuleSession<
           participantId,
           content: content.trim(),
         };
-        this.timeline.push({ id: `timeline-${this.timeline.length + 1}`, type: 'chat', message });
+        this.timeline.push({ id: this.nextTimelineItemId('chat'), type: 'chat', message });
       });
   }
   private livingParticipant(
@@ -532,7 +533,17 @@ export class MafiaGameSession implements GameModuleSession<
       .exhaustive();
   }
   private recordOutcome(outcome: MafiaPublicOutcome) {
-    this.timeline.push({ id: `timeline-${this.timeline.length + 1}`, type: 'record', outcome });
+    this.timeline.push({ id: this.nextTimelineItemId('record'), type: 'record', outcome });
+  }
+  private nextTimelineItemId(type: MafiaPersonalTimelineItem['type']) {
+    const sequence = (this.timelineItemCounts.get(type) ?? 0) + 1;
+    this.timelineItemCounts.set(type, sequence);
+    const prefix = match(type)
+      .with('chat', () => 'public-chat')
+      .with('mafia-chat', () => 'mafia-chat')
+      .with('record', () => 'record')
+      .exhaustive();
+    return `${prefix}-${sequence}`;
   }
   private changePhase(phase: MafiaPhase) {
     this.phase = phase;

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { MafiaGameModule } from '@repo/mafia';
+import { MafiaGameModule, MafiaGameSession } from '@repo/mafia';
 import { filter, map, pipe } from 'remeda';
 
 const timeAt = (milliseconds: number) => new Date(`2026-08-26T00:00:00.${milliseconds}Z`);
@@ -157,6 +157,47 @@ describe('MafiaGameModule', () => {
     expect(daytimeMafiaProjection.value.timeline).toContainEqual(
       expect.objectContaining({ type: 'mafia-chat' }),
     );
+  });
+
+  it('shares the last valid Mafia target and permits friendly fire', () => {
+    const session = new MafiaGameSession(
+      'session-shared-mafia-target',
+      [
+        { id: 'participant-1', name: 'Mafia One', alive: true, role: 'Mafia' },
+        { id: 'participant-2', name: 'Mafia Two', alive: true, role: 'Mafia' },
+        { id: 'participant-3', name: 'Sora', alive: true, role: 'Citizen' },
+        { id: 'participant-4', name: 'Hana', alive: true, role: 'Citizen' },
+        { id: 'participant-5', name: 'Iris', alive: true, role: 'Citizen' },
+      ],
+      {
+        discussionDurationMs: 1,
+        nominationDurationMs: 1,
+        finalDefenceDurationMs: 1,
+        verdictDurationMs: 1,
+        nightDurationMs: 1,
+      },
+    );
+    const now = new Date('2026-08-25T23:59:59.999Z');
+
+    expect(session.submitMafiaTarget('participant-1', 'participant-3', now)).toEqual({
+      value: undefined,
+    });
+    expect(session.submitMafiaTarget('participant-2', 'participant-2', now)).toEqual({
+      value: undefined,
+    });
+
+    for (const participantId of ['participant-1', 'participant-2']) {
+      const projection = session.projectionFor(participantId, 1);
+      if (projection.isErr()) throw new Error('Expected a Mafia projection.');
+      expect(projection.value.personal.nightAction).toEqual({
+        type: 'mafia-target',
+        targetParticipantId: 'participant-2',
+      });
+    }
+
+    expect(session.advanceDayPhase(new Date('2026-08-26T00:00:00.000Z'))).toEqual({
+      value: { type: 'night-resolved', result: 'participant-eliminated' },
+    });
   });
 
   it('allows a Detective to investigate only one participant per Night', () => {

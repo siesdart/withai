@@ -36,7 +36,7 @@ function projection(): MafiaGameProjection {
 
 function gameAction(): UseGameActionResult {
   return {
-    draft: undefined,
+    drafts: {},
     error: undefined,
     isSubmissionBlocked: false,
     retryAfterSeconds: undefined,

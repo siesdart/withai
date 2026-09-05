@@ -4,23 +4,28 @@ import { match } from 'ts-pattern';
 
 import { MafiaGameSessionClient } from '../../api/client';
 import { isGameSessionApiError } from '../../api/error';
-import { type GameAction, type GameActionDraft } from '../../store/drafts/game-action-draft';
+import {
+  nextGameActionDraft,
+  type GameAction,
+  type GameActionDraft,
+  type GameActionDrafts,
+} from '../../store/drafts/game-action-draft';
 import { useGameSessionStore } from '../../store/game-session';
 import { gameSessionMutationOptions } from '../options/game-session-mutation-options';
 import { useCooldown } from '../ui/use-cooldown';
 
 export type UseGameActionResult = {
-  draft: GameActionDraft | undefined;
+  drafts: GameActionDrafts;
   error: string | undefined;
   isSubmissionBlocked: boolean;
   retryAfterSeconds: number | undefined;
   setDraft: (action: GameAction) => void;
   submit: (action: GameAction) => void;
-  submitDraft: () => void;
+  submitDraft: (actionType: GameAction['type']) => void;
 };
 
 export function useGameAction(sessionId: string): UseGameActionResult {
-  const draft = useGameSessionStore((state) => state.gameActionDraft);
+  const drafts = useGameSessionStore((state) => state.gameActionDrafts);
   const setGameActionDraft = useGameSessionStore((state) => state.setGameActionDraft);
   const clearGameActionDraft = useGameSessionStore((state) => state.clearGameActionDraft);
   const cooldown = useCooldown();
@@ -34,36 +39,43 @@ export function useGameAction(sessionId: string): UseGameActionResult {
   );
   const isSubmissionBlocked = isPending || cooldown.isCoolingDown;
 
-  const submitDraft = useCallback(() => {
-    if (!draft || isSubmissionBlocked) {
-      return;
-    }
-
-    mutate(draft, {
-      onSuccess: () => {
-        clearGameActionDraft(draft.idempotencyKey);
-      },
-    });
-  }, [clearGameActionDraft, draft, isSubmissionBlocked, mutate]);
-
-  const submit = useCallback(
-    (action: GameAction) => {
-      const nextDraft = setGameActionDraft(action);
-      if (!nextDraft || isSubmissionBlocked) {
+  const submitDraft = useCallback(
+    (actionType: GameAction['type']) => {
+      const draft = drafts[actionType];
+      if (!draft || isSubmissionBlocked) {
         return;
       }
 
-      mutate(nextDraft, {
+      mutate(draft, {
         onSuccess: () => {
-          clearGameActionDraft(nextDraft.idempotencyKey);
+          clearGameActionDraft(actionType, draft.idempotencyKey);
         },
       });
     },
-    [clearGameActionDraft, isSubmissionBlocked, mutate, setGameActionDraft],
+    [clearGameActionDraft, drafts, isSubmissionBlocked, mutate],
+  );
+
+  const submit = useCallback(
+    (action: GameAction) => {
+      if (isSubmissionBlocked) {
+        return;
+      }
+
+      setGameActionDraft(action);
+      const nextDraft = nextGameActionDraft(action, drafts[action.type]);
+      if (!nextDraft) return;
+
+      mutate(nextDraft, {
+        onSuccess: () => {
+          clearGameActionDraft(action.type, nextDraft.idempotencyKey);
+        },
+      });
+    },
+    [clearGameActionDraft, drafts, isSubmissionBlocked, mutate, setGameActionDraft],
   );
 
   return {
-    draft,
+    drafts,
     error: isError ? gameActionErrorMessage(error) : undefined,
     isSubmissionBlocked,
     retryAfterSeconds: cooldown.retryAfterSeconds,

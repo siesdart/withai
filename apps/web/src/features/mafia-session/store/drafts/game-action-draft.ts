@@ -1,3 +1,4 @@
+import { omit } from 'remeda';
 import { match } from 'ts-pattern';
 
 import { type IdempotentDraft, nextIdempotentDraft } from './idempotent-draft';
@@ -13,6 +14,7 @@ export type GameAction =
   | { type: 'detective-investigation'; targetParticipantId: string };
 
 export type GameActionDraft = IdempotentDraft<GameAction>;
+export type GameActionDrafts = Partial<Record<GameAction['type'], GameActionDraft>>;
 
 export function nextGameActionDraft(
   action: GameAction,
@@ -23,6 +25,24 @@ export function nextGameActionDraft(
   }
 
   return nextIdempotentDraft(action, existing, isSameGameAction);
+}
+
+export function nextGameActionDrafts(
+  action: GameAction,
+  existing: GameActionDrafts,
+): GameActionDrafts {
+  const draft = nextGameActionDraft(action, existing[action.type]);
+  return draft ? { ...existing, [action.type]: draft } : omit(existing, [action.type]);
+}
+
+export function clearGameActionDraft(
+  drafts: GameActionDrafts,
+  actionType: GameAction['type'],
+  idempotencyKey: string,
+): GameActionDrafts {
+  return drafts[actionType]?.idempotencyKey === idempotencyKey
+    ? omit(drafts, [actionType])
+    : drafts;
 }
 
 function isEmptyMessage(action: GameAction) {

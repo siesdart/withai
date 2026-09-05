@@ -38,6 +38,10 @@ class SequencedMafiaTargetGateway implements AgentDecisionGateway {
     this.targetIndex += 1;
     return target;
   }
+
+  selectedTargetCount() {
+    return this.targetIndex;
+  }
 }
 
 const createSession = (): StoredGameSessionEntity => ({
@@ -74,6 +78,31 @@ const createSession = (): StoredGameSessionEntity => ({
   phaseTimer: undefined,
   agentFinalDefenceTimer: undefined,
   mafiaTargetFallbackTimer: undefined,
+});
+
+const createAgentOnlyMafiaSession = (): StoredGameSessionEntity => ({
+  ...createSession(),
+  humanParticipantId: 'participant-1',
+  gameSession: new MafiaGameSession(
+    'session-agent-only-mafia',
+    [
+      { id: 'participant-1', name: 'You', alive: true, role: 'Citizen' },
+      { id: 'participant-2', name: 'Agent Mafia One', alive: true, role: 'Mafia' },
+      { id: 'participant-3', name: 'Agent Mafia Two', alive: true, role: 'Mafia' },
+      { id: 'participant-4', name: 'Sora', alive: true, role: 'Citizen' },
+      { id: 'participant-5', name: 'Hana', alive: true, role: 'Citizen' },
+      { id: 'participant-6', name: 'Iris', alive: true, role: 'Citizen' },
+      { id: 'participant-7', name: 'Jin', alive: true, role: 'Citizen' },
+      { id: 'participant-8', name: 'Noa', alive: true, role: 'Citizen' },
+    ],
+    {
+      discussionDurationMs: 1,
+      nominationDurationMs: 1,
+      finalDefenceDurationMs: 1,
+      verdictDurationMs: 1,
+      nightDurationMs: 1_000,
+    },
+  ),
 });
 
 describe('GameSessionAgentOrchestrator', () => {
@@ -146,5 +175,25 @@ describe('GameSessionAgentOrchestrator', () => {
         },
       },
     });
+  });
+
+  it('uses one Agent Mafia coordinator to choose the shared Night target', () => {
+    const session = createAgentOnlyMafiaSession();
+    const decisions = new SequencedMafiaTargetGateway();
+    const orchestrator = new GameSessionAgentOrchestrator(decisions, () =>
+      ok(new MafiaGameSessionProjectionEntity()),
+    );
+
+    orchestrator.submitDayActions(session);
+
+    expect(decisions.selectedTargetCount()).toBe(1);
+    for (const participantId of ['participant-2', 'participant-3']) {
+      const projection = session.gameSession.projectionFor(participantId, 1);
+      if (projection.isErr()) throw new Error('Expected an Agent Mafia projection.');
+      expect(projection.value.personal.nightAction).toEqual({
+        type: 'mafia-target',
+        targetParticipantId: 'participant-3',
+      });
+    }
   });
 });

@@ -113,14 +113,6 @@ export class GameSessionAgentOrchestrator {
     );
   }
 
-  alignMafiaTargets(session: StoredGameSessionEntity, targetParticipantId: string) {
-    for (const participantId of session.gameSession.livingMafiaAgentParticipantIds(
-      session.humanParticipantId,
-    )) {
-      session.gameSession.submitMafiaTarget(participantId, targetParticipantId);
-    }
-  }
-
   clearTimers(session: StoredGameSessionEntity) {
     if (session.agentFinalDefenceTimer) clearTimeout(session.agentFinalDefenceTimer);
     if (session.mafiaTargetFallbackTimer) clearTimeout(session.mafiaTargetFallbackTimer);
@@ -154,10 +146,9 @@ export class GameSessionAgentOrchestrator {
   }
 
   private publishMafiaNightOpenings(session: StoredGameSessionEntity) {
-    this.publishMafiaAgentMessages(
-      session,
-      (context, targetName) => this.agentDecisions.decideMafiaChatOpening(context, targetName),
-      true,
+    this.submitMafiaAgentTarget(session);
+    this.publishMafiaAgentMessages(session, (context, targetName) =>
+      this.agentDecisions.decideMafiaChatOpening(context, targetName),
     );
   }
 
@@ -166,7 +157,7 @@ export class GameSessionAgentOrchestrator {
     const delayMs = Math.max(0, Date.parse(phaseDeadline) - Date.now() - 1_000);
     session.mafiaTargetFallbackTimer = setTimeout(() => {
       if (this.humanMafiaTarget(session)) return;
-      this.submitMafiaAgentTargets(session);
+      this.submitMafiaAgentTarget(session);
       this.publishProjection(session).match(
         () => undefined,
         () => undefined,
@@ -178,7 +169,6 @@ export class GameSessionAgentOrchestrator {
   private publishMafiaAgentMessages(
     session: StoredGameSessionEntity,
     messageFor: (context: MafiaAgentSpeechContext, targetName: string) => string,
-    submitTarget = false,
   ) {
     this.forEachMafiaAgent(session, (participantId, context) => {
       const targetParticipantId = this.mafiaTargetFor(session, context);
@@ -186,16 +176,18 @@ export class GameSessionAgentOrchestrator {
         targetParticipantId && this.participantNameFor(context, targetParticipantId);
       if (!targetParticipantId || !targetName) return;
       session.gameSession.submitMafiaChat(participantId, messageFor(context, targetName));
-      if (submitTarget) session.gameSession.submitMafiaTarget(participantId, targetParticipantId);
     });
   }
 
-  private submitMafiaAgentTargets(session: StoredGameSessionEntity) {
+  private submitMafiaAgentTarget(session: StoredGameSessionEntity) {
+    let coordinator: { participantId: string; context: MafiaAgentSpeechContext } | undefined;
     this.forEachMafiaAgent(session, (participantId, context) => {
-      const targetParticipantId = this.mafiaTargetFor(session, context);
-      if (targetParticipantId)
-        session.gameSession.submitMafiaTarget(participantId, targetParticipantId);
+      coordinator ??= { participantId, context };
     });
+    if (!coordinator) return;
+    const targetParticipantId = this.mafiaTargetFor(session, coordinator.context);
+    if (targetParticipantId)
+      session.gameSession.submitMafiaTarget(coordinator.participantId, targetParticipantId);
   }
 
   private forEachMafiaAgent(

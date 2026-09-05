@@ -9,17 +9,19 @@ type PublicSpeechFormProps = {
 };
 
 export function PublicSpeechForm({ disabled, gameAction }: PublicSpeechFormProps) {
-  const content = gameAction.draft?.type === 'public-speech' ? gameAction.draft.content : '';
+  const draft = gameAction.drafts['public-speech'];
+  const content = draft?.type === 'public-speech' ? draft.content : '';
   const onContentChange = useCallback(
     (nextContent: string) => gameAction.setDraft({ type: 'public-speech', content: nextContent }),
     [gameAction],
   );
+  const onSubmit = useCallback(() => gameAction.submitDraft('public-speech'), [gameAction]);
 
   return (
     <MessageForm
       disabled={disabled}
       error={gameAction.error}
-      onSubmit={gameAction.submitDraft}
+      onSubmit={onSubmit}
       onValueChange={onContentChange}
       value={content}
     />

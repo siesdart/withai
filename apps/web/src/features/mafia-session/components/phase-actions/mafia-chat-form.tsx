@@ -9,17 +9,19 @@ type MafiaChatFormProps = {
 };
 
 export function MafiaChatForm({ disabled, gameAction }: MafiaChatFormProps) {
-  const content = gameAction.draft?.type === 'mafia-chat' ? gameAction.draft.content : '';
+  const draft = gameAction.drafts['mafia-chat'];
+  const content = draft?.type === 'mafia-chat' ? draft.content : '';
   const onContentChange = useCallback(
     (nextContent: string) => gameAction.setDraft({ type: 'mafia-chat', content: nextContent }),
     [gameAction],
   );
+  const onSubmit = useCallback(() => gameAction.submitDraft('mafia-chat'), [gameAction]);
 
   return (
     <MessageForm
       disabled={disabled}
       error={gameAction.error}
-      onSubmit={gameAction.submitDraft}
+      onSubmit={onSubmit}
       onValueChange={onContentChange}
       value={content}
     />

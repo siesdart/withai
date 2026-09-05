@@ -1,17 +1,18 @@
-import { nextGameActionDraft, type GameAction } from './drafts/game-action-draft';
-import { clearIdempotentDraft } from './drafts/idempotent-draft';
+import {
+  clearGameActionDraft,
+  nextGameActionDrafts,
+  type GameAction,
+} from './drafts/game-action-draft';
 import type { DraftSlice, GameSessionSliceCreator } from './game-session.types';
 
 export const createDraftSlice: GameSessionSliceCreator<DraftSlice> = (set, get) => ({
-  gameActionDraft: undefined,
+  gameActionDrafts: {},
   setGameActionDraft: (action: GameAction) => {
-    const gameActionDraft = nextGameActionDraft(action, get().gameActionDraft);
-    set({ gameActionDraft });
-    return gameActionDraft;
+    set({ gameActionDrafts: nextGameActionDrafts(action, get().gameActionDrafts) });
   },
-  clearGameActionDraft: (idempotencyKey) => {
-    set(({ gameActionDraft }) => ({
-      gameActionDraft: clearIdempotentDraft(gameActionDraft, idempotencyKey),
+  clearGameActionDraft: (actionType, idempotencyKey) => {
+    set(({ gameActionDrafts }) => ({
+      gameActionDrafts: clearGameActionDraft(gameActionDrafts, actionType, idempotencyKey),
     }));
   },
 });

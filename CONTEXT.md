@@ -63,7 +63,7 @@ The public Phase comprising timed discussion, nomination, final defence, and the
 _Avoid_: Round
 
 **Night**:
-The private Phase in which Mafia coordinate a target and eligible special Roles choose their private actions.
+The private Phase in which Mafia maintain one shared Mafia Night Target and eligible special Roles choose their private actions.
 _Avoid_: Round
 
 **Public Chat**:
@@ -73,6 +73,10 @@ _Avoid_: Group chat, chat room
 **Mafia Night Chat**:
 The ordered private conversation among Mafia Participants in a Game Session, structurally equivalent to Public Chat but restricted to the Mafia. Living Mafia may read it at all times and send messages during Night, while Eliminated Mafia may only read it.
 _Avoid_: Secret chat, Mafia channel
+
+**Mafia Night Target**:
+A living Participant selected by the Mafia for the Night's Mafia action, including a Mafia Participant when friendly fire or self-sacrifice is strategic. The most recently submitted valid choice is the shared target.
+_Avoid_: Kill target, victim
 
 **Speech Decision**:
 An Agent's private decision to respond or remain silent after a Public Chat event.

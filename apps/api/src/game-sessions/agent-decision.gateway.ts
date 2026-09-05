@@ -1,7 +1,7 @@
 import { randomInt } from 'node:crypto';
 
 import type { MafiaAgentSpeechContext } from '@repo/mafia';
-import { filter, find, findLast } from 'remeda';
+import { filter, findLast } from 'remeda';
 
 export type AgentPublicSpeechDecision =
   | { type: 'speak'; content: string; delayMs: number }
@@ -61,13 +61,7 @@ export class DeterministicAgentDecisionGateway implements AgentDecisionGateway {
     return `I have considered that. I will commit my action to ${targetName}.`;
   }
   selectMafiaTarget(context: MafiaAgentSpeechContext): string | undefined {
-    const targetParticipants = filter(context.public.participants, ({ alive, id }) => {
-      const knownRole = find(
-        context.personal.knownRoles,
-        (role) => role.participantId === id,
-      )?.role;
-      return alive && knownRole !== 'Mafia';
-    });
+    const targetParticipants = filter(context.public.participants, ({ alive }) => alive);
     return targetParticipants[randomInt(targetParticipants.length)]?.id;
   }
 }

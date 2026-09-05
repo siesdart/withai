@@ -9,17 +9,19 @@ type FinalDefenceFormProps = {
 };
 
 export function FinalDefenceForm({ disabled, gameAction }: FinalDefenceFormProps) {
-  const content = gameAction.draft?.type === 'final-defence' ? gameAction.draft.content : '';
+  const draft = gameAction.drafts['final-defence'];
+  const content = draft?.type === 'final-defence' ? draft.content : '';
   const onContentChange = useCallback(
     (nextContent: string) => gameAction.setDraft({ type: 'final-defence', content: nextContent }),
     [gameAction],
   );
+  const onSubmit = useCallback(() => gameAction.submitDraft('final-defence'), [gameAction]);
 
   return (
     <MessageForm
       disabled={disabled}
       error={gameAction.error}
-      onSubmit={gameAction.submitDraft}
+      onSubmit={onSubmit}
       onValueChange={onContentChange}
       value={content}
     />

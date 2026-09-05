@@ -7,7 +7,7 @@ export const createSessionSlice: GameSessionSliceCreator<SessionSlice> = (set, g
     set({
       sessionId,
       creationKey: undefined,
-      gameActionDraft: undefined,
+      gameActionDrafts: {},
     });
   },
   ensureCreationKey: () => {
@@ -24,7 +24,7 @@ export const createSessionSlice: GameSessionSliceCreator<SessionSlice> = (set, g
     set({
       sessionId: undefined,
       creationKey: undefined,
-      gameActionDraft: undefined,
+      gameActionDrafts: {},
     });
   },
 });

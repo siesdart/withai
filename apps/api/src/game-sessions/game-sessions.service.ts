@@ -343,9 +343,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       `mafia-target:${targetParticipantId}`,
       idempotencyKey,
       (session) =>
-        session.gameSession
-          .submitMafiaTarget(session.humanParticipantId, targetParticipantId)
-          .map(() => this.agentActions.alignMafiaTargets(session, targetParticipantId)),
+        session.gameSession.submitMafiaTarget(session.humanParticipantId, targetParticipantId),
     );
   }
 

@@ -8,15 +8,23 @@ import { MafiaChatForm } from './mafia-chat-form';
 import { PublicSpeechForm } from './public-speech-form';
 import { VerdictControls } from './verdict-controls';
 
-export function PhaseActionPanel({ panel }: { panel: PhasePanel }) {
+export function PhaseActionPanel({ panel, isNight }: { panel: PhasePanel; isNight: boolean }) {
+  const secondaryTextClassName = isNight ? 'text-[#c9cad5]' : 'text-[#625e55]';
+
   return match(panel)
     .with({ type: 'completed' }, () => (
-      <div className="shrink-0 p-3 text-sm text-[#625e55] sm:p-5">
+      <div className={cn('shrink-0 p-3 text-sm sm:p-5', secondaryTextClassName)}>
         You are now observing the completed game. The full vote record is available below.
       </div>
     ))
     .with({ type: 'observer' }, () => (
-      <div className="shrink-0 border-t border-[#22221e]/25 p-3 text-sm text-[#625e55] sm:p-5">
+      <div
+        className={cn(
+          'shrink-0 border-t p-3 text-sm sm:p-5',
+          isNight ? 'border-[#565968]' : 'border-[#22221e]/25',
+          secondaryTextClassName,
+        )}
+      >
         You are out of the game. You can continue to observe each phase and its results.
       </div>
     ))
@@ -29,7 +37,7 @@ export function PhaseActionPanel({ panel }: { panel: PhasePanel }) {
     .with({ type: 'nomination' }, () => (
       <div className="shrink-0 p-3 sm:p-5">
         <h3 className="text-base font-medium">Choose a nominee</h3>
-        <p className="mt-1 text-sm text-[#625e55]">
+        <p className={cn('mt-1 text-sm', secondaryTextClassName)}>
           Select an alive participant from the participant list.
         </p>
       </div>
@@ -38,7 +46,7 @@ export function PhaseActionPanel({ panel }: { panel: PhasePanel }) {
       <div className="shrink-0">
         <div className={cn('p-3 sm:p-5', p.isCurrentParticipantNominated && 'pb-0 sm:pb-0')}>
           <h3 className="text-base font-medium">Final defence</h3>
-          <p className="mt-1 text-sm text-[#625e55]">
+          <p className={cn('mt-1 text-sm', secondaryTextClassName)}>
             {p.nominatedParticipantName
               ? `${p.nominatedParticipantName} is nominated and has the floor.`
               : 'The nominated participant is preparing a final defence.'}
@@ -72,7 +80,12 @@ export function PhaseActionPanel({ panel }: { panel: PhasePanel }) {
             .with('Citizen', () => 'Night actions are private')
             .exhaustive()}
         </h3>
-        <p className={cn('mt-1 text-sm', p.role === 'Mafia' ? 'text-[#d8d7df]' : 'text-[#625e55]')}>
+        <p
+          className={cn(
+            'mt-1 text-sm',
+            p.role === 'Mafia' || isNight ? 'text-[#d8d7df]' : 'text-[#625e55]',
+          )}
+        >
           {p.role === 'Citizen'
             ? 'Wait for dawn.'
             : 'Select an alive participant from the participant list.'}

@@ -99,7 +99,12 @@ export function PublicDiscussionPanel({
 
   return (
     <section
-      className="flex min-h-0 flex-1 flex-col border border-[#22221e]/45 bg-[#f4efe7] lg:min-h-0"
+      className={cn(
+        'flex min-h-0 flex-1 flex-col border lg:min-h-0',
+        currentPeriod === 'night'
+          ? 'border-[#565968] bg-[#292b35] text-[#f7f2e8]'
+          : 'border-[#22221e]/45 bg-[#f4efe7]',
+      )}
       aria-labelledby="public-information-heading"
     >
       {isReconnecting ? (
@@ -125,67 +130,34 @@ export function PublicDiscussionPanel({
         <MessageScroller className="h-auto! flex-1!">
           <MessageScrollerViewport className="h-auto! flex-1! px-3 py-0 text-sm sm:px-5">
             <MessageScrollerContent className="gap-0">
-              {timeline.length === 0 ? (
-                <p className="mt-auto text-[#625e55]">
-                  The table is waiting for the first public statement.
-                </p>
-              ) : (
-                map(timelineSegments, (segment) => {
-                  const isNight = segment.period === 'night';
-                  return (
-                    <section
-                      key={segment.id}
-                      aria-label={`Day ${segment.dayNumber} ${segment.period} records`}
-                      className={cn(
-                        '-mx-3 border-y px-3 py-4 sm:-mx-5 sm:px-5',
-                        isNight
-                          ? 'border-[#565968] bg-[#292b35] text-[#f7f2e8] shadow-[inset_0_1px_0_rgb(255_255_255/0.05)]'
-                          : 'border-[#ded7c9] bg-[#f8f4eb]',
-                      )}
-                    >
-                      <MessageGroup>
-                        {map(segment.items, (item) => {
-                          if (item.type === 'record') {
-                            return (
-                              <MessageScrollerItem key={item.id} messageId={item.id}>
-                                <GameRecordMarker
-                                  completedRecords={publicInformation.completedRecords}
-                                  isNight={isNight}
-                                  outcome={item.outcome}
-                                  participantNames={participantMap}
-                                />
-                              </MessageScrollerItem>
-                            );
-                          }
-                          if (item.type === 'mafia-chat') {
-                            const isCurrentParticipant =
-                              item.message.participantId === currentParticipantId;
-                            return (
-                              <MessageScrollerItem key={item.id} messageId={item.id}>
-                                <Message align={isCurrentParticipant ? 'end' : 'start'}>
-                                  <MessageContent>
-                                    <MessageHeader
-                                      className={participantNameClassName(
-                                        knownRolesMap.get(item.message.participantId),
-                                        isNight,
-                                      )}
-                                    >
-                                      {participantMap.get(item.message.participantId) ?? 'Mafia'}
-                                    </MessageHeader>
-                                    <Bubble
-                                      align={isCurrentParticipant ? 'end' : 'start'}
-                                      className={cn(
-                                        '**:data-[slot=bubble-content]:border-[#7884a4]! **:data-[slot=bubble-content]:bg-[#4d5874]! **:data-[slot=bubble-content]:text-[#f7f2e8]!',
-                                      )}
-                                      variant={isCurrentParticipant ? 'tinted' : 'muted'}
-                                    >
-                                      <BubbleContent>{item.message.content}</BubbleContent>
-                                    </Bubble>
-                                  </MessageContent>
-                                </Message>
-                              </MessageScrollerItem>
-                            );
-                          }
+              {map(timelineSegments, (segment) => {
+                const isNight = segment.period === 'night';
+                return (
+                  <section
+                    key={segment.id}
+                    aria-label={`Day ${segment.dayNumber} ${segment.period} records`}
+                    className={cn(
+                      '-mx-3 border-y px-3 py-4 sm:-mx-5 sm:px-5',
+                      isNight
+                        ? 'border-[#565968] bg-[#292b35] text-[#f7f2e8] shadow-[inset_0_1px_0_rgb(255_255_255/0.05)]'
+                        : 'border-[#ded7c9] bg-[#f8f4eb]',
+                    )}
+                  >
+                    <MessageGroup>
+                      {map(segment.items, (item) => {
+                        if (item.type === 'record') {
+                          return (
+                            <MessageScrollerItem key={item.id} messageId={item.id}>
+                              <GameRecordMarker
+                                completedRecords={publicInformation.completedRecords}
+                                isNight={isNight}
+                                outcome={item.outcome}
+                                participantNames={participantMap}
+                              />
+                            </MessageScrollerItem>
+                          );
+                        }
+                        if (item.type === 'mafia-chat') {
                           const isCurrentParticipant =
                             item.message.participantId === currentParticipantId;
                           return (
@@ -198,19 +170,12 @@ export function PublicDiscussionPanel({
                                       isNight,
                                     )}
                                   >
-                                    {participantMap.get(item.message.participantId) ??
-                                      'Participant'}
+                                    {participantMap.get(item.message.participantId) ?? 'Mafia'}
                                   </MessageHeader>
                                   <Bubble
                                     align={isCurrentParticipant ? 'end' : 'start'}
                                     className={cn(
-                                      isNight
-                                        ? isCurrentParticipant
-                                          ? '**:data-[slot=bubble-content]:border-[#7884a4]! **:data-[slot=bubble-content]:bg-[#4d5874]! **:data-[slot=bubble-content]:text-[#f7f2e8]!'
-                                          : '**:data-[slot=bubble-content]:border-[#565968]! **:data-[slot=bubble-content]:bg-[#383b47]! **:data-[slot=bubble-content]:text-[#f7f2e8]!'
-                                        : isCurrentParticipant
-                                          ? '**:data-[slot=bubble-content]:border-[#62594e]! **:data-[slot=bubble-content]:bg-[#393833]! **:data-[slot=bubble-content]:text-[#f8f4eb]! **:data-[slot=bubble-content]:shadow-[0_2px_0_rgb(34_34_30/0.16)]'
-                                          : '**:data-[slot=bubble-content]:border-[#b8aa96]! **:data-[slot=bubble-content]:bg-[#fffaf2]! **:data-[slot=bubble-content]:text-[#38332c]! **:data-[slot=bubble-content]:shadow-[0_2px_0_rgb(34_34_30/0.08)]',
+                                      '**:data-[slot=bubble-content]:border-[#7884a4]! **:data-[slot=bubble-content]:bg-[#4d5874]! **:data-[slot=bubble-content]:text-[#f7f2e8]!',
                                     )}
                                     variant={isCurrentParticipant ? 'tinted' : 'muted'}
                                   >
@@ -220,16 +185,54 @@ export function PublicDiscussionPanel({
                               </Message>
                             </MessageScrollerItem>
                           );
-                        })}
-                      </MessageGroup>
-                    </section>
-                  );
-                })
-              )}
+                        }
+                        const isCurrentParticipant =
+                          item.message.participantId === currentParticipantId;
+                        return (
+                          <MessageScrollerItem key={item.id} messageId={item.id}>
+                            <Message align={isCurrentParticipant ? 'end' : 'start'}>
+                              <MessageContent>
+                                <MessageHeader
+                                  className={participantNameClassName(
+                                    knownRolesMap.get(item.message.participantId),
+                                    isNight,
+                                  )}
+                                >
+                                  {participantMap.get(item.message.participantId) ?? 'Participant'}
+                                </MessageHeader>
+                                <Bubble
+                                  align={isCurrentParticipant ? 'end' : 'start'}
+                                  className={cn(
+                                    isNight
+                                      ? isCurrentParticipant
+                                        ? '**:data-[slot=bubble-content]:border-[#7884a4]! **:data-[slot=bubble-content]:bg-[#4d5874]! **:data-[slot=bubble-content]:text-[#f7f2e8]!'
+                                        : '**:data-[slot=bubble-content]:border-[#565968]! **:data-[slot=bubble-content]:bg-[#383b47]! **:data-[slot=bubble-content]:text-[#f7f2e8]!'
+                                      : isCurrentParticipant
+                                        ? '**:data-[slot=bubble-content]:border-[#62594e]! **:data-[slot=bubble-content]:bg-[#393833]! **:data-[slot=bubble-content]:text-[#f8f4eb]! **:data-[slot=bubble-content]:shadow-[0_2px_0_rgb(34_34_30/0.16)]'
+                                        : '**:data-[slot=bubble-content]:border-[#b8aa96]! **:data-[slot=bubble-content]:bg-[#fffaf2]! **:data-[slot=bubble-content]:text-[#38332c]! **:data-[slot=bubble-content]:shadow-[0_2px_0_rgb(34_34_30/0.08)]',
+                                  )}
+                                  variant={isCurrentParticipant ? 'tinted' : 'muted'}
+                                >
+                                  <BubbleContent>{item.message.content}</BubbleContent>
+                                </Bubble>
+                              </MessageContent>
+                            </Message>
+                          </MessageScrollerItem>
+                        );
+                      })}
+                    </MessageGroup>
+                  </section>
+                );
+              })}
             </MessageScrollerContent>
           </MessageScrollerViewport>
           <MessageScrollerButton
-            className="border-[#22221e]/45 bg-[#f4efe7] text-[#22221e] shadow-sm"
+            className={cn(
+              'shadow-sm',
+              currentPeriod === 'night'
+                ? 'border-[#565968] bg-[#292b35] text-[#f7f2e8]'
+                : 'border-[#22221e]/45 bg-[#f4efe7] text-[#22221e]',
+            )}
             size="sm"
             variant="outline"
           >
@@ -237,7 +240,7 @@ export function PublicDiscussionPanel({
           </MessageScrollerButton>
         </MessageScroller>
       </MessageScrollerProvider>
-      <PhaseActionPanel panel={phasePanel} />
+      <PhaseActionPanel isNight={currentPeriod === 'night'} panel={phasePanel} />
     </section>
   );
 }

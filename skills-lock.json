@@ -5,13 +5,13 @@
       "source": "TanStack/router",
       "sourceType": "github",
       "skillPath": "packages/react-router/skills/react-router/SKILL.md",
-      "computedHash": "f63e0d9e9a22395b2122cdb9616779581561ebec69d4df3deb6a853deed3785b"
+      "computedHash": "f762a6278b2b1ae911195cc7748d213ed08f37cb70ce33aef1578a5759ef01d2"
     },
     "router-query": {
       "source": "TanStack/router",
       "sourceType": "github",
       "skillPath": "packages/react-router/skills/compositions/router-query/SKILL.md",
-      "computedHash": "d33828cdf1d2fb56044069e39a106910d50e84f315a055ab8e3b2afd078152ec"
+      "computedHash": "63fc32c213852863cb237c83c783a46d77f87e1551ef3e48abdda4c3667ba1e2"
     }
   }
 }

@@ -8,9 +8,6 @@ import { defineConfig } from 'vite';
 
 // https://vite.dev/config/
 export default defineConfig({
-  optimizeDeps: {
-    include: ['@repo/mafia'],
-  },
   plugins: [
     tanstackRouter({
       target: 'react',
@@ -25,6 +22,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, './src'),
+      '@repo/mafia/client': path.resolve(import.meta.dirname, '../../packages/mafia/src/client.ts'),
     },
   },
   server: {

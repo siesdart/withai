@@ -12,8 +12,10 @@ export type {
   MafiaPublicChatMessage,
   MafiaPublicInformation,
   MafiaPublicOutcome,
-  MafiaPublicVoteStatus,
   MafiaPublicTimelineItem,
+  MafiaCompletedNightAction,
+  MafiaCompletedNightActionRecord,
+  MafiaCompletedRecords,
   MafiaCompletedVoteRecord,
 } from './mafia-game-session';
 export type {
@@ -23,3 +25,4 @@ export type {
   MafiaRole,
   RandomInt,
 } from './participants';
+export type { MafiaChatMessage, MafiaPersonalTimelineItem } from './timeline';

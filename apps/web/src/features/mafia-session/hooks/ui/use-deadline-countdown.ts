@@ -9,7 +9,13 @@ function formatDuration(deadline: string, now: dayjs.Dayjs) {
   return remaining.format(remaining.asHours() >= 1 ? 'HH:mm:ss' : 'mm:ss');
 }
 
-export function useDeadlineCountdown(deadline: string) {
+export type UseDeadlineCountdownResult = {
+  label: string;
+  isExpired: boolean;
+  isUrgent: boolean;
+};
+
+export function useDeadlineCountdown(deadline: string): UseDeadlineCountdownResult {
   const [now, setNow] = useState(() => dayjs());
 
   const isExpired = !dayjs(deadline).isAfter(now);
@@ -32,6 +38,6 @@ export function useDeadlineCountdown(deadline: string) {
   return {
     label: formatDuration(deadline, now),
     isExpired,
-    isUrgent: remainingMs > 0 && remainingMs <= 30_000,
+    isUrgent: remainingMs > 0 && remainingMs <= 10_000,
   };
 }

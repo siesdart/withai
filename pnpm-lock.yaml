@@ -282,6 +282,9 @@ importers:
       '@repo/game-contract':
         specifier: workspace:*
         version: link:../game-contract
+      dayjs:
+        specifier: ^1.11.23
+        version: 1.11.23
       neverthrow:
         specifier: ^8.2.0
         version: 8.2.0

@@ -13,15 +13,17 @@ export type StoredGameSessionEntity = {
   nextEventId: number;
   nextPublicSpeechAt: Dayjs | undefined;
   nextFinalDefenceAt: Dayjs | undefined;
-  nextPhaseTimeAdjustmentAt: Dayjs | undefined;
+  nextDiscussionTimeAdjustmentAt: Dayjs | undefined;
   lastAccessedAt: Dayjs;
   activeEventSubscribers: number;
   publicSpeechIdempotencyKeys: Map<string, IdempotencyRecord<MafiaGameSessionProjectionEntity>>;
+  mafiaChatIdempotencyKeys: Map<string, IdempotencyRecord<MafiaGameSessionProjectionEntity>>;
   dayActionIdempotencyKeys: Map<string, IdempotencyRecord<MafiaGameSessionProjectionEntity>>;
-  phaseTimeAdjustmentIdempotencyKeys: Map<
+  discussionTimeAdjustmentIdempotencyKeys: Map<
     string,
     IdempotencyRecord<MafiaGameSessionProjectionEntity>
   >;
   phaseTimer: NodeJS.Timeout | undefined;
   agentFinalDefenceTimer: NodeJS.Timeout | undefined;
+  mafiaTargetFallbackTimer: NodeJS.Timeout | undefined;
 };

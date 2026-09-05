@@ -1,4 +1,4 @@
-import type { MafiaGameProjection } from '@repo/mafia';
+import type { MafiaGameProjection } from '@repo/mafia/client';
 import ky from 'ky';
 import { ResultAsync } from 'neverthrow';
 import { parseServerSentEvents } from 'parse-sse';
@@ -27,7 +27,7 @@ export class MafiaGameSessionClient {
   static createSession(
     idempotencyKey: string,
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
-    return MafiaGameSessionClient.#postProjection('mafia', { participantCount: 5 }, idempotencyKey);
+    return MafiaGameSessionClient.#postProjection('mafia', { participantCount: 8 }, idempotencyKey);
   }
 
   getSnapshot(): ResultAsync<MafiaGameProjection, GameSessionApiError> {
@@ -42,6 +42,17 @@ export class MafiaGameSessionClient {
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
     return MafiaGameSessionClient.#postProjection(
       `${this.#sessionId}/actions/public-speech`,
+      { content },
+      idempotencyKey,
+    );
+  }
+
+  submitMafiaChat(
+    content: string,
+    idempotencyKey: string,
+  ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
+    return MafiaGameSessionClient.#postProjection(
+      `${this.#sessionId}/actions/mafia-chat`,
       { content },
       idempotencyKey,
     );
@@ -80,15 +91,36 @@ export class MafiaGameSessionClient {
     );
   }
 
-  adjustPhaseTime(
+  submitMafiaTarget(targetParticipantId: string, idempotencyKey: string) {
+    return MafiaGameSessionClient.#postProjection(
+      `${this.#sessionId}/actions/mafia-target`,
+      { targetParticipantId },
+      idempotencyKey,
+    );
+  }
+  submitDoctorProtection(targetParticipantId: string, idempotencyKey: string) {
+    return MafiaGameSessionClient.#postProjection(
+      `${this.#sessionId}/actions/doctor-protection`,
+      { targetParticipantId },
+      idempotencyKey,
+    );
+  }
+  submitDetectiveInvestigation(targetParticipantId: string, idempotencyKey: string) {
+    return MafiaGameSessionClient.#postProjection(
+      `${this.#sessionId}/actions/detective-investigation`,
+      { targetParticipantId },
+      idempotencyKey,
+    );
+  }
+
+  adjustDiscussionTime(
     adjustmentSeconds: 10 | -10,
-    expectedPhase: Exclude<MafiaGameProjection['public']['phase'], 'completed'>,
-    expectedPhaseDeadline: string,
+    expectedDeadline: string,
     idempotencyKey: string,
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
     return MafiaGameSessionClient.#postProjection(
-      `${this.#sessionId}/actions/phase-time-adjustment`,
-      { adjustmentSeconds, expectedPhase, expectedPhaseDeadline },
+      `${this.#sessionId}/actions/discussion-time-adjustment`,
+      { adjustmentSeconds, expectedDeadline },
       idempotencyKey,
     );
   }

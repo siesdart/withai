@@ -1,4 +1,4 @@
-import type { MafiaGameProjection } from '@repo/mafia';
+import type { MafiaGameProjection } from '@repo/mafia/client';
 import { queryOptions } from '@tanstack/react-query';
 
 import { MafiaGameSessionClient } from '../../api/client';

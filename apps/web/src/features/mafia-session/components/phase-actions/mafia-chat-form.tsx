@@ -3,19 +3,19 @@ import { useCallback } from 'react';
 import type { UseGameActionResult } from '../../hooks/actions/use-game-action';
 import { MessageForm } from './message-form';
 
-type FinalDefenceFormProps = {
+type MafiaChatFormProps = {
   disabled: boolean;
   gameAction: UseGameActionResult;
 };
 
-export function FinalDefenceForm({ disabled, gameAction }: FinalDefenceFormProps) {
-  const draft = gameAction.drafts['final-defence'];
-  const content = draft?.type === 'final-defence' ? draft.content : '';
+export function MafiaChatForm({ disabled, gameAction }: MafiaChatFormProps) {
+  const draft = gameAction.drafts['mafia-chat'];
+  const content = draft?.type === 'mafia-chat' ? draft.content : '';
   const onContentChange = useCallback(
-    (nextContent: string) => gameAction.setDraft({ type: 'final-defence', content: nextContent }),
+    (nextContent: string) => gameAction.setDraft({ type: 'mafia-chat', content: nextContent }),
     [gameAction],
   );
-  const onSubmit = useCallback(() => gameAction.submitDraft('final-defence'), [gameAction]);
+  const onSubmit = useCallback(() => gameAction.submitDraft('mafia-chat'), [gameAction]);
 
   return (
     <MessageForm

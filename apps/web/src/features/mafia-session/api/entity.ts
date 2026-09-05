@@ -1,4 +1,4 @@
-import { MafiaGameProjectionSchema, type MafiaGameProjection } from '@repo/mafia';
+import { MafiaGameProjectionSchema, type MafiaGameProjection } from '@repo/mafia/client';
 import { err, ok, Result } from 'neverthrow';
 import * as v from 'valibot';
 

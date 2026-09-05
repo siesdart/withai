@@ -1,98 +1,99 @@
-import { find } from 'remeda';
+import { cn } from '@repo/ui/lib/utils';
 import { match } from 'ts-pattern';
 
-import type { MafiaGameProjection } from '../../api/client';
-import type { UseDayActionResult } from '../../hooks/actions/use-day-action';
-import type { UsePublicSpeechResult } from '../../hooks/actions/use-public-speech';
+import type { PhasePanel } from '../control-room/phase-interaction';
+import { DiscussionTimeControls } from './discussion-time-controls';
 import { FinalDefenceForm } from './final-defence-form';
-import { NominationControls } from './nomination-controls';
-import { PublicSpeechComposer } from './public-speech-composer';
+import { MafiaChatForm } from './mafia-chat-form';
+import { PublicSpeechForm } from './public-speech-form';
 import { VerdictControls } from './verdict-controls';
 
-type PhaseActionPanelProps = {
-  currentParticipantId: string;
-  currentParticipantAlive: boolean;
-  isPhaseExpired: boolean;
-  personalVote: MafiaGameProjection['personal']['vote'];
-  publicInformation: MafiaGameProjection['public'];
-  dayAction: UseDayActionResult;
-  speech: UsePublicSpeechResult;
-  onNominate: (participantId: string) => void;
-  onSubmitFinalDefence: (content: string, onSuccess: () => void) => void;
-  onSubmitVerdict: (vote: 'eliminate' | 'spare') => void;
-};
+export function PhaseActionPanel({ panel, isNight }: { panel: PhasePanel; isNight: boolean }) {
+  const secondaryTextClassName = isNight ? 'text-[#c9cad5]' : 'text-[#625e55]';
 
-export function PhaseActionPanel({
-  currentParticipantId,
-  currentParticipantAlive,
-  isPhaseExpired,
-  personalVote,
-  publicInformation,
-  dayAction,
-  speech,
-  onNominate,
-  onSubmitFinalDefence,
-  onSubmitVerdict,
-}: PhaseActionPanelProps) {
-  if (publicInformation.phase === 'completed') {
-    return (
-      <div className="shrink-0 p-3 text-sm text-[#625e55] sm:p-5">
+  return match(panel)
+    .with({ type: 'completed' }, () => (
+      <div className={cn('shrink-0 p-3 text-sm sm:p-5', secondaryTextClassName)}>
         You are now observing the completed game. The full vote record is available below.
       </div>
-    );
-  }
-
-  if (!currentParticipantAlive) {
-    return (
-      <div className="shrink-0 border-t border-[#22221e]/25 p-3 text-sm text-[#625e55] sm:p-5">
+    ))
+    .with({ type: 'observer' }, () => (
+      <div
+        className={cn(
+          'shrink-0 border-t p-3 text-sm sm:p-5',
+          isNight ? 'border-[#565968]' : 'border-[#22221e]/25',
+          secondaryTextClassName,
+        )}
+      >
         You are out of the game. You can continue to observe each phase and its results.
       </div>
-    );
-  }
-
-  const actionDisabled = dayAction.isPending || dayAction.isCoolingDown || isPhaseExpired;
-  const nominatedParticipant = find(
-    publicInformation.participants,
-    (participant) => participant.id === publicInformation.nominatedParticipantId,
-  );
-
-  return match(publicInformation.phase)
-    .with('day-discussion', () => (
-      <PublicSpeechComposer disabled={actionDisabled} speech={speech} />
     ))
-    .with('nomination', () => (
-      <NominationControls
-        disabled={actionDisabled}
-        onNominate={onNominate}
-        participants={publicInformation.participants}
-        personalVote={personalVote}
-      />
+    .with({ type: 'discussion' }, (p) => (
+      <div className="flex shrink-0 flex-col">
+        <DiscussionTimeControls phaseDeadline={p.phaseDeadline} sessionId={p.sessionId} />
+        <PublicSpeechForm disabled={p.disabled} gameAction={p.gameAction} />
+      </div>
     ))
-    .with('final-defence', () => (
+    .with({ type: 'nomination' }, () => (
       <div className="shrink-0 p-3 sm:p-5">
-        <h3 className="text-base font-medium">Final defence</h3>
-        <p className="mt-1 text-sm text-[#625e55]">
-          {nominatedParticipant
-            ? `${nominatedParticipant.name} is nominated and has the floor.`
-            : 'The nominated participant is preparing a final defence.'}
+        <h3 className="text-base font-medium">Choose a nominee</h3>
+        <p className={cn('mt-1 text-sm', secondaryTextClassName)}>
+          Select an alive participant from the participant list.
         </p>
-        {publicInformation.nominatedParticipantId === currentParticipantId ? (
-          <FinalDefenceForm
-            disabled={actionDisabled}
-            error={dayAction.error}
-            onSubmitFinalDefence={onSubmitFinalDefence}
-            retryAfterSeconds={dayAction.retryAfterSeconds}
-          />
+      </div>
+    ))
+    .with({ type: 'final-defence' }, (p) => (
+      <div className="shrink-0">
+        <div className={cn('p-3 sm:p-5', p.isCurrentParticipantNominated && 'pb-0 sm:pb-0')}>
+          <h3 className="text-base font-medium">Final defence</h3>
+          <p className={cn('mt-1 text-sm', secondaryTextClassName)}>
+            {p.nominatedParticipantName
+              ? `${p.nominatedParticipantName} is nominated and has the floor.`
+              : 'The nominated participant is preparing a final defence.'}
+          </p>
+        </div>
+        {p.isCurrentParticipantNominated ? (
+          <FinalDefenceForm disabled={p.disabled} gameAction={p.gameAction} />
         ) : null}
       </div>
     ))
-    .with('verdict', () => (
+    .with({ type: 'verdict' }, (p) => (
       <VerdictControls
-        disabled={actionDisabled}
-        nominatedParticipantName={nominatedParticipant?.name}
-        onSubmitVerdict={onSubmitVerdict}
-        personalVote={personalVote}
+        disabled={p.disabled}
+        nominatedParticipantName={p.nominatedParticipantName}
+        personalVote={p.personalVote}
+        gameAction={p.gameAction}
       />
+    ))
+    .with({ type: 'night' }, (p) => (
+      <div
+        className={cn(
+          'shrink-0 p-3 sm:p-5',
+          p.role === 'Mafia' && 'border-[#565968] bg-[#292b35] text-[#f7f2e8]',
+        )}
+      >
+        <h3 className="text-base font-medium">
+          {match(p.role)
+            .with('Mafia', () => 'Choose a target')
+            .with('Doctor', () => 'Choose someone to protect')
+            .with('Detective', () => 'Choose someone to investigate')
+            .with('Citizen', () => 'Night actions are private')
+            .exhaustive()}
+        </h3>
+        <p
+          className={cn(
+            'mt-1 text-sm',
+            p.role === 'Mafia' || isNight ? 'text-[#d8d7df]' : 'text-[#625e55]',
+          )}
+        >
+          {p.role === 'Citizen'
+            ? 'Wait for dawn.'
+            : 'Select an alive participant from the participant list.'}
+        </p>
+        {p.role === 'Mafia' ? (
+          <MafiaChatForm disabled={p.disabled} gameAction={p.gameAction} />
+        ) : null}
+      </div>
     ))
     .exhaustive();
 }

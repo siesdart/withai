@@ -1,4 +1,4 @@
-import type { MafiaGameProjection } from '@repo/mafia';
+import type { MafiaGameProjection } from '@repo/mafia/client';
 import { describe, expect, it } from 'vitest';
 
 import { retainNewerProjection } from './projection-order';
@@ -7,21 +7,22 @@ function projection(eventId: number): MafiaGameProjection {
   return {
     eventId,
     sessionId: 'session-1',
+    timeline: [],
     public: {
       dayNumber: 1,
-      phase: 'day-discussion',
+      phase: 'discussion',
       phaseDeadline: '2026-08-27T00:02:00.000Z',
       participants: [],
       nominatedParticipantId: undefined,
-      voteStatus: undefined,
-      timeline: [],
-      completedVoteRecords: [],
+      completedRecords: { voteRecords: [], nightActionRecords: [] },
     },
     personal: {
       participantId: 'participant-1',
       role: 'Citizen',
       allegiance: 'Citizen',
       vote: undefined,
+      nightAction: undefined,
+      knownRoles: [],
     },
   };
 }

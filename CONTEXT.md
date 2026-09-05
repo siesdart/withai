@@ -25,7 +25,7 @@ Information visible only to the Participant it belongs to, including that Partic
 _Avoid_: Secret (when referring to a role itself)
 
 **Public Information**:
-Information visible to Participants during a Game Session, including public chat messages, game phase, living Participants, vote status, and announced outcomes. It never includes an in-progress Vote Choice.
+Information visible to Participants during a Game Session, including public chat messages, game phase, living Participants, and announced outcomes. It never includes an in-progress Vote Choice.
 _Avoid_: Shared state
 
 **Allegiance Reveal**:
@@ -54,8 +54,8 @@ _Avoid_: Team, faction
 A rules-defined period of a Game Session that determines which actions and public information are available.
 _Avoid_: Turn (unless referring to one Participant's action opportunity)
 
-**Phase Time Adjustment**:
-A living Human Player's change of the active Phase's remaining duration by a fixed amount. Each accepted adjustment is recorded as Public Information, is applied to the Phase deadline, and may cause the Phase to resolve immediately. An Eliminated Human Player cannot make a Phase Time Adjustment.
+**Discussion Time Adjustment**:
+A living Human Player's change of the Discussion Phase's remaining duration by a fixed amount. Each accepted adjustment is recorded as Public Information, is applied to the Discussion deadline, and may cause the Phase to resolve immediately. An Eliminated Human Player cannot make a Discussion Time Adjustment.
 _Avoid_: Pause, skip
 
 **Day**:
@@ -63,12 +63,20 @@ The public Phase comprising timed discussion, nomination, final defence, and the
 _Avoid_: Round
 
 **Night**:
-The private Phase in which Mafia coordinate a target and eligible special Roles choose their private actions.
+The private Phase in which Mafia maintain one shared Mafia Night Target and eligible special Roles choose their private actions.
 _Avoid_: Round
 
 **Public Chat**:
 The ordered conversation visible to all living Participants during a Game Session.
 _Avoid_: Group chat, chat room
+
+**Mafia Night Chat**:
+The ordered private conversation among Mafia Participants in a Game Session, structurally equivalent to Public Chat but restricted to the Mafia. Living Mafia may read it at all times and send messages during Night, while Eliminated Mafia may only read it.
+_Avoid_: Secret chat, Mafia channel
+
+**Mafia Night Target**:
+A living Participant selected by the Mafia for the Night's Mafia action, including a Mafia Participant when friendly fire or self-sacrifice is strategic. The most recently submitted valid choice is the shared target.
+_Avoid_: Kill target, victim
 
 **Speech Decision**:
 An Agent's private decision to respond or remain silent after a Public Chat event.
@@ -102,10 +110,6 @@ _Avoid_: Ballot, selection
 The publicly announced count for each available Vote Choice after a Nomination or Verdict resolves. It never identifies which Participant selected a choice.
 _Avoid_: Vote reveal, ballot status
 
-**Vote Status**:
-The Public Information that a living Participant has submitted a vote in the active Nomination or Verdict, without revealing that Participant's Vote Choice.
-_Avoid_: Vote reveal, ballot status
-
 **Vote Amendment**:
 The replacement of a Participant's Vote Choice during its active Phase. Only the latest submitted Vote Choice is counted when the Phase resolves.
 _Avoid_: Revote
@@ -113,6 +117,10 @@ _Avoid_: Revote
 **Vote Record**:
 The complete list of Vote Choices from resolved Nominations and Verdicts. It becomes Public Information only when the Game Session is completed.
 _Avoid_: Audit log, vote history
+
+**Night Action Record**:
+The completed-only record of each Night's resolved Mafia target and each eligible Doctor's and Detective's submitted target or lack of action. It does not disclose a Detective's learned Allegiance.
+_Avoid_: Night vote, night history
 
 **Eliminated Participant**:
 A Participant no longer eligible to take game actions. An Eliminated Participant remains a spectator of Public Information and announced outcomes.

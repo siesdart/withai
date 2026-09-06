@@ -684,7 +684,50 @@ describe('Mafia Game Session API', () => {
 });
 
 describe('Mafia Game Session API lifecycle acceptance', () => {
-  it('abandons a disconnected SSE session after its grace period without new Agent work', async () => {
+  it('keeps every scheduled Agent Public Chat reply after the first reply commits', async () => {
+    const gatewaySpy = createGatewaySpy();
+    gatewaySpy.decidePublicSpeech.mockReturnValue({
+      type: 'speak',
+      content: 'I want to hear more before we nominate.',
+      delayMs: 500,
+    });
+    const fixture = await createLifecycleFixture({ gatewaySpy });
+    try {
+      const created = await request(fixture.app.getHttpServer())
+        .post('/game-sessions/mafia')
+        .send({ participantCount: 5 })
+        .expect(201);
+      const sessionId = String(created.body.sessionId);
+      const guestCookie = firstSetCookie(created.headers['set-cookie']);
+
+      await fixture.clock.advanceBy(30_001);
+      await request(fixture.app.getHttpServer())
+        .post(`/game-sessions/${sessionId}/actions/public-speech`)
+        .set('Cookie', guestCookie)
+        .set('Idempotency-Key', 'all-agent-public-replies-key')
+        .send({ content: 'What should we make of the night?' })
+        .expect(201);
+
+      await fixture.clock.advanceBy(1_000);
+
+      await request(fixture.app.getHttpServer())
+        .get(`/game-sessions/${sessionId}/snapshot`)
+        .set('Cookie', guestCookie)
+        .expect(200)
+        .expect((response) => {
+          const agentMessages = response.body.timeline.filter(
+            (item: { type: string; message?: { participantId: string } }) =>
+              item.type === 'chat' && item.message?.participantId !== 'participant-1',
+          );
+          expect(agentMessages).toHaveLength(4);
+        });
+    } finally {
+      await fixture.close();
+      fixture.redis.disconnect();
+    }
+  });
+
+  it('abandons a disconnected SSE session after its grace period while preserving its Night fallback', async () => {
     const fixture = await createLifecycleFixture();
     try {
       const created = await request(fixture.app.getHttpServer())
@@ -710,7 +753,7 @@ describe('Mafia Game Session API lifecycle acceptance', () => {
         .set('Idempotency-Key', 'abandoned-session-public-speech-key')
         .send({ content: 'This action must not be accepted.' })
         .expect(403);
-      expect(gatewayCallCount(fixture.gatewaySpy)).toBe(0);
+      expect(gatewayCallCount(fixture.gatewaySpy)).toBe(1);
     } finally {
       await fixture.close();
       fixture.redis.disconnect();

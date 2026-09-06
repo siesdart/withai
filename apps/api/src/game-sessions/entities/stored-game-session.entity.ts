@@ -6,6 +6,17 @@ import type { GameSessionStatus } from '../game-session-status';
 import type { IdempotencyRecord } from '../idempotency/idempotency-ledger';
 import type { MafiaGameSessionProjectionEntity } from './mafia-game-session-projection.entity';
 
+export type ScheduledAgentPublicSpeech = {
+  participantId: string;
+  dueAt: string;
+};
+
+export type ScheduledAgentFinalDefence = {
+  participantId: string;
+  content: string;
+  dueAt: string;
+};
+
 export type StoredGameSessionEntity = {
   holderId: string;
   humanParticipantId: string;
@@ -29,6 +40,9 @@ export type StoredGameSessionEntity = {
   agentFinalDefenceTimer: NodeJS.Timeout | undefined;
   publicSpeechAgentTimers: Set<NodeJS.Timeout>;
   mafiaTargetFallbackTimer: NodeJS.Timeout | undefined;
+  scheduledAgentPublicSpeeches: ScheduledAgentPublicSpeech[];
+  scheduledAgentFinalDefence: ScheduledAgentFinalDefence | undefined;
+  scheduledMafiaTargetFallbackAt: string | undefined;
   reconnectGraceTimer: NodeJS.Timeout | undefined;
   reconnectGraceDeadline: Dayjs | undefined;
 };

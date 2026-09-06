@@ -267,6 +267,7 @@ export class GameSessionLifecycle {
           const events = await authority.eventsAfter(snapshot.sessionId, 0);
           if (events.isOk())
             for (const event of events.value) session.events.next(event.projection);
+          this.runtime.agentActions.resumeScheduledTasks(session);
           const recovered = await this.recoverExpiredPhaseDurably(session);
           if (recovered.isOk()) this.schedulePhaseTransition(session);
         }),

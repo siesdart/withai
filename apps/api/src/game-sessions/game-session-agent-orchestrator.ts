@@ -4,7 +4,7 @@ import type { MafiaAgentSpeechContext } from '@repo/mafia';
 import dayjs from 'dayjs';
 import type { Result } from 'neverthrow';
 import { filter, find, map, pipe } from 'remeda';
-import { match, P } from 'ts-pattern';
+import { match } from 'ts-pattern';
 
 import type { AgentDecisionGateway } from './agent-decision.gateway';
 import type { MafiaGameSessionProjectionEntity } from './entities/mafia-game-session-projection.entity';
@@ -35,6 +35,19 @@ export class GameSessionAgentOrchestrator {
     )) {
       this.schedulePublicSpeechReply(session, participantId);
     }
+  }
+
+  resumeScheduledTasks(session: StoredGameSessionEntity) {
+    if (session.publicSpeechAgentTimers.size === 0) {
+      for (const speech of session.scheduledAgentPublicSpeeches)
+        this.schedulePublicSpeechReply(session, speech.participantId, speech);
+    }
+    if (session.scheduledAgentFinalDefence && !session.agentFinalDefenceTimer) {
+      const { participantId, content, dueAt } = session.scheduledAgentFinalDefence;
+      this.scheduleFinalDefenceFollowUp(session, participantId, content, dueAt);
+    }
+    if (session.scheduledMafiaTargetFallbackAt && !session.mafiaTargetFallbackTimer)
+      this.scheduleMafiaTargetFallback(session, session.scheduledMafiaTargetFallbackAt);
   }
 
   submitDayActions(session: StoredGameSessionEntity) {
@@ -110,7 +123,12 @@ export class GameSessionAgentOrchestrator {
     if (session.agentFinalDefenceTimer) this.clock.clearTimeout(session.agentFinalDefenceTimer);
     if (session.mafiaTargetFallbackTimer) this.clock.clearTimeout(session.mafiaTargetFallbackTimer);
     for (const timer of session.publicSpeechAgentTimers) this.clock.clearTimeout(timer);
+    session.agentFinalDefenceTimer = undefined;
     session.publicSpeechAgentTimers.clear();
+    session.mafiaTargetFallbackTimer = undefined;
+    session.scheduledAgentPublicSpeeches = [];
+    session.scheduledAgentFinalDefence = undefined;
+    session.scheduledMafiaTargetFallbackAt = undefined;
   }
 
   private livingParticipantIds(projection: MafiaGameSessionProjectionEntity) {
@@ -121,24 +139,35 @@ export class GameSessionAgentOrchestrator {
     );
   }
 
-  private schedulePublicSpeechReply(session: StoredGameSessionEntity, participantId: string) {
-    const delayMs = Number.parseInt(participantId.split('-')[1] ?? '1', 10) * 100;
+  private schedulePublicSpeechReply(
+    session: StoredGameSessionEntity,
+    participantId: string,
+    scheduled = this.publicSpeechFor(session, participantId),
+  ) {
+    if (!scheduled) return;
+    if (!session.scheduledAgentPublicSpeeches.includes(scheduled))
+      session.scheduledAgentPublicSpeeches.push(scheduled);
+    const delayMs = Math.max(0, dayjs(scheduled.dueAt).diff(this.clock.now()));
     const timer = this.clock.setTimeout(() => {
-      session.publicSpeechAgentTimers.delete(timer);
-      void this.commitAgentMutation(session, (current) =>
-        current.gameSession.agentSpeechContextFor(participantId).match(
+      void this.commitAgentMutation(session, (current) => {
+        current.publicSpeechAgentTimers.delete(timer);
+        current.scheduledAgentPublicSpeeches = filter(
+          current.scheduledAgentPublicSpeeches,
+          (candidate) => !this.sameScheduledSpeech(candidate, scheduled),
+        );
+        return current.gameSession.agentSpeechContextFor(participantId).match(
           (context) =>
             match(this.agentDecisions.decidePublicSpeech(context))
-              .with({ type: 'speak', content: P.select() }, (content) =>
+              .with({ type: 'speak' }, (decision) =>
                 current.gameSession
-                  .submitPublicSpeech(participantId, content, this.clock.now())
+                  .submitPublicSpeech(participantId, decision.content, this.clock.now())
                   .isOk(),
               )
               .with({ type: 'remain-silent' }, () => false)
               .exhaustive(),
           () => false,
-        ),
-      );
+        );
+      });
     }, delayMs);
     session.publicSpeechAgentTimers.add(timer);
     timer.unref?.();
@@ -151,11 +180,16 @@ export class GameSessionAgentOrchestrator {
     );
   }
 
-  private scheduleMafiaTargetFallback(session: StoredGameSessionEntity, phaseDeadline: string) {
+  private scheduleMafiaTargetFallback(session: StoredGameSessionEntity, dueAt: string) {
     if (session.mafiaTargetFallbackTimer) this.clock.clearTimeout(session.mafiaTargetFallbackTimer);
-    const delayMs = Math.max(0, dayjs(phaseDeadline).diff(this.clock.now()) - 1_000);
+    const fallbackAt =
+      session.scheduledMafiaTargetFallbackAt ?? dayjs(dueAt).subtract(1, 'second').toISOString();
+    session.scheduledMafiaTargetFallbackAt = fallbackAt;
+    const delayMs = Math.max(0, dayjs(fallbackAt).diff(this.clock.now()));
     session.mafiaTargetFallbackTimer = this.clock.setTimeout(() => {
       void this.commitAgentMutation(session, (current) => {
+        current.mafiaTargetFallbackTimer = undefined;
+        current.scheduledMafiaTargetFallbackAt = undefined;
         if (this.humanMafiaTarget(current)) return false;
         const before = JSON.stringify(current.gameSession.snapshot());
         this.submitMafiaAgentTarget(current);
@@ -231,15 +265,42 @@ export class GameSessionAgentOrchestrator {
     session: StoredGameSessionEntity,
     participantId: string,
     content: string,
-    phaseDeadline: string,
+    dueAt: string,
   ) {
     if (session.agentFinalDefenceTimer) this.clock.clearTimeout(session.agentFinalDefenceTimer);
-    const delayMs = Math.max(0, Math.floor(dayjs(phaseDeadline).diff(this.clock.now()) / 2));
+    const scheduled = session.scheduledAgentFinalDefence ?? {
+      participantId,
+      content,
+      dueAt: dayjs(this.clock.now())
+        .add(Math.max(0, Math.floor(dayjs(dueAt).diff(this.clock.now()) / 2)), 'millisecond')
+        .toISOString(),
+    };
+    session.scheduledAgentFinalDefence = scheduled;
+    const delayMs = Math.max(0, dayjs(scheduled.dueAt).diff(this.clock.now()));
     session.agentFinalDefenceTimer = this.clock.setTimeout(() => {
-      void this.commitAgentMutation(session, (current) =>
-        current.gameSession.submitFinalDefence(participantId, content, this.clock.now()).isOk(),
-      );
+      void this.commitAgentMutation(session, (current) => {
+        current.agentFinalDefenceTimer = undefined;
+        current.scheduledAgentFinalDefence = undefined;
+        return current.gameSession
+          .submitFinalDefence(scheduled.participantId, scheduled.content, this.clock.now())
+          .isOk();
+      });
     }, delayMs);
     session.agentFinalDefenceTimer.unref?.();
+  }
+
+  private publicSpeechFor(session: StoredGameSessionEntity, participantId: string) {
+    const delayMs = Number.parseInt(participantId.split('-')[1] ?? '1', 10) * 100;
+    return {
+      participantId,
+      dueAt: dayjs(this.clock.now()).add(delayMs, 'millisecond').toISOString(),
+    };
+  }
+
+  private sameScheduledSpeech(
+    left: { participantId: string; dueAt: string },
+    right: { participantId: string; dueAt: string },
+  ) {
+    return left.participantId === right.participantId && left.dueAt === right.dueAt;
   }
 }

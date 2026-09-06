@@ -6,6 +6,10 @@ import { ResultAsync, err, ok, type Result } from 'neverthrow';
 import { filter, flatMap, map } from 'remeda';
 
 import type { MafiaGameSessionProjectionEntity } from '../entities/mafia-game-session-projection.entity';
+import type {
+  ScheduledAgentFinalDefence,
+  ScheduledAgentPublicSpeech,
+} from '../entities/stored-game-session.entity';
 import type { GameSessionStatus } from '../game-session-status';
 import { gameSessionsConfig } from '../game-sessions.config';
 
@@ -30,6 +34,9 @@ export type DurableSessionSnapshot = {
     string,
     [string, { fingerprint: string; result: MafiaGameSessionProjectionEntity }][]
   >;
+  scheduledAgentPublicSpeeches?: ScheduledAgentPublicSpeech[];
+  scheduledAgentFinalDefence?: ScheduledAgentFinalDefence;
+  scheduledMafiaTargetFallbackAt?: string;
 };
 
 export type DurablePublicEvent = {

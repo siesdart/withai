@@ -61,6 +61,7 @@ type IdempotentProjectionAction = {
   submit: (
     session: StoredGameSessionEntity,
   ) => Result<MafiaGameSessionProjectionEntity, GameSessionError>;
+  beforeSave?: (session: StoredGameSessionEntity) => void | Promise<void>;
   afterCommit?: (session: StoredGameSessionEntity) => void | Promise<void>;
 };
 
@@ -226,6 +227,9 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       agentFinalDefenceTimer: undefined,
       publicSpeechAgentTimers: new Set(),
       mafiaTargetFallbackTimer: undefined,
+      scheduledAgentPublicSpeeches: [],
+      scheduledAgentFinalDefence: undefined,
+      scheduledMafiaTargetFallbackAt: undefined,
       reconnectGraceTimer: undefined,
       reconnectGraceDeadline: undefined,
     };
@@ -509,7 +513,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
           );
         });
       },
-      afterCommit: (session) => this.agentActions.publishPublicSpeechReplies(session),
+      beforeSave: (session) => this.agentActions.publishPublicSpeechReplies(session),
     });
   }
 
@@ -795,6 +799,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       conflict,
       records,
       submit,
+      beforeSave,
       afterCommit,
     }: IdempotentProjectionAction,
     attempt = 0,
@@ -825,12 +830,14 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     });
     if (result.isErr()) return result;
     if (!this.authority) {
+      if (committedAction) await beforeSave?.(this.sessions.get(sessionId)!);
       if (committedAction) await afterCommit?.(this.sessions.get(sessionId)!);
       return result;
     }
     if (!committedAction) return result;
     const session = this.sessions.get(sessionId);
     if (!session) return err({ type: 'session-not-found', sessionId });
+    await beforeSave?.(session);
     const saved = await this.saveAuthoritativeProjection(session, result.value);
     if (saved.isErr()) {
       await this.hydrateAuthoritativeSession(sessionId);
@@ -841,7 +848,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       return this.runIdempotentProjectionActionUnlocked(
         sessionId,
         cookie,
-        { idempotencyKey, fingerprint, conflict, records, submit, afterCommit },
+        { idempotencyKey, fingerprint, conflict, records, submit, beforeSave, afterCommit },
         attempt + 1,
       );
     }
@@ -926,10 +933,19 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
   private async submitAndCommitAgentActions(
     session: StoredGameSessionEntity,
   ): Promise<Result<void, GameSessionError>> {
-    const before = JSON.stringify(session.gameSession.snapshot());
+    const before = this.agentWorkSnapshot(session);
     this.agentActions.submitDayActions(session);
-    if (before === JSON.stringify(session.gameSession.snapshot())) return ok(undefined);
+    if (before === this.agentWorkSnapshot(session)) return ok(undefined);
     return (await this.publishAgentProjection(session)).map(() => undefined);
+  }
+
+  private agentWorkSnapshot(session: StoredGameSessionEntity) {
+    return JSON.stringify({
+      gameSession: session.gameSession.snapshot(),
+      scheduledAgentPublicSpeeches: session.scheduledAgentPublicSpeeches,
+      scheduledAgentFinalDefence: session.scheduledAgentFinalDefence,
+      scheduledMafiaTargetFallbackAt: session.scheduledMafiaTargetFallbackAt,
+    });
   }
 
   private async commitAgentMutation(
@@ -1050,7 +1066,10 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     const hydrated = await this.durability.hydrate(sessionId);
     if (hydrated.isErr()) return hydrated;
     const session = this.sessions.get(sessionId);
-    if (session) this.lifecycle.schedulePhaseTransition(session);
+    if (session) {
+      this.agentActions.resumeScheduledTasks(session);
+      this.lifecycle.schedulePhaseTransition(session);
+    }
     return hydrated;
   }
 }

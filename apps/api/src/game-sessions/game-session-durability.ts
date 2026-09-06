@@ -99,6 +99,9 @@ export class GameSessionDurability {
         dayAction: [...session.dayActionIdempotencyKeys],
         discussionTimeAdjustment: [...session.discussionTimeAdjustmentIdempotencyKeys],
       },
+      scheduledAgentPublicSpeeches: session.scheduledAgentPublicSpeeches,
+      scheduledAgentFinalDefence: session.scheduledAgentFinalDefence,
+      scheduledMafiaTargetFallbackAt: session.scheduledMafiaTargetFallbackAt,
     };
   }
 
@@ -133,6 +136,9 @@ export class GameSessionDurability {
       agentFinalDefenceTimer: undefined,
       publicSpeechAgentTimers: new Set(),
       mafiaTargetFallbackTimer: undefined,
+      scheduledAgentPublicSpeeches: snapshot.scheduledAgentPublicSpeeches ?? [],
+      scheduledAgentFinalDefence: snapshot.scheduledAgentFinalDefence,
+      scheduledMafiaTargetFallbackAt: snapshot.scheduledMafiaTargetFallbackAt,
       reconnectGraceTimer: undefined,
       reconnectGraceDeadline: snapshot.reconnectGraceDeadline
         ? dayjs(snapshot.reconnectGraceDeadline)
@@ -142,7 +148,28 @@ export class GameSessionDurability {
 
   private replace(sessionId: string, next: StoredGameSessionEntity) {
     const previous = this.sessions.get(sessionId);
-    if (previous) this.disposeSession(previous);
+    if (previous) {
+      this.transferPendingAgentTimers(previous, next);
+      this.disposeSession(previous);
+    }
     this.sessions.set(sessionId, next);
+  }
+
+  private transferPendingAgentTimers(
+    previous: StoredGameSessionEntity,
+    next: StoredGameSessionEntity,
+  ) {
+    if (next.scheduledAgentFinalDefence) {
+      next.agentFinalDefenceTimer = previous.agentFinalDefenceTimer;
+      previous.agentFinalDefenceTimer = undefined;
+    }
+    if (next.scheduledAgentPublicSpeeches.length > 0) {
+      next.publicSpeechAgentTimers = previous.publicSpeechAgentTimers;
+      previous.publicSpeechAgentTimers = new Set();
+    }
+    if (next.scheduledMafiaTargetFallbackAt) {
+      next.mafiaTargetFallbackTimer = previous.mafiaTargetFallbackTimer;
+      previous.mafiaTargetFallbackTimer = undefined;
+    }
   }
 }

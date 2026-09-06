@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "build": "turbo run build",
-    "dev": "turbo run dev",
+    "dev": "docker compose up -d --wait redis && REDIS_URL=\"${REDIS_URL:-redis://127.0.0.1:6379}\" turbo run dev",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
     "lint": "oxlint",

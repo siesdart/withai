@@ -1,6 +1,7 @@
 import { randomInt } from 'node:crypto';
 
 import type { MafiaAgentSpeechContext } from '@repo/mafia';
+import dayjs from 'dayjs';
 import type { Result } from 'neverthrow';
 import { filter, find, map, pipe } from 'remeda';
 import { match, P } from 'ts-pattern';
@@ -8,36 +9,31 @@ import { match, P } from 'ts-pattern';
 import type { AgentDecisionGateway } from './agent-decision.gateway';
 import type { MafiaGameSessionProjectionEntity } from './entities/mafia-game-session-projection.entity';
 import type { StoredGameSessionEntity } from './entities/stored-game-session.entity';
+import { nativeGameSessionClock, type GameSessionClock } from './game-session-clock';
 import type { GameSessionError } from './game-session-error';
 
 type PublishProjection = (
   session: StoredGameSessionEntity,
-) => Result<MafiaGameSessionProjectionEntity, GameSessionError>;
+) => Promise<Result<MafiaGameSessionProjectionEntity, GameSessionError>>;
+
+type CommitAgentMutation = (
+  session: StoredGameSessionEntity,
+  mutate: (session: StoredGameSessionEntity) => boolean,
+) => Promise<void>;
 
 export class GameSessionAgentOrchestrator {
   constructor(
     private readonly agentDecisions: AgentDecisionGateway,
     private readonly publishProjection: PublishProjection,
+    private readonly commitAgentMutation: CommitAgentMutation,
+    private readonly clock: GameSessionClock = nativeGameSessionClock,
   ) {}
 
   publishPublicSpeechReplies(session: StoredGameSessionEntity) {
     for (const participantId of session.gameSession.livingAgentParticipantIds(
       session.humanParticipantId,
     )) {
-      session.gameSession.agentSpeechContextFor(participantId).match(
-        (context) => {
-          const decision = this.agentDecisions.decidePublicSpeech(context);
-          return match(decision)
-            .with({ type: 'remain-silent' }, () => undefined)
-            .with(
-              { type: 'speak', content: P.select('content'), delayMs: P.select('delayMs') },
-              ({ content, delayMs }) =>
-                this.schedulePublicSpeechReply(session, participantId, content, delayMs),
-            )
-            .exhaustive();
-        },
-        () => undefined,
-      );
+      this.schedulePublicSpeechReply(session, participantId);
     }
   }
 
@@ -103,19 +99,18 @@ export class GameSessionAgentOrchestrator {
     }
   }
 
-  publishMafiaChatReplies(session: StoredGameSessionEntity) {
+  async publishMafiaChatReplies(session: StoredGameSessionEntity) {
     this.publishMafiaAgentMessages(session, (context, targetName) =>
       this.agentDecisions.decideMafiaChatReply(context, targetName),
     );
-    this.publishProjection(session).match(
-      () => undefined,
-      () => undefined,
-    );
+    await this.publishProjection(session);
   }
 
   clearTimers(session: StoredGameSessionEntity) {
-    if (session.agentFinalDefenceTimer) clearTimeout(session.agentFinalDefenceTimer);
-    if (session.mafiaTargetFallbackTimer) clearTimeout(session.mafiaTargetFallbackTimer);
+    if (session.agentFinalDefenceTimer) this.clock.clearTimeout(session.agentFinalDefenceTimer);
+    if (session.mafiaTargetFallbackTimer) this.clock.clearTimeout(session.mafiaTargetFallbackTimer);
+    for (const timer of session.publicSpeechAgentTimers) this.clock.clearTimeout(timer);
+    session.publicSpeechAgentTimers.clear();
   }
 
   private livingParticipantIds(projection: MafiaGameSessionProjectionEntity) {
@@ -126,23 +121,27 @@ export class GameSessionAgentOrchestrator {
     );
   }
 
-  private schedulePublicSpeechReply(
-    session: StoredGameSessionEntity,
-    participantId: string,
-    content: string,
-    delayMs: number,
-  ) {
-    const timer = setTimeout(() => {
-      session.gameSession.submitPublicSpeech(participantId, content).match(
-        () =>
-          this.publishProjection(session).match(
-            () => undefined,
-            () => undefined,
-          ),
-        () => undefined,
+  private schedulePublicSpeechReply(session: StoredGameSessionEntity, participantId: string) {
+    const delayMs = Number.parseInt(participantId.split('-')[1] ?? '1', 10) * 100;
+    const timer = this.clock.setTimeout(() => {
+      session.publicSpeechAgentTimers.delete(timer);
+      void this.commitAgentMutation(session, (current) =>
+        current.gameSession.agentSpeechContextFor(participantId).match(
+          (context) =>
+            match(this.agentDecisions.decidePublicSpeech(context))
+              .with({ type: 'speak', content: P.select() }, (content) =>
+                current.gameSession
+                  .submitPublicSpeech(participantId, content, this.clock.now())
+                  .isOk(),
+              )
+              .with({ type: 'remain-silent' }, () => false)
+              .exhaustive(),
+          () => false,
+        ),
       );
     }, delayMs);
-    timer.unref();
+    session.publicSpeechAgentTimers.add(timer);
+    timer.unref?.();
   }
 
   private publishMafiaNightOpenings(session: StoredGameSessionEntity) {
@@ -153,17 +152,17 @@ export class GameSessionAgentOrchestrator {
   }
 
   private scheduleMafiaTargetFallback(session: StoredGameSessionEntity, phaseDeadline: string) {
-    if (session.mafiaTargetFallbackTimer) clearTimeout(session.mafiaTargetFallbackTimer);
-    const delayMs = Math.max(0, Date.parse(phaseDeadline) - Date.now() - 1_000);
-    session.mafiaTargetFallbackTimer = setTimeout(() => {
-      if (this.humanMafiaTarget(session)) return;
-      this.submitMafiaAgentTarget(session);
-      this.publishProjection(session).match(
-        () => undefined,
-        () => undefined,
-      );
+    if (session.mafiaTargetFallbackTimer) this.clock.clearTimeout(session.mafiaTargetFallbackTimer);
+    const delayMs = Math.max(0, dayjs(phaseDeadline).diff(this.clock.now()) - 1_000);
+    session.mafiaTargetFallbackTimer = this.clock.setTimeout(() => {
+      void this.commitAgentMutation(session, (current) => {
+        if (this.humanMafiaTarget(current)) return false;
+        const before = JSON.stringify(current.gameSession.snapshot());
+        this.submitMafiaAgentTarget(current);
+        return before !== JSON.stringify(current.gameSession.snapshot());
+      });
     }, delayMs);
-    session.mafiaTargetFallbackTimer.unref();
+    session.mafiaTargetFallbackTimer.unref?.();
   }
 
   private publishMafiaAgentMessages(
@@ -234,18 +233,13 @@ export class GameSessionAgentOrchestrator {
     content: string,
     phaseDeadline: string,
   ) {
-    if (session.agentFinalDefenceTimer) clearTimeout(session.agentFinalDefenceTimer);
-    const delayMs = Math.max(0, Math.floor((Date.parse(phaseDeadline) - Date.now()) / 2));
-    session.agentFinalDefenceTimer = setTimeout(() => {
-      session.gameSession.submitFinalDefence(participantId, content).match(
-        () =>
-          this.publishProjection(session).match(
-            () => undefined,
-            () => undefined,
-          ),
-        () => undefined,
+    if (session.agentFinalDefenceTimer) this.clock.clearTimeout(session.agentFinalDefenceTimer);
+    const delayMs = Math.max(0, Math.floor(dayjs(phaseDeadline).diff(this.clock.now()) / 2));
+    session.agentFinalDefenceTimer = this.clock.setTimeout(() => {
+      void this.commitAgentMutation(session, (current) =>
+        current.gameSession.submitFinalDefence(participantId, content, this.clock.now()).isOk(),
       );
     }, delayMs);
-    session.agentFinalDefenceTimer.unref();
+    session.agentFinalDefenceTimer.unref?.();
   }
 }

@@ -44,6 +44,15 @@ class SequencedMafiaTargetGateway implements AgentDecisionGateway {
   }
 }
 
+class CountingPublicSpeechGateway extends SequencedMafiaTargetGateway {
+  publicSpeechDecisionCount = 0;
+
+  override decidePublicSpeech(_context: MafiaAgentSpeechContext): AgentPublicSpeechDecision {
+    this.publicSpeechDecisionCount += 1;
+    return { type: 'speak', content: 'I need more evidence.', delayMs: 500 };
+  }
+}
+
 const createSession = (): StoredGameSessionEntity => ({
   holderId: 'holder-1',
   humanParticipantId: 'participant-1',
@@ -71,13 +80,17 @@ const createSession = (): StoredGameSessionEntity => ({
   nextDiscussionTimeAdjustmentAt: undefined,
   lastAccessedAt: dayjs(),
   activeEventSubscribers: 0,
+  status: 'in-progress',
   publicSpeechIdempotencyKeys: new Map(),
   mafiaChatIdempotencyKeys: new Map(),
   dayActionIdempotencyKeys: new Map(),
   discussionTimeAdjustmentIdempotencyKeys: new Map(),
   phaseTimer: undefined,
   agentFinalDefenceTimer: undefined,
+  publicSpeechAgentTimers: new Set(),
   mafiaTargetFallbackTimer: undefined,
+  reconnectGraceTimer: undefined,
+  reconnectGraceDeadline: undefined,
 });
 
 const createAgentOnlyMafiaSession = (): StoredGameSessionEntity => ({
@@ -113,17 +126,19 @@ describe('GameSessionAgentOrchestrator', () => {
     jest.useRealTimers();
   });
 
-  it('keeps an Agent Mafia target fixed across Mafia Chat replies', () => {
+  it('keeps an Agent Mafia target fixed across Mafia Chat replies', async () => {
     const session = createSession();
-    const orchestrator = new GameSessionAgentOrchestrator(new SequencedMafiaTargetGateway(), () =>
-      ok(new MafiaGameSessionProjectionEntity()),
+    const orchestrator = new GameSessionAgentOrchestrator(
+      new SequencedMafiaTargetGateway(),
+      async () => ok(new MafiaGameSessionProjectionEntity()),
+      async () => undefined,
     );
 
     orchestrator.submitDayActions(session);
     session.gameSession.submitMafiaChat('participant-1', 'What about Hana?');
-    orchestrator.publishMafiaChatReplies(session);
+    await orchestrator.publishMafiaChatReplies(session);
     session.gameSession.submitMafiaChat('participant-1', 'I disagree.');
-    orchestrator.publishMafiaChatReplies(session);
+    await orchestrator.publishMafiaChatReplies(session);
     jest.runOnlyPendingTimers();
 
     const projection = session.gameSession.projectionFor('participant-2', 1);
@@ -180,8 +195,10 @@ describe('GameSessionAgentOrchestrator', () => {
   it('uses one Agent Mafia coordinator to choose the shared Night target', () => {
     const session = createAgentOnlyMafiaSession();
     const decisions = new SequencedMafiaTargetGateway();
-    const orchestrator = new GameSessionAgentOrchestrator(decisions, () =>
-      ok(new MafiaGameSessionProjectionEntity()),
+    const orchestrator = new GameSessionAgentOrchestrator(
+      decisions,
+      async () => ok(new MafiaGameSessionProjectionEntity()),
+      async () => undefined,
     );
 
     orchestrator.submitDayActions(session);
@@ -195,5 +212,21 @@ describe('GameSessionAgentOrchestrator', () => {
         targetParticipantId: 'participant-3',
       });
     }
+  });
+
+  it('does not invoke the Agent gateway when a scheduled public reply is cancelled', () => {
+    const session = createSession();
+    const decisions = new CountingPublicSpeechGateway();
+    const orchestrator = new GameSessionAgentOrchestrator(
+      decisions,
+      async () => ok(new MafiaGameSessionProjectionEntity()),
+      async () => undefined,
+    );
+
+    orchestrator.publishPublicSpeechReplies(session);
+    orchestrator.clearTimers(session);
+    jest.advanceTimersByTime(1_000);
+
+    expect(decisions.publicSpeechDecisionCount).toBe(0);
   });
 });

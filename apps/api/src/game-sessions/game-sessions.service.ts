@@ -5,15 +5,37 @@ import { Inject } from '@nestjs/common';
 import { MafiaGameModule, mafiaGameConfig } from '@repo/mafia';
 import dayjs from 'dayjs';
 import { err, ok, type Result } from 'neverthrow';
-import { defer, filter, finalize, type Observable, ReplaySubject } from 'rxjs';
+import {
+  concat,
+  concatMap,
+  defer,
+  filter,
+  finalize,
+  from,
+  mergeMap,
+  Observable,
+  ReplaySubject,
+  startWith,
+} from 'rxjs';
 import { match, P } from 'ts-pattern';
 
 import { agentDecisionGateway, type AgentDecisionGateway } from './agent-decision.gateway';
 import { cooldownRetryAfterMs } from './cooldown/cooldown';
+import {
+  type DurableSessionSnapshot,
+  RedisGameSessionAuthority,
+} from './durability/redis-game-session-authority';
 import type { MafiaGameSessionProjectionEntity } from './entities/mafia-game-session-projection.entity';
 import type { StoredGameSessionEntity } from './entities/stored-game-session.entity';
 import { GameSessionAgentOrchestrator } from './game-session-agent-orchestrator';
+import {
+  gameSessionClock,
+  nativeGameSessionClock,
+  type GameSessionClock,
+} from './game-session-clock';
+import { GameSessionDurability } from './game-session-durability';
 import type { GameSessionError } from './game-session-error';
+import { GameSessionLifecycle } from './game-session-lifecycle';
 import { gameSessionsConfig } from './game-sessions.config';
 import { createGuestCookieSigner, guestCookieSecret } from './guest-cookie';
 import {
@@ -39,51 +61,103 @@ type IdempotentProjectionAction = {
   submit: (
     session: StoredGameSessionEntity,
   ) => Result<MafiaGameSessionProjectionEntity, GameSessionError>;
+  afterCommit?: (session: StoredGameSessionEntity) => void | Promise<void>;
 };
 
 @Injectable()
 export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
-  private readonly mafiaModule = new MafiaGameModule();
+  private readonly mafiaModule: MafiaGameModule;
   private readonly sessions = new Map<string, StoredGameSessionEntity>();
   private readonly guestSessionCounts = new Map<string, number>();
   private readonly idempotencyKeys = new Map<string, IdempotencyRecord<string>>();
+  private readonly sessionMutationTails = new Map<string, Promise<void>>();
   private readonly guestCookies = createGuestCookieSigner(
     gameSessionsConfig.guestCookieName,
     guestCookieSecret(),
   );
   private readonly agentActions: GameSessionAgentOrchestrator;
+  private readonly durability: GameSessionDurability;
+  private readonly lifecycle: GameSessionLifecycle;
+  private readonly authority = RedisGameSessionAuthority.fromEnvironment();
   private cleanupTimer: NodeJS.Timeout | undefined;
 
-  constructor(@Inject(agentDecisionGateway) agentDecisions: AgentDecisionGateway) {
+  constructor(
+    @Inject(agentDecisionGateway) agentDecisions: AgentDecisionGateway,
+    @Inject(gameSessionClock) private readonly clock: GameSessionClock = nativeGameSessionClock,
+  ) {
+    this.mafiaModule = new MafiaGameModule(undefined, undefined, () => this.clock.now());
     this.agentActions = new GameSessionAgentOrchestrator(
       agentDecisions,
-      this.publishProjection.bind(this),
+      this.publishAgentProjection.bind(this),
+      this.commitAgentMutation.bind(this),
+      this.clock,
     );
+    this.durability = new GameSessionDurability(
+      () => this.authority,
+      this.clock,
+      this.sessions,
+      (session) => {
+        if (session.phaseTimer) this.clock.clearTimeout(session.phaseTimer);
+        if (session.reconnectGraceTimer) this.clock.clearTimeout(session.reconnectGraceTimer);
+        this.agentActions.clearTimers(session);
+      },
+    );
+    this.lifecycle = new GameSessionLifecycle({
+      state: {
+        sessions: this.sessions,
+        guestSessionCounts: this.guestSessionCounts,
+        idempotencyKeys: this.idempotencyKeys,
+      },
+      persistence: {
+        authorityFor: () => this.authority,
+        save: this.saveAuthoritativeProjection.bind(this),
+        hydrate: this.hydrateAuthoritativeSession.bind(this),
+        snapshotFor: this.durableSnapshot.bind(this),
+        restore: this.durability.restore.bind(this.durability),
+      },
+      phaseOperations: {
+        projectionFor: this.projectionFor.bind(this),
+        publishProjection: this.publishProjection.bind(this),
+        submitAgentActions: this.submitAndCommitAgentActions.bind(this),
+      },
+      clock: this.clock,
+      agentActions: this.agentActions,
+      now: this.now.bind(this),
+      utcDay: this.utcDay.bind(this),
+    });
   }
 
-  onModuleInit() {
-    this.cleanupTimer = setInterval(
-      () => this.cleanupExpiredSessions(),
+  async onModuleInit() {
+    if (!this.authority && this.requiresDurableAuthority()) {
+      throw new Error('REDIS_URL is required for durable Game Sessions.');
+    }
+    await this.lifecycle.recoverDurableSessions();
+    this.cleanupTimer = this.clock.setInterval(
+      () => this.lifecycle.cleanupExpiredSessions(),
       gameSessionsConfig.cleanupIntervalMs,
     );
-    this.cleanupTimer.unref();
+    this.cleanupTimer.unref?.();
   }
 
   onModuleDestroy() {
     if (this.cleanupTimer) {
-      clearInterval(this.cleanupTimer);
+      this.clock.clearInterval(this.cleanupTimer);
     }
+    void this.authority?.close();
   }
 
-  createMafiaSession(
+  async createMafiaSession(
     cookie: string | undefined,
     participantCount: number = mafiaGameConfig.defaultParticipantCount,
     idempotencyKey: string | undefined,
-  ): Result<CreatedMafiaSession, GameSessionError> {
-    this.cleanupExpiredSessions();
+  ): Promise<Result<CreatedMafiaSession, GameSessionError>> {
+    if (!this.authority && this.requiresDurableAuthority()) {
+      return err({ type: 'durability-unavailable' });
+    }
+    this.lifecycle.cleanupExpiredSessions();
     const holderId = this.guestCookies.read(cookie) ?? randomUUID();
     const scopedIdempotencyKey = idempotencyKey && `${holderId}:${idempotencyKey}`;
-    if (scopedIdempotencyKey) {
+    if (!this.authority && scopedIdempotencyKey) {
       const lookup = lookupIdempotency(
         this.idempotencyKeys,
         scopedIdempotencyKey,
@@ -112,9 +186,12 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     }
 
     const countKey = `${this.utcDay()}:${holderId}`;
-    const count = this.guestSessionCounts.get(countKey) ?? 0;
-    if (count >= gameSessionsConfig.guestAllowance) {
-      return err({ type: 'guest-allowance-exhausted' });
+    if (!this.authority) {
+      const count = this.guestSessionCounts.get(countKey) ?? 0;
+      if (count >= gameSessionsConfig.guestAllowance) {
+        return err({ type: 'guest-allowance-exhausted' });
+      }
+      this.guestSessionCounts.set(countKey, count + 1);
     }
 
     const sessionId = randomUUID();
@@ -138,18 +215,21 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       nextPublicSpeechAt: undefined,
       nextFinalDefenceAt: undefined,
       nextDiscussionTimeAdjustmentAt: undefined,
-      lastAccessedAt: dayjs(),
+      lastAccessedAt: this.now(),
       activeEventSubscribers: 0,
+      status: 'in-progress',
       publicSpeechIdempotencyKeys: new Map(),
       mafiaChatIdempotencyKeys: new Map(),
       dayActionIdempotencyKeys: new Map(),
       discussionTimeAdjustmentIdempotencyKeys: new Map(),
       phaseTimer: undefined,
       agentFinalDefenceTimer: undefined,
+      publicSpeechAgentTimers: new Set(),
       mafiaTargetFallbackTimer: undefined,
+      reconnectGraceTimer: undefined,
+      reconnectGraceDeadline: undefined,
     };
-    this.sessions.set(sessionId, session);
-    if (scopedIdempotencyKey) {
+    if (!this.authority && scopedIdempotencyKey) {
       recordIdempotency(
         this.idempotencyKeys,
         scopedIdempotencyKey,
@@ -157,19 +237,92 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         sessionId,
       );
     }
-    this.guestSessionCounts.set(countKey, count + 1);
-    this.agentActions.submitDayActions(session);
-
-    return this.publishProjection(session)
-      .andTee(() => this.schedulePhaseTransition(session))
-      .map((projection) => ({ holderId, projection }));
+    const projection = this.publishProjection(session);
+    if (projection.isErr()) return err(projection.error);
+    if (this.authority) {
+      const creation = await this.authority.create(
+        this.durableSnapshot(session, projection.value),
+        { eventId: projection.value.eventId, projection: projection.value },
+        holderId,
+        this.utcDay(),
+        gameSessionsConfig.guestAllowance,
+        idempotencyKey ? { key: idempotencyKey, fingerprint: String(participantCount) } : undefined,
+      );
+      if (creation.isErr()) return err({ type: 'durability-unavailable' });
+      if (creation.value.type === 'allowance-exhausted') {
+        return err({ type: 'guest-allowance-exhausted' });
+      }
+      if (creation.value.type === 'conflict') return err({ type: 'idempotency-conflict' });
+      if (creation.value.type === 'replayed') {
+        const hydrated = await this.hydrateAuthoritativeSession(creation.value.record.sessionId);
+        if (hydrated.isErr()) return err(hydrated.error);
+        const existingSession = this.sessions.get(creation.value.record.sessionId);
+        if (!existingSession) {
+          return err({ type: 'session-not-found', sessionId: creation.value.record.sessionId });
+        }
+        return this.projectionFor(existingSession).map((existingProjection) => ({
+          holderId,
+          projection: existingProjection,
+        }));
+      }
+    }
+    this.sessions.set(sessionId, session);
+    await this.submitAndCommitAgentActions(session);
+    this.lifecycle.schedulePhaseTransition(session);
+    return ok({ holderId, projection: projection.value });
   }
 
   getProjection(
     sessionId: string,
     cookie: string | undefined,
+  ):
+    | Result<MafiaGameSessionProjectionEntity, GameSessionError>
+    | Promise<Result<MafiaGameSessionProjectionEntity, GameSessionError>> {
+    if (!this.authority) {
+      return this.requiresDurableAuthority()
+        ? err({ type: 'durability-unavailable' })
+        : this.getProjectionFromMemory(sessionId, cookie);
+    }
+    return this.hydrateAuthoritativeSession(sessionId).then(
+      async (hydrated): Promise<Result<MafiaGameSessionProjectionEntity, GameSessionError>> => {
+        if (hydrated.isErr())
+          return err<MafiaGameSessionProjectionEntity, GameSessionError>(hydrated.error);
+        const session = this.sessions.get(sessionId);
+        if (!session)
+          return err<MafiaGameSessionProjectionEntity, GameSessionError>({
+            type: 'session-not-found',
+            sessionId,
+          });
+        const activeSession = this.activeSessionForHolder(sessionId, cookie);
+        if (activeSession.isErr()) return err(activeSession.error);
+        const currentProjection = this.projectionFor(session);
+        if (currentProjection.isErr()) return currentProjection;
+        if (dayjs(currentProjection.value.public.phaseDeadline).isBefore(this.now())) {
+          const claimed = await this.authority!.claimPhaseDeadline(
+            sessionId,
+            currentProjection.value.public.phaseDeadline,
+          );
+          if (claimed.isErr()) return err({ type: 'durability-unavailable' });
+          if (!claimed.value) return currentProjection;
+        }
+        const recovery = await this.lifecycle.recoverExpiredPhaseDurably(session);
+        if (recovery.isErr()) return err(recovery.error);
+        const recoveredSession = this.sessions.get(sessionId);
+        if (!recoveredSession) return err({ type: 'session-not-found', sessionId });
+        const recoveredActiveSession = this.activeSessionForHolder(sessionId, cookie);
+        if (recoveredActiveSession.isErr()) return err(recoveredActiveSession.error);
+        const touched = await this.touchAuthoritativeSession(recoveredActiveSession.value);
+        if (touched.isErr()) return err(touched.error);
+        return this.projectionFor(recoveredSession);
+      },
+    );
+  }
+
+  private getProjectionFromMemory(
+    sessionId: string,
+    cookie: string | undefined,
   ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
-    this.cleanupExpiredSessions();
+    this.lifecycle.cleanupExpiredSessions();
     return this.activeSessionForHolder(sessionId, cookie).andThen((session) =>
       this.projectionFor(session),
     );
@@ -179,17 +332,102 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     sessionId: string,
     cookie: string | undefined,
     lastEventId: number | undefined,
+  ):
+    | Result<Observable<MafiaGameSessionProjectionEntity>, GameSessionError>
+    | Promise<Result<Observable<MafiaGameSessionProjectionEntity>, GameSessionError>> {
+    const authority = this.authority;
+    if (!authority) {
+      return this.requiresDurableAuthority()
+        ? err({ type: 'durability-unavailable' })
+        : this.eventsForFromMemory(sessionId, cookie, lastEventId);
+    }
+    return this.hydrateAuthoritativeSession(sessionId).then(async (hydrated) => {
+      if (hydrated.isErr())
+        return err<Observable<MafiaGameSessionProjectionEntity>, GameSessionError>(hydrated.error);
+      const session = this.activeSessionForHolder(sessionId, cookie);
+      if (session.isErr())
+        return err<Observable<MafiaGameSessionProjectionEntity>, GameSessionError>(session.error);
+      const touched = await this.touchAuthoritativeSession(session.value);
+      if (touched.isErr())
+        return err<Observable<MafiaGameSessionProjectionEntity>, GameSessionError>(touched.error);
+      const snapshot = this.projectionFor(session.value);
+      if (snapshot.isErr())
+        return err<Observable<MafiaGameSessionProjectionEntity>, GameSessionError>(snapshot.error);
+      return ok<Observable<MafiaGameSessionProjectionEntity>, GameSessionError>(
+        defer(() => {
+          // A snapshot is intentionally id-less at the transport boundary. A
+          // reconnect still needs every missed, identified Public Information
+          // event after its supplied cursor.
+          let cursor = lastEventId ?? snapshot.value.eventId;
+          const connectionId = randomUUID();
+          return from(authority.acquireReconnectLease(sessionId, connectionId)).pipe(
+            mergeMap((lease) => {
+              if (lease.isErr()) throw new Error('Game Session authority is unavailable.');
+              return from(authority.clearReconnectGrace(sessionId)).pipe(
+                mergeMap((cleared) => {
+                  if (cleared.isErr()) throw new Error('Game Session authority is unavailable.');
+                  return concat(
+                    from([snapshot.value]),
+                    this.clockInterval(250).pipe(
+                      startWith(0),
+                      concatMap(async () => {
+                        const renewedLease = await authority.acquireReconnectLease(
+                          sessionId,
+                          connectionId,
+                        );
+                        if (renewedLease.isErr())
+                          throw new Error('Game Session authority is unavailable.');
+                        const events = await authority.eventsAfter(sessionId, cursor);
+                        if (events.isErr())
+                          throw new Error('Game Session authority is unavailable.');
+                        if (events.value.length > 0) cursor = events.value.at(-1)!.eventId;
+                        return events.value;
+                      }),
+                      mergeMap((events) => from(events.map((event) => event.projection))),
+                    ),
+                  );
+                }),
+              );
+            }),
+            finalize(() => {
+              void this.releaseReconnectLeaseWithRetry(
+                authority,
+                sessionId,
+                connectionId,
+                this.now().add(gameSessionsConfig.reconnectGraceMs, 'millisecond').toISOString(),
+              );
+            }),
+          );
+        }),
+      );
+    });
+  }
+
+  private eventsForFromMemory(
+    sessionId: string,
+    cookie: string | undefined,
+    lastEventId: number | undefined,
   ): Result<Observable<MafiaGameSessionProjectionEntity>, GameSessionError> {
-    this.cleanupExpiredSessions();
+    this.lifecycle.cleanupExpiredSessions();
     return this.activeSessionForHolder(sessionId, cookie).map((session) =>
       defer(() => {
         session.activeEventSubscribers += 1;
+        const connectionId = randomUUID();
+        void this.authority?.acquireReconnectLease(sessionId, connectionId);
+        if (session.reconnectGraceTimer) {
+          this.clock.clearTimeout(session.reconnectGraceTimer);
+          session.reconnectGraceTimer = undefined;
+          session.reconnectGraceDeadline = undefined;
+        }
         this.touch(session);
         return session.events.asObservable().pipe(
           filter((projection) => lastEventId === undefined || projection.eventId > lastEventId),
           finalize(() => {
             session.activeEventSubscribers -= 1;
+            void this.authority?.releaseReconnectLease(sessionId, connectionId);
             this.touch(session);
+            if (session.activeEventSubscribers === 0)
+              this.lifecycle.scheduleReconnectGrace(session);
           }),
         );
       }),
@@ -207,19 +445,19 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     return this.publishProjection(session);
   }
 
-  submitPublicSpeech(
+  async submitPublicSpeech(
     sessionId: string,
     cookie: string | undefined,
     content: string,
     idempotencyKey: string,
-  ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
+  ): Promise<Result<MafiaGameSessionProjectionEntity, GameSessionError>> {
     return this.runIdempotentProjectionAction(sessionId, cookie, {
       idempotencyKey,
       fingerprint: content,
       conflict: { type: 'public-speech-idempotency-conflict' },
       records: (session) => session.publicSpeechIdempotencyKeys,
       submit: (session) => {
-        const now = dayjs();
+        const now = this.now();
         const retryAfterMs = cooldownRetryAfterMs(session.nextPublicSpeechAt, now);
         if (retryAfterMs) {
           return err<MafiaGameSessionProjectionEntity, GameSessionError>({
@@ -231,6 +469,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         const speechResult = session.gameSession.submitPublicSpeech(
           session.humanParticipantId,
           content,
+          this.clock.now(),
         );
         if (speechResult.isErr()) {
           const error: GameSessionError = match(speechResult.error)
@@ -268,25 +507,25 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
             gameSessionsConfig.humanActionCooldownMs,
             'millisecond',
           );
-          this.agentActions.publishPublicSpeechReplies(session);
         });
       },
+      afterCommit: (session) => this.agentActions.publishPublicSpeechReplies(session),
     });
   }
 
-  submitMafiaChat(
+  async submitMafiaChat(
     sessionId: string,
     cookie: string | undefined,
     content: string,
     idempotencyKey: string,
-  ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
+  ): Promise<Result<MafiaGameSessionProjectionEntity, GameSessionError>> {
     return this.runIdempotentProjectionAction(sessionId, cookie, {
       idempotencyKey,
       fingerprint: content,
       conflict: { type: 'mafia-chat-idempotency-conflict' },
       records: (session) => session.mafiaChatIdempotencyKeys,
       submit: (session) => {
-        const now = dayjs();
+        const now = this.now();
         const retryAfterMs = cooldownRetryAfterMs(session.nextPublicSpeechAt, now);
         if (retryAfterMs) return err({ type: 'public-speech-rate-limited', retryAfterMs });
         return session.gameSession
@@ -298,18 +537,18 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
               gameSessionsConfig.humanActionCooldownMs,
               'millisecond',
             );
-            this.agentActions.publishMafiaChatReplies(session);
           });
       },
+      afterCommit: (session) => this.agentActions.publishMafiaChatReplies(session),
     });
   }
 
-  submitNomination(
+  async submitNomination(
     sessionId: string,
     cookie: string | undefined,
     targetParticipantId: string,
     idempotencyKey: string,
-  ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
+  ): Promise<Result<MafiaGameSessionProjectionEntity, GameSessionError>> {
     return this.submitDayAction(
       sessionId,
       cookie,
@@ -320,18 +559,18 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
-  submitVerdict(
+  async submitVerdict(
     sessionId: string,
     cookie: string | undefined,
     vote: 'eliminate' | 'spare',
     idempotencyKey: string,
-  ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
+  ): Promise<Result<MafiaGameSessionProjectionEntity, GameSessionError>> {
     return this.submitDayAction(sessionId, cookie, `verdict:${vote}`, idempotencyKey, (session) =>
       session.gameSession.submitVerdict(session.humanParticipantId, vote),
     );
   }
 
-  submitMafiaTarget(
+  async submitMafiaTarget(
     sessionId: string,
     cookie: string | undefined,
     targetParticipantId: string,
@@ -347,7 +586,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
-  submitDoctorProtection(
+  async submitDoctorProtection(
     sessionId: string,
     cookie: string | undefined,
     targetParticipantId: string,
@@ -363,7 +602,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
-  submitDetectiveInvestigation(
+  async submitDetectiveInvestigation(
     sessionId: string,
     cookie: string | undefined,
     targetParticipantId: string,
@@ -382,13 +621,13 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
-  adjustDiscussionTime(
+  async adjustDiscussionTime(
     sessionId: string,
     cookie: string | undefined,
     adjustmentSeconds: 10 | -10,
     expectedDeadline: string,
     idempotencyKey: string,
-  ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
+  ): Promise<Result<MafiaGameSessionProjectionEntity, GameSessionError>> {
     const fingerprint = `${adjustmentSeconds}:${expectedDeadline}`;
     return this.runIdempotentProjectionAction(sessionId, cookie, {
       idempotencyKey,
@@ -417,7 +656,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
           });
         }
 
-        const now = dayjs();
+        const now = this.now();
         const retryAfterMs = cooldownRetryAfterMs(session.nextDiscussionTimeAdjustmentAt, now);
         if (retryAfterMs) {
           return err<MafiaGameSessionProjectionEntity, GameSessionError>({
@@ -466,18 +705,18 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
             gameSessionsConfig.humanActionCooldownMs,
             'millisecond',
           );
-          this.schedulePhaseTransition(session);
+          this.lifecycle.schedulePhaseTransition(session);
         });
       },
     });
   }
 
-  submitFinalDefence(
+  async submitFinalDefence(
     sessionId: string,
     cookie: string | undefined,
     content: string,
     idempotencyKey: string,
-  ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
+  ): Promise<Result<MafiaGameSessionProjectionEntity, GameSessionError>> {
     const fingerprint = `final-defence:${content}`;
     return this.runIdempotentProjectionAction(sessionId, cookie, {
       idempotencyKey,
@@ -485,7 +724,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       conflict: { type: 'day-action-idempotency-conflict' },
       records: (session) => session.dayActionIdempotencyKeys,
       submit: (session) => {
-        const now = dayjs();
+        const now = this.now();
         const retryAfterMs = cooldownRetryAfterMs(session.nextFinalDefenceAt, now);
         if (retryAfterMs) {
           return err<MafiaGameSessionProjectionEntity, GameSessionError>({
@@ -511,7 +750,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  private submitDayAction(
+  private async submitDayAction(
     sessionId: string,
     cookie: string | undefined,
     fingerprint: string,
@@ -519,7 +758,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     submit: (
       session: StoredGameSessionEntity,
     ) => ReturnType<StoredGameSessionEntity['gameSession']['submitNomination']>,
-  ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
+  ): Promise<Result<MafiaGameSessionProjectionEntity, GameSessionError>> {
     return this.runIdempotentProjectionAction(sessionId, cookie, {
       idempotencyKey,
       fingerprint,
@@ -537,16 +776,40 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  private runIdempotentProjectionAction(
+  private async runIdempotentProjectionAction(
     sessionId: string,
     cookie: string | undefined,
-    { idempotencyKey, fingerprint, conflict, records, submit }: IdempotentProjectionAction,
-  ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
-    return this.activeSessionForHolder(sessionId, cookie).andThen((session) => {
+    action: IdempotentProjectionAction,
+  ): Promise<Result<MafiaGameSessionProjectionEntity, GameSessionError>> {
+    return this.withSessionMutation(sessionId, () =>
+      this.runIdempotentProjectionActionUnlocked(sessionId, cookie, action),
+    );
+  }
+
+  private async runIdempotentProjectionActionUnlocked(
+    sessionId: string,
+    cookie: string | undefined,
+    {
+      idempotencyKey,
+      fingerprint,
+      conflict,
+      records,
+      submit,
+      afterCommit,
+    }: IdempotentProjectionAction,
+    attempt = 0,
+  ): Promise<Result<MafiaGameSessionProjectionEntity, GameSessionError>> {
+    if (this.authority) {
+      const recovered = await this.getProjection(sessionId, cookie);
+      if (recovered.isErr())
+        return err<MafiaGameSessionProjectionEntity, GameSessionError>(recovered.error);
+    }
+    let committedAction = false;
+    const result = this.activeSessionForHolder(sessionId, cookie).andThen((session) => {
       const ledger = records(session);
       const idempotencyResult = match(lookupIdempotency(ledger, idempotencyKey, fingerprint))
-        .with({ type: 'replayed' }, ({ result }) =>
-          ok<MafiaGameSessionProjectionEntity, GameSessionError>(result),
+        .with({ type: 'replayed' }, ({ result: replayedProjection }) =>
+          ok<MafiaGameSessionProjectionEntity, GameSessionError>(replayedProjection),
         )
         .with({ type: 'conflict' }, () =>
           err<MafiaGameSessionProjectionEntity, GameSessionError>(conflict),
@@ -556,9 +819,57 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       if (idempotencyResult) return idempotencyResult;
 
       return submit(session).andTee((projection) => {
+        committedAction = true;
         recordIdempotency(ledger, idempotencyKey, fingerprint, projection);
       });
     });
+    if (result.isErr()) return result;
+    if (!this.authority) {
+      if (committedAction) await afterCommit?.(this.sessions.get(sessionId)!);
+      return result;
+    }
+    if (!committedAction) return result;
+    const session = this.sessions.get(sessionId);
+    if (!session) return err({ type: 'session-not-found', sessionId });
+    const saved = await this.saveAuthoritativeProjection(session, result.value);
+    if (saved.isErr()) {
+      await this.hydrateAuthoritativeSession(sessionId);
+      return err({ type: 'durability-unavailable' });
+    }
+    if (!saved.value && attempt < 1) {
+      await this.hydrateAuthoritativeSession(sessionId);
+      return this.runIdempotentProjectionActionUnlocked(
+        sessionId,
+        cookie,
+        { idempotencyKey, fingerprint, conflict, records, submit, afterCommit },
+        attempt + 1,
+      );
+    }
+    if (!saved.value) await this.hydrateAuthoritativeSession(sessionId);
+    if (saved.value && committedAction) await afterCommit?.(session);
+    return saved.value ? result : err({ type: 'durability-unavailable' });
+  }
+
+  private async withSessionMutation<Value>(
+    sessionId: string,
+    operation: () => Promise<Value>,
+  ): Promise<Value> {
+    const previous = this.sessionMutationTails.get(sessionId) ?? Promise.resolve();
+    let release: (() => void) | undefined;
+    const tail = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const queued = previous.then(() => tail);
+    this.sessionMutationTails.set(sessionId, queued);
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      release?.();
+      if (this.sessionMutationTails.get(sessionId) === queued) {
+        this.sessionMutationTails.delete(sessionId);
+      }
+    }
   }
 
   guestCookieName() {
@@ -570,7 +881,22 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
   }
 
   private utcDay() {
-    return new Date().toISOString().slice(0, 10);
+    return this.clock.now().toISOString().slice(0, 10);
+  }
+
+  private now() {
+    return dayjs(this.clock.now());
+  }
+
+  private clockInterval(delayMs: number) {
+    return new Observable<void>((subscriber) => {
+      const timer = this.clock.setInterval(() => subscriber.next(), delayMs);
+      return () => this.clock.clearInterval(timer);
+    });
+  }
+
+  private requiresDurableAuthority() {
+    return process.env.NODE_ENV !== 'test';
   }
 
   private publishProjection(
@@ -583,39 +909,75 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       .mapErr((cause): GameSessionError => ({
         type: 'invalid-mafia-projection',
         cause,
-      }))
-      .andTee((projection) => {
-        session.events.next(projection);
-      });
+      }));
   }
 
-  private schedulePhaseTransition(session: StoredGameSessionEntity) {
-    if (session.phaseTimer) {
-      clearTimeout(session.phaseTimer);
+  private async publishAgentProjection(session: StoredGameSessionEntity) {
+    const projection = this.publishProjection(session);
+    if (projection.isErr()) return projection;
+    const saved = await this.saveAuthoritativeProjection(session, projection.value);
+    if (saved.isOk() && saved.value) return projection;
+    await this.hydrateAuthoritativeSession(projection.value.sessionId);
+    return err<MafiaGameSessionProjectionEntity, GameSessionError>({
+      type: 'durability-unavailable',
+    });
+  }
+
+  private async submitAndCommitAgentActions(
+    session: StoredGameSessionEntity,
+  ): Promise<Result<void, GameSessionError>> {
+    const before = JSON.stringify(session.gameSession.snapshot());
+    this.agentActions.submitDayActions(session);
+    if (before === JSON.stringify(session.gameSession.snapshot())) return ok(undefined);
+    return (await this.publishAgentProjection(session)).map(() => undefined);
+  }
+
+  private async commitAgentMutation(
+    staleSession: StoredGameSessionEntity,
+    mutate: (session: StoredGameSessionEntity) => boolean,
+    attempt = 0,
+  ): Promise<void> {
+    const sessionId = staleSession.gameSession.snapshot().sessionId;
+    if (this.authority) {
+      const hydrated = await this.hydrateAuthoritativeSession(sessionId);
+      if (hydrated.isErr()) return;
     }
-    const projection = session.gameSession.projectionFor(
-      session.humanParticipantId,
-      session.nextEventId,
+    const session = this.sessions.get(sessionId);
+    if (!session || session.status !== 'in-progress') return;
+    if (!mutate(session)) {
+      this.lifecycle.schedulePhaseTransition(session);
+      return;
+    }
+    const published = await this.publishAgentProjection(session);
+    if (published.isOk()) {
+      this.lifecycle.schedulePhaseTransition(session);
+      return;
+    }
+    if (attempt >= 1) return;
+    await this.commitAgentMutation(staleSession, mutate, attempt + 1);
+  }
+
+  private async releaseReconnectLeaseWithRetry(
+    authority: RedisGameSessionAuthority,
+    sessionId: string,
+    connectionId: string,
+    reconnectGraceDeadline: string,
+    attempt = 0,
+  ): Promise<void> {
+    const released = await authority.releaseReconnectLeaseAndBeginGrace(
+      sessionId,
+      connectionId,
+      reconnectGraceDeadline,
     );
-    if (projection.isErr() || projection.value.public.phase === 'completed') return;
-    const delayMs = Math.max(0, Date.parse(projection.value.public.phaseDeadline) - Date.now());
-    session.phaseTimer = setTimeout(() => {
-      session.gameSession.advanceDayPhase(new Date()).match(
-        (result) => {
-          if (result.type === 'not-due') {
-            this.schedulePhaseTransition(session);
-            return;
-          }
-          this.agentActions.submitDayActions(session);
-          this.publishProjection(session).match(
-            () => this.schedulePhaseTransition(session),
-            () => undefined,
-          );
-        },
-        () => undefined,
-      );
-    }, delayMs);
-    session.phaseTimer.unref();
+    if (!released.isErr() || attempt >= 2) return;
+    await new Promise<void>((resolve) => this.clock.setTimeout(resolve, 100 * (attempt + 1)));
+    await this.releaseReconnectLeaseWithRetry(
+      authority,
+      sessionId,
+      connectionId,
+      reconnectGraceDeadline,
+      attempt + 1,
+    );
   }
 
   private sessionForHolder(
@@ -636,19 +998,14 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     sessionId: string,
     cookie: string | undefined,
   ): Result<StoredGameSessionEntity, GameSessionError> {
-    return this.sessionForHolder(sessionId, cookie).andThen((session) =>
-      this.recoverExpiredPhase(session).map(() => session),
-    );
-  }
-
-  private recoverExpiredPhase(session: StoredGameSessionEntity): Result<void, GameSessionError> {
-    return session.gameSession.advanceDayPhase(new Date()).andThen((result) => {
-      if (result.type === 'not-due') return ok<void, GameSessionError>(undefined);
-
-      this.agentActions.submitDayActions(session);
-      return this.publishProjection(session)
-        .andTee(() => this.schedulePhaseTransition(session))
-        .map(() => undefined);
+    return this.sessionForHolder(sessionId, cookie).andThen((session) => {
+      if (session.status !== 'in-progress')
+        return err<StoredGameSessionEntity, GameSessionError>({
+          type: 'unavailable-to-guest',
+          sessionId,
+        });
+      if (this.authority) return ok(session);
+      return this.lifecycle.recoverExpiredPhase(session).map(() => session);
     });
   }
 
@@ -664,37 +1021,36 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
   }
 
   private touch(session: StoredGameSessionEntity) {
-    session.lastAccessedAt = dayjs();
+    session.lastAccessedAt = this.now();
   }
 
-  private cleanupExpiredSessions() {
-    const now = dayjs();
-    for (const [sessionId, session] of this.sessions) {
-      if (
-        session.activeEventSubscribers > 0 ||
-        now.diff(session.lastAccessedAt, 'hour', true) < gameSessionsConfig.sessionIdleTtlHours
-      ) {
-        continue;
-      }
+  private async touchAuthoritativeSession(
+    session: StoredGameSessionEntity,
+  ): Promise<Result<void, GameSessionError>> {
+    return this.durability.touch(session);
+  }
 
-      session.events.complete();
-      if (session.phaseTimer) {
-        clearTimeout(session.phaseTimer);
-      }
-      this.agentActions.clearTimers(session);
-      this.sessions.delete(sessionId);
-      for (const [key, record] of this.idempotencyKeys) {
-        if (record.result === sessionId) {
-          this.idempotencyKeys.delete(key);
-        }
-      }
-    }
+  private saveAuthoritativeProjection(
+    session: StoredGameSessionEntity,
+    projection: MafiaGameSessionProjectionEntity,
+  ) {
+    return this.durability.save(session, projection);
+  }
 
-    const activeDayPrefix = `${this.utcDay()}:`;
-    for (const countKey of this.guestSessionCounts.keys()) {
-      if (!countKey.startsWith(activeDayPrefix)) {
-        this.guestSessionCounts.delete(countKey);
-      }
-    }
+  private durableSnapshot(
+    session: StoredGameSessionEntity,
+    projection: MafiaGameSessionProjectionEntity,
+  ): DurableSessionSnapshot {
+    return this.durability.snapshotFor(session, projection);
+  }
+
+  private async hydrateAuthoritativeSession(
+    sessionId: string,
+  ): Promise<Result<void, GameSessionError>> {
+    const hydrated = await this.durability.hydrate(sessionId);
+    if (hydrated.isErr()) return hydrated;
+    const session = this.sessions.get(sessionId);
+    if (session) this.lifecycle.schedulePhaseTransition(session);
+    return hydrated;
   }
 }

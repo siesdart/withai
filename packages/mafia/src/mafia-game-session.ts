@@ -88,6 +88,25 @@ export type MafiaDayPhaseResult =
   | { type: 'participant-eliminated'; participantId: string }
   | { type: 'night-resolved'; result: 'protected' | 'no-death' | 'participant-eliminated' }
   | { type: 'game-completed'; winner: MafiaAllegiance };
+export type MafiaGameSessionSnapshot = {
+  sessionId: string;
+  participants: MafiaParticipant[];
+  dayDurations: MafiaDayDurations;
+  timeline: MafiaPersonalTimelineItem[];
+  timelineItemCounts: Array<[MafiaPersonalTimelineItem['type'], number]>;
+  nominations: Array<[string, string]>;
+  verdicts: Array<[string, 'eliminate' | 'spare']>;
+  mafiaTargetParticipantId: string | undefined;
+  doctorProtections: Array<[string, string]>;
+  detectiveInvestigations: Array<[string, string]>;
+  detectiveInvestigationHistory: Array<[string, Array<[string, MafiaAllegiance]>]>;
+  completedVoteRecords: MafiaCompletedVoteRecord[];
+  completedNightActionRecords: MafiaCompletedNightActionRecord[];
+  phase: MafiaPhase;
+  phaseDeadline: string;
+  nominatedParticipantId: string | undefined;
+  dayNumber: number;
+};
 export class MafiaGameSession implements GameModuleSession<
   MafiaPublicInformation,
   MafiaPersonalInformation,
@@ -111,9 +130,78 @@ export class MafiaGameSession implements GameModuleSession<
     private readonly sessionId: string,
     private readonly participants: MafiaParticipant[],
     private readonly dayDurations: MafiaDayDurations,
+    private readonly now: () => Date = () => new Date(),
   ) {
     this.changePhase('night');
-    this.phaseDeadline = new Date(Date.now() + dayDurations.nightDurationMs);
+    this.phaseDeadline = new Date(this.now().valueOf() + dayDurations.nightDurationMs);
+  }
+  snapshot(): MafiaGameSessionSnapshot {
+    return {
+      sessionId: this.sessionId,
+      participants: structuredClone(this.participants),
+      dayDurations: { ...this.dayDurations },
+      timeline: structuredClone(this.timeline),
+      timelineItemCounts: [...this.timelineItemCounts],
+      nominations: [...this.nominations],
+      verdicts: [...this.verdicts],
+      mafiaTargetParticipantId: this.mafiaTargetParticipantId,
+      doctorProtections: [...this.doctorProtections],
+      detectiveInvestigations: [...this.detectiveInvestigations],
+      detectiveInvestigationHistory: map(
+        [...this.detectiveInvestigationHistory],
+        ([id, values]) => [id, [...values]],
+      ),
+      completedVoteRecords: structuredClone(this.completedVoteRecords),
+      completedNightActionRecords: structuredClone(this.completedNightActionRecords),
+      phase: this.phase,
+      phaseDeadline: this.phaseDeadline.toISOString(),
+      nominatedParticipantId: this.nominatedParticipantId,
+      dayNumber: this.dayNumber,
+    };
+  }
+  static restore(
+    snapshot: MafiaGameSessionSnapshot,
+    now: () => Date = () => new Date(),
+  ): MafiaGameSession {
+    const session = new MafiaGameSession(
+      snapshot.sessionId,
+      structuredClone(snapshot.participants),
+      snapshot.dayDurations,
+      now,
+    );
+    session.timeline.splice(0, session.timeline.length, ...structuredClone(snapshot.timeline));
+    session.timelineItemCounts.clear();
+    for (const [type, count] of snapshot.timelineItemCounts)
+      session.timelineItemCounts.set(type, count);
+    session.nominations.clear();
+    for (const [id, target] of snapshot.nominations) session.nominations.set(id, target);
+    session.verdicts.clear();
+    for (const [id, vote] of snapshot.verdicts) session.verdicts.set(id, vote);
+    session.mafiaTargetParticipantId = snapshot.mafiaTargetParticipantId;
+    session.doctorProtections.clear();
+    for (const [id, target] of snapshot.doctorProtections)
+      session.doctorProtections.set(id, target);
+    session.detectiveInvestigations.clear();
+    for (const [id, target] of snapshot.detectiveInvestigations)
+      session.detectiveInvestigations.set(id, target);
+    session.detectiveInvestigationHistory.clear();
+    for (const [id, values] of snapshot.detectiveInvestigationHistory)
+      session.detectiveInvestigationHistory.set(id, new Map(values));
+    session.completedVoteRecords.splice(
+      0,
+      session.completedVoteRecords.length,
+      ...structuredClone(snapshot.completedVoteRecords),
+    );
+    session.completedNightActionRecords.splice(
+      0,
+      session.completedNightActionRecords.length,
+      ...structuredClone(snapshot.completedNightActionRecords),
+    );
+    session.phase = snapshot.phase;
+    session.phaseDeadline = dayjs(snapshot.phaseDeadline).toDate();
+    session.nominatedParticipantId = snapshot.nominatedParticipantId;
+    session.dayNumber = snapshot.dayNumber;
+    return session;
   }
 
   submitPublicSpeech(

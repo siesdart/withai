@@ -39,6 +39,7 @@ export class MafiaGameModule implements GameModule<
   constructor(
     private readonly randomIntExclusive: RandomInt = randomInt,
     private readonly dayDurations: MafiaDayDurations = defaultDayDurations,
+    private readonly now: () => Date = () => new Date(),
   ) {}
   create({
     sessionId,
@@ -54,6 +55,7 @@ export class MafiaGameModule implements GameModule<
         sessionId,
         createParticipants(participantCount, this.randomIntExclusive),
         this.dayDurations,
+        this.now,
       ),
     );
   }

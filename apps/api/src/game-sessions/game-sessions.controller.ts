@@ -4,14 +4,12 @@ import {
   Controller,
   ForbiddenException,
   Get,
-  Header,
   HttpException,
   HttpStatus,
   Param,
   Post,
   Req,
   Res,
-  Sse,
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -24,12 +22,12 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiResponse,
+  ApiServiceUnavailableResponse,
   ApiTags,
   ApiTooManyRequestsResponse,
 } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import type { Result } from 'neverthrow';
-import { map, type Observable } from 'rxjs';
 import { match } from 'ts-pattern';
 
 import { retryAfterSeconds } from './cooldown/cooldown';
@@ -47,6 +45,9 @@ import {
 } from './idempotency/idempotency-key.decorator';
 
 @ApiTags('Game Sessions')
+@ApiServiceUnavailableResponse({
+  description: 'The durable Game Session authority is temporarily unavailable.',
+})
 @Controller('game-sessions')
 export class GameSessionsController {
   constructor(private readonly gameSessionsService: GameSessionsService) {}
@@ -70,27 +71,31 @@ export class GameSessionsController {
   @ApiConflictResponse({
     description: 'The Idempotency-Key was already used with a different request.',
   })
-  createMafiaSession(
+  async createMafiaSession(
     @Body() body: CreateMafiaSessionDto,
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
     @OptionalIdempotencyKey() idempotencyKey: string | undefined,
   ) {
     return this.resolveGameSessionResult(
-      this.gameSessionsService
-        .createMafiaSession(request.headers.cookie, body.participantCount, idempotencyKey)
-        .map(({ holderId, projection }) => {
-          response.cookie(
-            this.gameSessionsService.guestCookieName(),
-            this.gameSessionsService.signGuestId(holderId),
-            {
-              httpOnly: true,
-              sameSite: 'strict',
-              secure: process.env.NODE_ENV === 'production',
-            },
-          );
-          return projection;
-        }),
+      (
+        await this.gameSessionsService.createMafiaSession(
+          request.headers.cookie,
+          body.participantCount,
+          idempotencyKey,
+        )
+      ).map(({ holderId, projection }) => {
+        response.cookie(
+          this.gameSessionsService.guestCookieName(),
+          this.gameSessionsService.signGuestId(holderId),
+          {
+            httpOnly: true,
+            sameSite: 'strict',
+            secure: process.env.NODE_ENV === 'production',
+          },
+        );
+        return projection;
+      }),
     );
   }
 
@@ -101,7 +106,7 @@ export class GameSessionsController {
   @ApiForbiddenResponse({
     description: 'The Game Session does not exist or is unavailable to this guest.',
   })
-  snapshot(@Param('sessionId') sessionId: string, @Req() request: Request) {
+  async snapshot(@Param('sessionId') sessionId: string, @Req() request: Request) {
     return this.projectionFor(sessionId, request.headers.cookie);
   }
 
@@ -129,7 +134,7 @@ export class GameSessionsController {
   @ApiForbiddenResponse({
     description: 'The Game Session does not exist or is unavailable to this guest.',
   })
-  submitPublicSpeech(
+  async submitPublicSpeech(
     @Param('sessionId') sessionId: string,
     @Body() body: CreatePublicSpeechDto,
     @Req() request: Request,
@@ -153,7 +158,7 @@ export class GameSessionsController {
   @ApiBody({ type: CreateMafiaChatDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ApiCreatedResponse({ type: MafiaGameSessionProjectionEntity })
-  submitMafiaChat(
+  async submitMafiaChat(
     @Param('sessionId') sessionId: string,
     @Body() body: CreateMafiaChatDto,
     @Req() request: Request,
@@ -179,7 +184,7 @@ export class GameSessionsController {
   @ApiCreatedResponse({ type: MafiaGameSessionProjectionEntity })
   @ApiBadRequestResponse({ description: 'The nomination is not permitted in the current Phase.' })
   @ApiConflictResponse({ description: 'The idempotency key was reused with a different action.' })
-  submitNomination(
+  async submitNomination(
     @Param('sessionId') sessionId: string,
     @Body() body: CreateNominationDto,
     @Req() request: Request,
@@ -214,7 +219,7 @@ export class GameSessionsController {
     },
   })
   @ApiConflictResponse({ description: 'The idempotency key was reused with a different action.' })
-  submitFinalDefence(
+  async submitFinalDefence(
     @Param('sessionId') sessionId: string,
     @Body() body: CreatePublicSpeechDto,
     @Req() request: Request,
@@ -240,7 +245,7 @@ export class GameSessionsController {
   @ApiCreatedResponse({ type: MafiaGameSessionProjectionEntity })
   @ApiBadRequestResponse({ description: 'The verdict is not permitted in the current Phase.' })
   @ApiConflictResponse({ description: 'The idempotency key was reused with a different action.' })
-  submitVerdict(
+  async submitVerdict(
     @Param('sessionId') sessionId: string,
     @Body() body: CreateVerdictDto,
     @Req() request: Request,
@@ -262,7 +267,7 @@ export class GameSessionsController {
   @ApiBody({ type: CreateNominationDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ApiCreatedResponse({ type: MafiaGameSessionProjectionEntity })
-  submitMafiaTarget(
+  async submitMafiaTarget(
     @Param('sessionId') sessionId: string,
     @Body() body: CreateNominationDto,
     @Req() request: Request,
@@ -284,7 +289,7 @@ export class GameSessionsController {
   @ApiBody({ type: CreateNominationDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ApiCreatedResponse({ type: MafiaGameSessionProjectionEntity })
-  submitDoctorProtection(
+  async submitDoctorProtection(
     @Param('sessionId') sessionId: string,
     @Body() body: CreateNominationDto,
     @Req() request: Request,
@@ -306,7 +311,7 @@ export class GameSessionsController {
   @ApiBody({ type: CreateNominationDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ApiCreatedResponse({ type: MafiaGameSessionProjectionEntity })
-  submitDetectiveInvestigation(
+  async submitDetectiveInvestigation(
     @Param('sessionId') sessionId: string,
     @Body() body: CreateNominationDto,
     @Req() request: Request,
@@ -342,7 +347,7 @@ export class GameSessionsController {
   @ApiForbiddenResponse({
     description: 'The Game Session does not exist or is unavailable to this guest.',
   })
-  adjustDiscussionTime(
+  async adjustDiscussionTime(
     @Param('sessionId') sessionId: string,
     @Body() body: CreateDiscussionTimeAdjustmentDto,
     @Req() request: Request,
@@ -361,8 +366,7 @@ export class GameSessionsController {
     );
   }
 
-  @Sse(':sessionId/events')
-  @Header('Cache-Control', 'no-cache')
+  @Get(':sessionId/events')
   @ApiOperation({ summary: 'Subscribe to ordered Game Session SSE events' })
   @ApiCookieAuth('withai_guest')
   @ApiResponse({
@@ -374,34 +378,59 @@ export class GameSessionsController {
   @ApiForbiddenResponse({
     description: 'The Game Session does not exist or is unavailable to this guest.',
   })
-  events(
+  async events(
     @Param('sessionId') sessionId: string,
     @Req() request: Request,
-  ): Observable<{ id: string; type: string; data: object }> {
+    @Res() response: Response,
+  ): Promise<void> {
     const events = this.resolveGameSessionResult(
-      this.gameSessionsService.eventsFor(
+      await this.gameSessionsService.eventsFor(
         sessionId,
         request.headers.cookie,
         this.lastEventId(request.headers['last-event-id']),
       ),
     );
-    return events.pipe(
-      map((projection) => ({
-        id: String(projection.eventId),
-        type: 'snapshot',
-        data: projection,
-      })),
-    );
+    response.set({
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'Content-Type': 'text/event-stream',
+    });
+    response.flushHeaders();
+
+    let sentSnapshot = false;
+    const subscription = events.subscribe({
+      next: (projection) => {
+        const eventId = sentSnapshot ? `id: ${projection.eventId}\n` : '';
+        sentSnapshot = true;
+        response.write(`event: snapshot\n${eventId}data: ${JSON.stringify(projection)}\n\n`);
+      },
+      error: () => response.end(),
+      complete: () => response.end(),
+    });
+    request.once('close', () => subscription.unsubscribe());
   }
 
-  private projectionFor(sessionId: string, cookie: string | undefined) {
-    return this.resolveGameSessionResult(this.gameSessionsService.getProjection(sessionId, cookie));
+  private async projectionFor(sessionId: string, cookie: string | undefined) {
+    return this.resolveGameSessionResult(
+      await this.gameSessionsService.getProjection(sessionId, cookie),
+    );
   }
 
   private resolveGameSessionResult<Value>(
     result: Result<Value, GameSessionError>,
     response?: Response,
-  ): Value {
+  ): Value;
+  private resolveGameSessionResult<Value>(
+    result: Promise<Result<Value, GameSessionError>>,
+    response?: Response,
+  ): Promise<Value>;
+  private resolveGameSessionResult<Value>(
+    result: Result<Value, GameSessionError> | Promise<Result<Value, GameSessionError>>,
+    response?: Response,
+  ): Value | Promise<Value> {
+    if (result instanceof Promise) {
+      return result.then((value) => this.resolveGameSessionResult(value, response));
+    }
     return result.match(
       (value) => value,
       (error) => {
@@ -443,6 +472,14 @@ export class GameSessionsController {
           new HttpException(
             'Your Guest Play Allowance is exhausted for today.',
             HttpStatus.TOO_MANY_REQUESTS,
+          ),
+      )
+      .with(
+        { type: 'durability-unavailable' },
+        () =>
+          new HttpException(
+            'The Game Session authority is temporarily unavailable.',
+            HttpStatus.SERVICE_UNAVAILABLE,
           ),
       )
       .with(

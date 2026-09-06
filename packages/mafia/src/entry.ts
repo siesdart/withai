@@ -7,6 +7,7 @@ export type {
   MafiaAgentSpeechContext,
   MafiaDayPhaseResult,
   MafiaGameProjection,
+  MafiaGameSessionSnapshot,
   MafiaPhase,
   MafiaProjectionError,
   MafiaPublicChatMessage,

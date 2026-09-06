@@ -52,6 +52,7 @@ export type DurableCreationIdempotencyRecord = {
 export type DurableCreationResult =
   | { type: 'created' }
   | { type: 'replayed'; record: DurableCreationIdempotencyRecord }
+  | { type: 'active-session'; sessionId: string }
   | { type: 'conflict' }
   | { type: 'allowance-exhausted' };
 
@@ -109,6 +110,11 @@ export class RedisGameSessionAuthority {
          redis.call('SET', KEYS[6], ARGV[9], 'PX', ARGV[2])
          redis.call('SET', KEYS[7], ARGV[10], 'PX', ARGV[2])
          redis.call('SET', KEYS[8], ARGV[11], 'PX', ARGV[2])
+         if ARGV[11] == 'in-progress' then
+           redis.call('SET', KEYS[9], ARGV[7], 'PX', ARGV[2])
+         elseif redis.call('GET', KEYS[9]) == ARGV[7] then
+           redis.call('DEL', KEYS[9])
+         end
          redis.call('ZADD', KEYS[2], ARGV[3], ARGV[4])
          redis.call('PEXPIRE', KEYS[2], ARGV[5])
          if ARGV[11] == 'in-progress' then
@@ -117,7 +123,7 @@ export class RedisGameSessionAuthority {
            redis.call('ZREM', KEYS[3], ARGV[7])
          end
          return 1`,
-        8,
+        9,
         snapshotKey,
         eventsKey,
         this.activeSessionsKey(),
@@ -126,6 +132,7 @@ export class RedisGameSessionAuthority {
         this.lastActivityKey(snapshot.sessionId),
         this.phaseDeadlineKey(snapshot.sessionId),
         this.statusKey(snapshot.sessionId),
+        this.holderActiveSessionKey(snapshot.holderId),
         JSON.stringify(snapshot),
         ttlMs,
         event.eventId,
@@ -226,6 +233,8 @@ export class RedisGameSessionAuthority {
              return 3
            end
          end
+         local activeSessionId = redis.call('GET', KEYS[10])
+         if activeSessionId then return 'active:' .. activeSessionId end
          local count = tonumber(redis.call('GET', KEYS[4]) or '0')
          if count >= tonumber(ARGV[7]) then return 4 end
          count = redis.call('INCR', KEYS[4])
@@ -238,11 +247,12 @@ export class RedisGameSessionAuthority {
          redis.call('ZADD', KEYS[3], ARGV[3], ARGV[4])
          redis.call('PEXPIRE', KEYS[3], ARGV[5])
          redis.call('ZADD', KEYS[6], ARGV[10], ARGV[11])
+         redis.call('SET', KEYS[10], ARGV[11], 'PX', ARGV[2])
          if ARGV[8] == '1' then
            redis.call('SET', KEYS[5], ARGV[12], 'PX', ARGV[2])
          end
          return 1`,
-        9,
+        10,
         this.snapshotKey(snapshot.sessionId),
         this.snapshotVersionKey(snapshot.sessionId),
         this.eventsKey(snapshot.sessionId),
@@ -252,6 +262,7 @@ export class RedisGameSessionAuthority {
         this.lastActivityKey(snapshot.sessionId),
         this.phaseDeadlineKey(snapshot.sessionId),
         this.statusKey(snapshot.sessionId),
+        this.holderActiveSessionKey(holderId),
         JSON.stringify(snapshot),
         sessionTtlMs,
         event.eventId,
@@ -272,6 +283,12 @@ export class RedisGameSessionAuthority {
       ),
       (cause): DurableSessionError => ({ type: 'authority-unavailable', cause }),
     ).andThen((value) => {
+      if (typeof value === 'string' && value.startsWith('active:')) {
+        return ok<DurableCreationResult, DurableSessionError>({
+          type: 'active-session',
+          sessionId: value.slice('active:'.length),
+        });
+      }
       const outcome = Number(value);
       if (outcome === 1) return ok<DurableCreationResult, DurableSessionError>({ type: 'created' });
       if (outcome === 3)
@@ -434,6 +451,7 @@ export class RedisGameSessionAuthority {
   abandonIfReconnectExpired(
     sessionId: string,
     reconnectGraceDeadline: string,
+    holderId: string,
   ): ResultAsync<boolean, DurableSessionError> {
     return ResultAsync.fromPromise(
       this.redis.eval(
@@ -450,8 +468,11 @@ export class RedisGameSessionAuthority {
          redis.call('PEXPIRE', KEYS[9], ARGV[3])
          redis.call('PEXPIRE', KEYS[4], ARGV[3])
          redis.call('ZREM', KEYS[5], ARGV[4])
+         if redis.call('GET', KEYS[10]) == ARGV[4] then
+           redis.call('DEL', KEYS[10])
+         end
          return 1`,
-        9,
+        10,
         this.snapshotKey(sessionId),
         this.snapshotVersionKey(sessionId),
         this.reconnectLeasesKey(sessionId),
@@ -461,6 +482,7 @@ export class RedisGameSessionAuthority {
         this.statusKey(sessionId),
         this.lastActivityKey(sessionId),
         this.phaseDeadlineKey(sessionId),
+        this.holderActiveSessionKey(holderId),
         reconnectGraceDeadline,
         this.now().valueOf(),
         abandonedSessionTtlMs,
@@ -484,8 +506,9 @@ export class RedisGameSessionAuthority {
                if redis.call('ZCARD', KEYS[4]) > 0 then return 0 end
                redis.call('DEL', KEYS[1], KEYS[2], KEYS[3], KEYS[4], KEYS[6], KEYS[7], KEYS[8])
                redis.call('ZREM', KEYS[5], ARGV[5])
+               if redis.call('GET', KEYS[9]) == ARGV[5] then redis.call('DEL', KEYS[9]) end
                return 1`,
-              8,
+              9,
               this.snapshotKey(snapshot.sessionId),
               this.snapshotVersionKey(snapshot.sessionId),
               this.eventsKey(snapshot.sessionId),
@@ -494,6 +517,7 @@ export class RedisGameSessionAuthority {
               this.statusKey(snapshot.sessionId),
               this.lastActivityKey(snapshot.sessionId),
               this.phaseDeadlineKey(snapshot.sessionId),
+              this.holderActiveSessionKey(snapshot.holderId),
               snapshot.lastActivityAt,
               this.now().valueOf(),
               dayjs(snapshot.lastActivityAt).valueOf(),
@@ -544,11 +568,16 @@ export class RedisGameSessionAuthority {
          redis.call('SET', KEYS[4], ARGV[2], 'PX', ARGV[4])
          redis.call('SET', KEYS[5], ARGV[5], 'PX', ARGV[4])
          redis.call('SET', KEYS[7], ARGV[6], 'PX', ARGV[4])
+         if ARGV[6] == 'in-progress' then
+           redis.call('SET', KEYS[8], ARGV[10], 'PX', ARGV[4])
+         elseif redis.call('GET', KEYS[8]) == ARGV[10] then
+           redis.call('DEL', KEYS[8])
+         end
          redis.call('ZADD', KEYS[2], ARGV[2], ARGV[7])
          redis.call('PEXPIRE', KEYS[2], ARGV[8])
          redis.call('ZADD', KEYS[3], ARGV[9], ARGV[10])
          return 1`,
-        7,
+        8,
         this.snapshotKey(snapshot.sessionId),
         this.eventsKey(snapshot.sessionId),
         this.activeSessionsKey(),
@@ -556,6 +585,7 @@ export class RedisGameSessionAuthority {
         this.lastActivityKey(snapshot.sessionId),
         this.statusKey(snapshot.sessionId),
         this.phaseDeadlineKey(snapshot.sessionId),
+        this.holderActiveSessionKey(snapshot.holderId),
         expectedPhaseDeadline,
         event.eventId,
         JSON.stringify(snapshot),
@@ -695,6 +725,10 @@ export class RedisGameSessionAuthority {
 
   private statusKey(sessionId: string) {
     return `${this.keyPrefix}:statuses:${sessionId}`;
+  }
+
+  private holderActiveSessionKey(holderId: string) {
+    return `${this.keyPrefix}:holder-active-sessions:${holderId}`;
   }
 
   private msUntilNextUtcDay() {

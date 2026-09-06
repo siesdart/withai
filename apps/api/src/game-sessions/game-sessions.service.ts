@@ -70,6 +70,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
   private readonly mafiaModule: MafiaGameModule;
   private readonly sessions = new Map<string, StoredGameSessionEntity>();
   private readonly guestSessionCounts = new Map<string, number>();
+  private readonly activeSessionIdsByHolder = new Map<string, string>();
   private readonly idempotencyKeys = new Map<string, IdempotencyRecord<string>>();
   private readonly sessionMutationTails = new Map<string, Promise<void>>();
   private readonly guestCookies = createGuestCookieSigner(
@@ -157,6 +158,14 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     }
     this.lifecycle.cleanupExpiredSessions();
     const holderId = this.guestCookies.read(cookie) ?? randomUUID();
+    const activeSessionId = this.activeSessionIdsByHolder.get(holderId);
+    if (!this.authority && activeSessionId) {
+      const activeSession = this.sessions.get(activeSessionId);
+      if (activeSession?.status === 'in-progress') {
+        return this.projectionFor(activeSession).map((projection) => ({ holderId, projection }));
+      }
+      this.activeSessionIdsByHolder.delete(holderId);
+    }
     const scopedIdempotencyKey = idempotencyKey && `${holderId}:${idempotencyKey}`;
     if (!this.authority && scopedIdempotencyKey) {
       const lookup = lookupIdempotency(
@@ -269,8 +278,21 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
           projection: existingProjection,
         }));
       }
+      if (creation.value.type === 'active-session') {
+        const hydrated = await this.hydrateAuthoritativeSession(creation.value.sessionId);
+        if (hydrated.isErr()) return err(hydrated.error);
+        const activeSession = this.sessions.get(creation.value.sessionId);
+        if (!activeSession) {
+          return err({ type: 'session-not-found', sessionId: creation.value.sessionId });
+        }
+        return this.projectionFor(activeSession).map((existingProjection) => ({
+          holderId,
+          projection: existingProjection,
+        }));
+      }
     }
     this.sessions.set(sessionId, session);
+    this.activeSessionIdsByHolder.set(holderId, sessionId);
     await this.submitAndCommitAgentActions(session);
     this.lifecycle.schedulePhaseTransition(session);
     return ok({ holderId, projection: projection.value });
@@ -913,6 +935,10 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     session.nextEventId += 1;
     return session.gameSession
       .projectionFor(session.humanParticipantId, session.nextEventId)
+      .map((projection) => {
+        if (projection.public.phase === 'completed') session.status = 'completed';
+        return projection;
+      })
       .mapErr((cause): GameSessionError => ({
         type: 'invalid-mafia-projection',
         cause,

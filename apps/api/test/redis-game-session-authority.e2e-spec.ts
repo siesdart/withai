@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from '@jest/globals';
 import { MafiaGameSession, type MafiaParticipant } from '@repo/mafia';
 import dayjs from 'dayjs';
+import type { Redis } from 'ioredis';
 import RedisMock from 'ioredis-mock';
 
 import { RedisGameSessionAuthority } from '../src/game-sessions/durability/redis-game-session-authority';
@@ -37,7 +38,7 @@ const createSnapshot = (sessionId: string, lastActivityAt = dayjs().toISOString(
 });
 
 describe('RedisGameSessionAuthority', () => {
-  const redisClients: RedisMock[] = [];
+  const redisClients: Redis[] = [];
 
   afterEach(() => {
     for (const client of redisClients.splice(0)) client.disconnect();
@@ -247,7 +248,7 @@ describe('RedisGameSessionAuthority', () => {
       expiredDeadline,
     );
     await expect(
-      authority.abandonIfReconnectExpired('abandoned-session', expiredDeadline),
+      authority.abandonIfReconnectExpired('abandoned-session', expiredDeadline, 'holder-1'),
     ).resolves.toEqual({ value: true });
     await expect(authority.load('abandoned-session')).resolves.toMatchObject({
       value: { status: 'abandoned' },

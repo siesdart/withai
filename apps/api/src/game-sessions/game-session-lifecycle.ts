@@ -200,6 +200,7 @@ export class GameSessionLifecycle {
         .abandonIfReconnectExpired(
           session.gameSession.snapshot().sessionId,
           session.reconnectGraceDeadline!.toISOString(),
+          session.holderId,
         )
         .match(
           (abandoned) => {
@@ -259,6 +260,7 @@ export class GameSessionLifecycle {
               await authority.abandonIfReconnectExpired(
                 snapshot.sessionId,
                 session.reconnectGraceDeadline.toISOString(),
+                snapshot.holderId,
               );
               return;
             }
@@ -290,6 +292,7 @@ export class GameSessionLifecycle {
         await authority.abandonIfReconnectExpired(
           snapshot.sessionId,
           snapshot.reconnectGraceDeadline,
+          snapshot.holderId,
         );
       }),
     );

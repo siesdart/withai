@@ -6,6 +6,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, jest } from '@jes
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { MafiaGameModule, mafiaGameConfig, type MafiaDayDurations } from '@repo/mafia';
+import type { Redis } from 'ioredis';
 import RedisMock from 'ioredis-mock';
 import request from 'supertest';
 
@@ -107,7 +108,7 @@ type LifecycleFixture = {
   close: () => Promise<void>;
   clock: ControlledGameSessionClock;
   gatewaySpy: jest.Mocked<AgentDecisionGateway>;
-  redis: RedisMock;
+  redis: Redis;
   prefix: string;
 };
 
@@ -130,7 +131,7 @@ const createLifecycleFixture = async (options?: {
   clock?: ControlledGameSessionClock;
   gatewaySpy?: jest.Mocked<AgentDecisionGateway>;
   prefix?: string;
-  redis?: RedisMock;
+  redis?: Redis;
   dayDurations?: MafiaDayDurations;
 }): Promise<LifecycleFixture> => {
   const clock = options?.clock ?? new ControlledGameSessionClock();

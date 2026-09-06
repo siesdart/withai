@@ -61,6 +61,32 @@ describe('GameSessionsService', () => {
     redis.disconnect();
   });
 
+  it('converges concurrent creation requests from separate tabs on the active session', async () => {
+    const redis = new RedisMock();
+    const authority = new RedisGameSessionAuthority(redis);
+    const agentDecisions = {
+      decidePublicSpeech: () => ({ type: 'remain-silent' as const }),
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
+    };
+    const firstTab = new GameSessionsService(agentDecisions);
+    const secondTab = new GameSessionsService(agentDecisions);
+    Object.assign(firstTab, { authority });
+    Object.assign(secondTab, { authority });
+    const cookie = `withai_guest=${firstTab.signGuestId('holder-multi-tab')}`;
+
+    const [first, second] = await Promise.all([
+      firstTab.createMafiaSession(cookie, 5, 'first-tab-request'),
+      secondTab.createMafiaSession(cookie, 5, 'second-tab-request'),
+    ]);
+
+    if (first.isErr() || second.isErr()) throw new Error('Expected a shared active session.');
+    expect(first.value.projection.sessionId).toBe(second.value.projection.sessionId);
+    redis.disconnect();
+  });
+
   it('recovers an expired phase when its timer was missed before a snapshot is read', async () => {
     jest.useFakeTimers({ now: new Date('2026-08-27T17:11:51.000Z') });
     const service = new GameSessionsService({

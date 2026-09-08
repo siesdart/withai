@@ -149,6 +149,43 @@ export class RedisGameSessionAuthority {
     ).map((saved) => saved === 1);
   }
 
+  saveSnapshot(snapshot: DurableSessionSnapshot): ResultAsync<boolean, DurableSessionError> {
+    const ttlMs = snapshot.status === 'abandoned' ? abandonedSessionTtlMs : sessionTtlMs;
+    return ResultAsync.fromPromise(
+      this.redis.eval(
+        `if not redis.call('GET', KEYS[1]) then return 0 end
+         if redis.call('GET', KEYS[4]) == 'abandoned' then return 0 end
+         redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2])
+         redis.call('SET', KEYS[5], ARGV[3], 'PX', ARGV[2])
+         redis.call('SET', KEYS[6], ARGV[4], 'PX', ARGV[2])
+         redis.call('SET', KEYS[4], ARGV[5], 'PX', ARGV[2])
+         if ARGV[5] == 'in-progress' then
+           redis.call('SET', KEYS[7], ARGV[6], 'PX', ARGV[2])
+           redis.call('ZADD', KEYS[2], ARGV[7], ARGV[6])
+         else
+           redis.call('ZREM', KEYS[2], ARGV[6])
+         end
+         return 1`,
+        7,
+        this.snapshotKey(snapshot.sessionId),
+        this.activeSessionsKey(),
+        this.eventsKey(snapshot.sessionId),
+        this.statusKey(snapshot.sessionId),
+        this.lastActivityKey(snapshot.sessionId),
+        this.phaseDeadlineKey(snapshot.sessionId),
+        this.holderActiveSessionKey(snapshot.holderId),
+        JSON.stringify(snapshot),
+        ttlMs,
+        snapshot.lastActivityAt,
+        snapshot.phaseDeadline,
+        snapshot.status,
+        snapshot.sessionId,
+        this.now().valueOf(),
+      ),
+      (cause): DurableSessionError => ({ type: 'authority-unavailable', cause }),
+    ).map((saved) => saved === 1);
+  }
+
   load(sessionId: string): ResultAsync<DurableSessionSnapshot | undefined, DurableSessionError> {
     const key = this.snapshotKey(sessionId);
     return ResultAsync.fromPromise(this.redis.get(key), (cause): DurableSessionError => ({
@@ -174,7 +211,8 @@ export class RedisGameSessionAuthority {
             return snapshot;
           }
           if (!lifecycle?.startsWith('grace:')) return snapshot;
-          snapshot.reconnectGraceDeadline = lifecycle.slice('grace:'.length);
+          snapshot.reconnectGraceDeadline =
+            lifecycle.split('|')[1] ?? lifecycle.slice('grace:'.length);
           return snapshot;
         });
       });
@@ -363,20 +401,29 @@ export class RedisGameSessionAuthority {
   acquireReconnectLease(
     sessionId: string,
     connectionId: string,
-  ): ResultAsync<void, DurableSessionError> {
+  ): ResultAsync<boolean, DurableSessionError> {
     return ResultAsync.fromPromise(
       this.redis.eval(
-        `redis.call('ZADD', KEYS[1], ARGV[1], ARGV[2])
+        `local lifecycle = redis.call('GET', KEYS[2])
+         if lifecycle == 'abandoned' then return 0 end
+         if string.sub(lifecycle or '', 1, 6) == 'grace:' then
+           local deadline = tonumber(string.match(lifecycle, '^grace:(%d+)|'))
+           if not deadline or deadline <= tonumber(ARGV[4]) then return 0 end
+           redis.call('DEL', KEYS[2])
+         end
+         redis.call('ZADD', KEYS[1], ARGV[1], ARGV[2])
          redis.call('PEXPIRE', KEYS[1], ARGV[3])
          return 1`,
-        1,
+        2,
         this.reconnectLeasesKey(sessionId),
+        this.lifecycleKey(sessionId),
         this.now().valueOf() + reconnectGraceMs,
         connectionId,
         reconnectGraceMs,
+        this.now().valueOf(),
       ),
       (cause): DurableSessionError => ({ type: 'authority-unavailable', cause }),
-    ).map(() => undefined);
+    ).map((acquired) => acquired === 1);
   }
 
   clearReconnectGrace(sessionId: string): ResultAsync<boolean, DurableSessionError> {
@@ -398,7 +445,7 @@ export class RedisGameSessionAuthority {
     return ResultAsync.fromPromise(
       this.redis.set(
         this.lifecycleKey(sessionId),
-        `grace:${reconnectGraceDeadline}`,
+        `grace:${Date.parse(reconnectGraceDeadline)}|${reconnectGraceDeadline}`,
         'PX',
         sessionTtlMs,
       ),
@@ -418,7 +465,7 @@ export class RedisGameSessionAuthority {
          redis.call('ZREMRANGEBYSCORE', KEYS[2], '-inf', ARGV[2])
          if redis.call('ZCARD', KEYS[2]) > 0 then return 0 end
          if not redis.call('GET', KEYS[1]) then return 0 end
-         redis.call('SET', KEYS[3], 'grace:' .. ARGV[3], 'PX', ARGV[4])
+         redis.call('SET', KEYS[3], 'grace:' .. ARGV[5] .. '|' .. ARGV[3], 'PX', ARGV[4])
          return 1`,
         3,
         this.snapshotKey(sessionId),
@@ -428,6 +475,7 @@ export class RedisGameSessionAuthority {
         this.now().valueOf(),
         reconnectGraceDeadline,
         sessionTtlMs,
+        Date.parse(reconnectGraceDeadline),
       ),
       (cause): DurableSessionError => ({ type: 'authority-unavailable', cause }),
     ).map((started) => started === 1);
@@ -458,7 +506,7 @@ export class RedisGameSessionAuthority {
         `if not redis.call('GET', KEYS[1]) then return 0 end
          redis.call('ZREMRANGEBYSCORE', KEYS[3], '-inf', ARGV[2])
          if redis.call('ZCARD', KEYS[3]) > 0 then return 0 end
-         if redis.call('GET', KEYS[6]) ~= 'grace:' .. ARGV[1] then return 0 end
+         if redis.call('GET', KEYS[6]) ~= 'grace:' .. ARGV[5] .. '|' .. ARGV[1] then return 0 end
          if redis.call('GET', KEYS[7]) ~= 'in-progress' then return 0 end
          redis.call('SET', KEYS[6], 'abandoned', 'PX', ARGV[3])
          redis.call('SET', KEYS[7], 'abandoned', 'PX', ARGV[3])
@@ -487,6 +535,7 @@ export class RedisGameSessionAuthority {
         this.now().valueOf(),
         abandonedSessionTtlMs,
         sessionId,
+        Date.parse(reconnectGraceDeadline),
       ),
       (cause): DurableSessionError => ({ type: 'authority-unavailable', cause }),
     ).map((abandoned) => abandoned === 1);

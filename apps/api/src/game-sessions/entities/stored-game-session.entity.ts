@@ -8,6 +8,7 @@ import type { MafiaGameSessionProjectionEntity } from './mafia-game-session-proj
 
 export type ScheduledAgentPublicSpeech = {
   participantId: string;
+  content: string;
   dueAt: string;
 };
 

@@ -559,7 +559,7 @@ describe('Mafia Game Session API', () => {
       .expect(201);
   }, 40_000);
 
-  it('enforces ten new sessions per UTC day for one guest identity', async () => {
+  it('reuses an active Game Session without consuming additional Guest Play Allowance', async () => {
     const first = await request(app.getHttpServer())
       .post('/game-sessions/mafia')
       .send({ participantCount: 5 });
@@ -567,18 +567,20 @@ describe('Mafia Game Session API', () => {
 
     for (let index = 0; index < 9; index += 1) {
       // oxlint-disable-next-line no-await-in-loop -- each request must observe the previous allowance count.
-      await request(app.getHttpServer())
+      const repeated = await request(app.getHttpServer())
         .post('/game-sessions/mafia')
         .set('Cookie', guestCookie)
         .send({ participantCount: 5 })
         .expect(201);
+      expect(repeated.body.sessionId).toBe(first.body.sessionId);
     }
 
-    await request(app.getHttpServer())
+    const repeated = await request(app.getHttpServer())
       .post('/game-sessions/mafia')
       .set('Cookie', guestCookie)
       .send({ participantCount: 5 })
-      .expect(429);
+      .expect(201);
+    expect(repeated.body.sessionId).toBe(first.body.sessionId);
   });
 
   it('reuses a Game Session when a creation request is retried with the same idempotency key', async () => {
@@ -659,11 +661,12 @@ describe('Mafia Game Session API', () => {
         .expect(201);
     }
 
-    await request(app.getHttpServer())
+    const repeated = await request(app.getHttpServer())
       .post('/game-sessions/mafia')
       .set('Cookie', guestCookie)
       .send({ participantCount: 5 })
-      .expect(429);
+      .expect(201);
+    expect(repeated.body.sessionId).toBe(first.body.sessionId);
   });
 
   it('keeps private Night commands unavailable outside Night without exposing private state', async () => {

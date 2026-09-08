@@ -44,6 +44,19 @@ export class GameSessionDurability {
       });
   }
 
+  async saveSnapshot(session: StoredGameSessionEntity): Promise<Result<boolean, GameSessionError>> {
+    const authority = this.authorityFor();
+    if (!authority) return ok(true);
+    const projection = session.gameSession.projectionFor(
+      session.humanParticipantId,
+      session.nextEventId,
+    );
+    if (projection.isErr())
+      return err({ type: 'invalid-mafia-projection', cause: projection.error });
+    const saved = await authority.saveSnapshot(this.snapshotFor(session, projection.value));
+    return saved.mapErr((): GameSessionError => ({ type: 'durability-unavailable' }));
+  }
+
   async touch(session: StoredGameSessionEntity): Promise<Result<void, GameSessionError>> {
     const authority = this.authorityFor();
     const now = dayjs(this.clock.now());

@@ -8,7 +8,10 @@ import { match } from 'ts-pattern';
 
 import type { AgentDecisionGateway } from './agent-decision.gateway';
 import type { MafiaGameSessionProjectionEntity } from './entities/mafia-game-session-projection.entity';
-import type { StoredGameSessionEntity } from './entities/stored-game-session.entity';
+import type {
+  StoredGameSessionEntity,
+  ScheduledAgentPublicSpeech,
+} from './entities/stored-game-session.entity';
 import { nativeGameSessionClock, type GameSessionClock } from './game-session-clock';
 import type { GameSessionError } from './game-session-error';
 
@@ -155,18 +158,9 @@ export class GameSessionAgentOrchestrator {
           current.scheduledAgentPublicSpeeches,
           (candidate) => !this.sameScheduledSpeech(candidate, scheduled),
         );
-        return current.gameSession.agentSpeechContextFor(participantId).match(
-          (context) =>
-            match(this.agentDecisions.decidePublicSpeech(context))
-              .with({ type: 'speak' }, (decision) =>
-                current.gameSession
-                  .submitPublicSpeech(participantId, decision.content, this.clock.now())
-                  .isOk(),
-              )
-              .with({ type: 'remain-silent' }, () => false)
-              .exhaustive(),
-          () => false,
-        );
+        return current.gameSession
+          .submitPublicSpeech(scheduled.participantId, scheduled.content, this.clock.now())
+          .isOk();
       });
     }, delayMs);
     session.publicSpeechAgentTimers.add(timer);
@@ -290,17 +284,21 @@ export class GameSessionAgentOrchestrator {
   }
 
   private publicSpeechFor(session: StoredGameSessionEntity, participantId: string) {
-    const delayMs = Number.parseInt(participantId.split('-')[1] ?? '1', 10) * 100;
-    return {
-      participantId,
-      dueAt: dayjs(this.clock.now()).add(delayMs, 'millisecond').toISOString(),
-    };
+    return session.gameSession.agentSpeechContextFor(participantId).match(
+      (context) =>
+        match(this.agentDecisions.decidePublicSpeech(context))
+          .with({ type: 'speak' }, (decision) => ({
+            participantId,
+            content: decision.content,
+            dueAt: dayjs(this.clock.now()).add(decision.delayMs, 'millisecond').toISOString(),
+          }))
+          .with({ type: 'remain-silent' }, () => undefined)
+          .exhaustive(),
+      () => undefined,
+    );
   }
 
-  private sameScheduledSpeech(
-    left: { participantId: string; dueAt: string },
-    right: { participantId: string; dueAt: string },
-  ) {
+  private sameScheduledSpeech(left: ScheduledAgentPublicSpeech, right: ScheduledAgentPublicSpeech) {
     return left.participantId === right.participantId && left.dueAt === right.dueAt;
   }
 }

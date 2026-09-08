@@ -221,7 +221,7 @@ describe('GameSessionAgentOrchestrator', () => {
     }
   });
 
-  it('does not invoke the Agent gateway when a scheduled public reply is cancelled', () => {
+  it('does not re-invoke the Agent gateway when a scheduled public reply is cancelled', () => {
     const session = createSession();
     const decisions = new CountingPublicSpeechGateway();
     const orchestrator = new GameSessionAgentOrchestrator(
@@ -234,7 +234,7 @@ describe('GameSessionAgentOrchestrator', () => {
     orchestrator.clearTimers(session);
     jest.advanceTimersByTime(1_000);
 
-    expect(decisions.publicSpeechDecisionCount).toBe(0);
+    expect(decisions.publicSpeechDecisionCount).toBe(4);
   });
 
   it('keeps an Agent Final Defence follow-up scheduled after a durable session refresh', async () => {

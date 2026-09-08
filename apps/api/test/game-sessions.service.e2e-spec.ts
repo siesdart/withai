@@ -205,6 +205,7 @@ describe('GameSessionsService', () => {
     };
     now = new Date(created.value.projection.public.phaseDeadline);
     await runNextDueTimer();
+    await runNextDueTimer();
     expect(claimPhaseDeadline).toHaveBeenCalledTimes(1);
 
     await expect(

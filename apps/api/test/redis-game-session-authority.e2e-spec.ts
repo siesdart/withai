@@ -258,6 +258,30 @@ describe('RedisGameSessionAuthority', () => {
     ).resolves.toEqual({ value: false });
   });
 
+  it('rejects a reconnect after its stored grace deadline before the sweep runs', async () => {
+    const redis = new RedisMock();
+    redisClients.push(redis);
+    const authority = new RedisGameSessionAuthority(redis);
+    const snapshot = createSnapshot('expired-reconnect-session');
+    const projection = createMafiaSession('expired-reconnect-session').projectionFor(
+      'participant-1',
+      1,
+    );
+    if (projection.isErr()) throw new Error('Expected a Human Player projection.');
+
+    await authority.save(snapshot, { eventId: 1, projection: projection.value });
+    await authority.acquireReconnectLease('expired-reconnect-session', 'connection-1');
+    await authority.releaseReconnectLeaseAndBeginGrace(
+      'expired-reconnect-session',
+      'connection-1',
+      '2020-01-01T00:00:00.000Z',
+    );
+
+    await expect(
+      authority.acquireReconnectLease('expired-reconnect-session', 'connection-2'),
+    ).resolves.toEqual({ value: false });
+  });
+
   it('rejects a phase-deadline claim once authoritative state has changed', async () => {
     const redis = new RedisMock();
     redisClients.push(redis);

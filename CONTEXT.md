@@ -38,6 +38,10 @@ _Avoid_: Role reveal
 One complete playthrough of a selected game with a fixed set of Participants and rules.
 _Avoid_: Room, match
 
+**Completed Game Session**:
+A Game Session whose Phase is completed. Its Human Player may read its outcome and completed records for 24 hours after completion, but may not take further actions; the retention period does not extend when it is read.
+_Avoid_: Archived game, finished room
+
 **Game Module**:
 The ruleset-owned definition of one selectable game, including its state, permitted actions, information disclosures, resolution, and presentation.
 _Avoid_: Mode, game type

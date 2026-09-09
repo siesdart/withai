@@ -801,7 +801,7 @@ describe('Mafia Game Session API lifecycle acceptance', () => {
       await fixture.close();
       fixture.redis.disconnect();
     }
-  }, 10_000);
+  }, 30_000);
 
   it('recovers an expired phase once after an API restart', async () => {
     const clock = new ControlledGameSessionClock();

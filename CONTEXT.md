@@ -94,6 +94,10 @@ _Avoid_: Last words
 The required opening public statement made by an Agent who is the Nominee during a Final Defence.
 _Avoid_: Auto-reply
 
+**Scheduled Agent Action**:
+An Agent action that has been decided or is required at Phase entry, is durably pending, and must be consumed at most once before it changes a Game Session. It includes delayed Public Chat and Final Defence statements, Mafia Night Target fallback, and required Phase-entry actions.
+_Avoid_: Timer, callback, background job
+
 **Nomination**:
 The Day vote in which each living Participant chooses one living Participant for Final Defence. A unique highest total produces a Nominee; a tie or no submission produces no Nominee.
 _Avoid_: Accusation, primary vote

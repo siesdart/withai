@@ -42,6 +42,7 @@ type LifecyclePhaseOperations = {
     session: StoredGameSessionEntity,
   ): Result<MafiaGameSessionProjectionEntity, GameSessionError>;
   submitAgentActions(session: StoredGameSessionEntity): Promise<Result<void, GameSessionError>>;
+  retryAgentActions(sessionId: string): void;
 };
 
 type LifecycleRuntime = {
@@ -90,11 +91,16 @@ export class GameSessionLifecycle {
           return;
         }
         this.runtime.agentActions.clearTimers(session);
+        session.agentActionsPending = true;
         const nextProjection = this.runtime.phaseOperations.publishProjection(session);
         if (nextProjection.isErr()) return;
         const saved = await this.runtime.persistence.save(session, nextProjection.value);
         if (saved.isOk() && saved.value) {
-          await this.runtime.phaseOperations.submitAgentActions(session);
+          const actions = await this.runtime.phaseOperations.submitAgentActions(session);
+          if (actions.isErr()) {
+            this.runtime.phaseOperations.retryAgentActions(nextProjection.value.sessionId);
+            return;
+          }
           this.schedulePhaseTransition(session);
           return;
         }
@@ -150,6 +156,7 @@ export class GameSessionLifecycle {
     if (advanced.isErr()) return err({ type: 'invalid-mafia-projection', cause: advanced.error });
     if (advanced.value.type === 'not-due') return ok(undefined);
     this.runtime.agentActions.clearTimers(session);
+    session.agentActionsPending = true;
     const projection = this.runtime.phaseOperations.publishProjection(session);
     if (projection.isErr()) return projection.map(() => undefined);
     const authority = this.runtime.persistence.authorityFor();
@@ -167,7 +174,10 @@ export class GameSessionLifecycle {
       return hydrated.isErr() ? err(hydrated.error) : ok(undefined);
     }
     const actions = await this.runtime.phaseOperations.submitAgentActions(session);
-    if (actions.isErr()) return actions;
+    if (actions.isErr()) {
+      this.runtime.phaseOperations.retryAgentActions(projection.value.sessionId);
+      return actions;
+    }
     this.schedulePhaseTransition(session);
     return ok(undefined);
   }
@@ -269,6 +279,13 @@ export class GameSessionLifecycle {
           const events = await authority.eventsAfter(snapshot.sessionId, 0);
           if (events.isOk())
             for (const event of events.value) session.events.next(event.projection);
+          if (session.agentActionsPending) {
+            const actions = await this.runtime.phaseOperations.submitAgentActions(session);
+            if (actions.isErr()) {
+              this.runtime.phaseOperations.retryAgentActions(snapshot.sessionId);
+              return;
+            }
+          }
           this.runtime.agentActions.resumeScheduledTasks(session);
           const recovered = await this.recoverExpiredPhaseDurably(session);
           if (recovered.isOk()) this.schedulePhaseTransition(session);

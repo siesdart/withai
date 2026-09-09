@@ -19,6 +19,7 @@ export function useGameSessionSubscription(sessionId: string | undefined) {
     const abortController = new AbortController();
     let lastEventId: string | undefined;
     let retryCount = 0;
+    let receivedCompletedProjection = false;
 
     const subscribe = async () => {
       while (!abortController.signal.aborted) {
@@ -32,13 +33,14 @@ export function useGameSessionSubscription(sessionId: string | undefined) {
           },
           onProjection: (projection, eventId) => {
             lastEventId = eventId;
+            receivedCompletedProjection ||= projection.public.phase === 'completed';
             updateGameSessionSnapshot(queryClient, sessionId, projection);
           },
           signal: abortController.signal,
         });
 
         const shouldReconnect = result.match(
-          () => true,
+          () => !receivedCompletedProjection,
           (error) =>
             match(error)
               .with({ type: 'aborted' }, () => false)

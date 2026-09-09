@@ -115,6 +115,7 @@ export class GameSessionDurability {
       scheduledAgentPublicSpeeches: session.scheduledAgentPublicSpeeches,
       scheduledAgentFinalDefence: session.scheduledAgentFinalDefence,
       scheduledMafiaTargetFallbackAt: session.scheduledMafiaTargetFallbackAt,
+      agentActionsPending: session.agentActionsPending,
     };
   }
 
@@ -152,6 +153,7 @@ export class GameSessionDurability {
       scheduledAgentPublicSpeeches: snapshot.scheduledAgentPublicSpeeches ?? [],
       scheduledAgentFinalDefence: snapshot.scheduledAgentFinalDefence,
       scheduledMafiaTargetFallbackAt: snapshot.scheduledMafiaTargetFallbackAt,
+      agentActionsPending: snapshot.agentActionsPending ?? false,
       reconnectGraceTimer: undefined,
       reconnectGraceDeadline: snapshot.reconnectGraceDeadline
         ? dayjs(snapshot.reconnectGraceDeadline)

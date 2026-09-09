@@ -44,6 +44,7 @@ export type StoredGameSessionEntity = {
   scheduledAgentPublicSpeeches: ScheduledAgentPublicSpeech[];
   scheduledAgentFinalDefence: ScheduledAgentFinalDefence | undefined;
   scheduledMafiaTargetFallbackAt: string | undefined;
+  agentActionsPending: boolean;
   reconnectGraceTimer: NodeJS.Timeout | undefined;
   reconnectGraceDeadline: Dayjs | undefined;
 };

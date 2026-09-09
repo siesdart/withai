@@ -154,6 +154,13 @@ export class GameSessionAgentOrchestrator {
     const timer = this.clock.setTimeout(() => {
       void this.commitAgentMutation(session, (current) => {
         current.publicSpeechAgentTimers.delete(timer);
+        if (
+          // Remeda has no predicate-based membership helper.
+          !current.scheduledAgentPublicSpeeches.some((candidate) =>
+            this.sameScheduledSpeech(candidate, scheduled),
+          )
+        )
+          return false;
         current.scheduledAgentPublicSpeeches = filter(
           current.scheduledAgentPublicSpeeches,
           (candidate) => !this.sameScheduledSpeech(candidate, scheduled),
@@ -183,6 +190,7 @@ export class GameSessionAgentOrchestrator {
     session.mafiaTargetFallbackTimer = this.clock.setTimeout(() => {
       void this.commitAgentMutation(session, (current) => {
         current.mafiaTargetFallbackTimer = undefined;
+        if (current.scheduledMafiaTargetFallbackAt !== fallbackAt) return false;
         current.scheduledMafiaTargetFallbackAt = undefined;
         if (this.humanMafiaTarget(current)) return false;
         const before = JSON.stringify(current.gameSession.snapshot());
@@ -274,6 +282,12 @@ export class GameSessionAgentOrchestrator {
     session.agentFinalDefenceTimer = this.clock.setTimeout(() => {
       void this.commitAgentMutation(session, (current) => {
         current.agentFinalDefenceTimer = undefined;
+        if (
+          !current.scheduledAgentFinalDefence ||
+          current.scheduledAgentFinalDefence.participantId !== scheduled.participantId ||
+          current.scheduledAgentFinalDefence.dueAt !== scheduled.dueAt
+        )
+          return false;
         current.scheduledAgentFinalDefence = undefined;
         return current.gameSession
           .submitFinalDefence(scheduled.participantId, scheduled.content, this.clock.now())

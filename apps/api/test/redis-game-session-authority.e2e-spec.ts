@@ -155,6 +155,36 @@ describe('RedisGameSessionAuthority', () => {
     });
   });
 
+  it('does not let a stale snapshot-only write replace a newer event', async () => {
+    const redis = new RedisMock();
+    redisClients.push(redis);
+    const authority = new RedisGameSessionAuthority(redis);
+    const gameSession = createMafiaSession('snapshot-race-session');
+    const projection = gameSession.projectionFor('participant-1', 1);
+    if (projection.isErr()) throw new Error('Expected a Human Player projection.');
+    const first = {
+      ...createSnapshot('snapshot-race-session'),
+      gameSession: gameSession.snapshot(),
+      nextEventId: 1,
+    };
+    const latest = { ...first, nextEventId: 2, lastActivityAt: '2026-09-05T00:01:00.000Z' };
+
+    await expect(
+      authority.save(first, { eventId: 1, projection: projection.value }),
+    ).resolves.toEqual({
+      value: true,
+    });
+    await expect(
+      authority.save(latest, { eventId: 2, projection: projection.value }),
+    ).resolves.toEqual({
+      value: true,
+    });
+    await expect(authority.saveSnapshot(first)).resolves.toEqual({ value: false });
+    await expect(authority.load('snapshot-race-session')).resolves.toMatchObject({
+      value: { nextEventId: 2, lastActivityAt: latest.lastActivityAt },
+    });
+  });
+
   it('commits only one concurrent snapshot version', async () => {
     const redis = new RedisMock();
     redisClients.push(redis);

@@ -96,6 +96,7 @@ const createSession = (): StoredGameSessionEntity => ({
   scheduledAgentPublicSpeeches: [],
   scheduledAgentFinalDefence: undefined,
   scheduledMafiaTargetFallbackAt: undefined,
+  agentActionsPending: false,
   reconnectGraceTimer: undefined,
   reconnectGraceDeadline: undefined,
 });
@@ -237,7 +238,7 @@ describe('GameSessionAgentOrchestrator', () => {
     expect(decisions.publicSpeechDecisionCount).toBe(4);
   });
 
-  it('keeps an Agent Final Defence follow-up scheduled after a durable session refresh', async () => {
+  it('consumes an Agent Final Defence follow-up only once after a durable session refresh', async () => {
     const redis = new RedisMock();
     const authority = new RedisGameSessionAuthority(redis, 'withai:agent-timers');
     const sessions = new Map<string, StoredGameSessionEntity>();
@@ -271,6 +272,7 @@ describe('GameSessionAgentOrchestrator', () => {
       async () => ok(new MafiaGameSessionProjectionEntity()),
       async (_stale, mutate) => {
         const current = sessions.get('session-1');
+        if (current && mutate(current)) committedFollowUps += 1;
         if (current && mutate(current)) committedFollowUps += 1;
       },
     );

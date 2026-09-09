@@ -74,6 +74,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
   private readonly activeSessionIdsByHolder = new Map<string, string>();
   private readonly idempotencyKeys = new Map<string, IdempotencyRecord<string>>();
   private readonly sessionMutationTails = new Map<string, Promise<void>>();
+  private readonly agentActionRetryTimers = new Map<string, NodeJS.Timeout>();
   private readonly guestCookies = createGuestCookieSigner(
     gameSessionsConfig.guestCookieName,
     guestCookieSecret(),
@@ -122,6 +123,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         projectionFor: this.projectionFor.bind(this),
         publishProjection: this.publishProjection.bind(this),
         submitAgentActions: this.submitAndCommitAgentActions.bind(this),
+        retryAgentActions: this.retryAgentActions.bind(this),
       },
       clock: this.clock,
       agentActions: this.agentActions,
@@ -146,6 +148,8 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     if (this.cleanupTimer) {
       this.clock.clearInterval(this.cleanupTimer);
     }
+    for (const timer of this.agentActionRetryTimers.values()) this.clock.clearTimeout(timer);
+    this.agentActionRetryTimers.clear();
     void this.authority?.close();
   }
 
@@ -240,6 +244,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       scheduledAgentPublicSpeeches: [],
       scheduledAgentFinalDefence: undefined,
       scheduledMafiaTargetFallbackAt: undefined,
+      agentActionsPending: true,
       reconnectGraceTimer: undefined,
       reconnectGraceDeadline: undefined,
     };
@@ -294,7 +299,11 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     }
     this.sessions.set(sessionId, session);
     this.activeSessionIdsByHolder.set(holderId, sessionId);
-    await this.submitAndCommitAgentActions(session);
+    const actions = await this.submitAndCommitAgentActions(session);
+    if (actions.isErr()) {
+      this.retryAgentActions(sessionId);
+      return ok({ holderId, projection: projection.value });
+    }
     this.lifecycle.schedulePhaseTransition(session);
     return ok({ holderId, projection: projection.value });
   }
@@ -972,21 +981,50 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
   private async submitAndCommitAgentActions(
     session: StoredGameSessionEntity,
   ): Promise<Result<void, GameSessionError>> {
+    if (!session.agentActionsPending) {
+      session.agentActionsPending = true;
+      const prepared = await this.durability.saveSnapshot(session);
+      if (prepared.isErr() || !prepared.value) {
+        await this.hydrateAuthoritativeSession(session.gameSession.snapshot().sessionId);
+        return err({ type: 'durability-unavailable' });
+      }
+    }
     const beforeGame = JSON.stringify(session.gameSession.snapshot());
-    const beforeSchedule = this.agentScheduleSnapshot(session);
     this.agentActions.submitDayActions(session);
-    if (beforeGame !== JSON.stringify(session.gameSession.snapshot()))
-      return (await this.publishAgentProjection(session)).map(() => undefined);
-    if (beforeSchedule === this.agentScheduleSnapshot(session)) return ok(undefined);
-    return (await this.durability.saveSnapshot(session)).map(() => undefined);
+    session.agentActionsPending = false;
+    const saved =
+      beforeGame !== JSON.stringify(session.gameSession.snapshot())
+        ? await this.publishAgentProjection(session)
+        : await this.durability.saveSnapshot(session);
+    if (saved.isOk() && saved.value) return ok(undefined);
+    await this.hydrateAuthoritativeSession(session.gameSession.snapshot().sessionId);
+    return err({ type: 'durability-unavailable' });
   }
 
-  private agentScheduleSnapshot(session: StoredGameSessionEntity) {
-    return JSON.stringify({
-      scheduledAgentPublicSpeeches: session.scheduledAgentPublicSpeeches,
-      scheduledAgentFinalDefence: session.scheduledAgentFinalDefence,
-      scheduledMafiaTargetFallbackAt: session.scheduledMafiaTargetFallbackAt,
-    });
+  private retryAgentActions(sessionId: string, attempt = 0) {
+    if (this.agentActionRetryTimers.has(sessionId)) return;
+    const delayMs = Math.min(1000 * 2 ** attempt, 30_000);
+    const timer = this.clock.setTimeout(() => {
+      this.agentActionRetryTimers.delete(sessionId);
+      void (async () => {
+        const hydrated = await this.hydrateAuthoritativeSession(sessionId);
+        if (hydrated.isErr()) {
+          this.retryAgentActions(sessionId, attempt + 1);
+          return;
+        }
+        const session = this.sessions.get(sessionId);
+        if (!session || !session.agentActionsPending) return;
+        const actions = await this.submitAndCommitAgentActions(session);
+        if (actions.isErr()) {
+          this.retryAgentActions(sessionId, attempt + 1);
+          return;
+        }
+        this.agentActions.resumeScheduledTasks(session);
+        this.lifecycle.schedulePhaseTransition(session);
+      })();
+    }, delayMs);
+    this.agentActionRetryTimers.set(sessionId, timer);
+    timer.unref?.();
   }
 
   private async commitAgentMutation(

@@ -37,6 +37,7 @@ export type DurableSessionSnapshot = {
   scheduledAgentPublicSpeeches?: ScheduledAgentPublicSpeech[];
   scheduledAgentFinalDefence?: ScheduledAgentFinalDefence;
   scheduledMafiaTargetFallbackAt?: string;
+  agentActionsPending?: boolean;
 };
 
 export type DurablePublicEvent = {
@@ -155,6 +156,8 @@ export class RedisGameSessionAuthority {
       this.redis.eval(
         `if not redis.call('GET', KEYS[1]) then return 0 end
          if redis.call('GET', KEYS[4]) == 'abandoned' then return 0 end
+         local currentVersion = redis.call('GET', KEYS[8])
+         if not currentVersion or tonumber(currentVersion) ~= tonumber(ARGV[8]) then return 0 end
          redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2])
          redis.call('SET', KEYS[5], ARGV[3], 'PX', ARGV[2])
          redis.call('SET', KEYS[6], ARGV[4], 'PX', ARGV[2])
@@ -166,7 +169,7 @@ export class RedisGameSessionAuthority {
            redis.call('ZREM', KEYS[2], ARGV[6])
          end
          return 1`,
-        7,
+        8,
         this.snapshotKey(snapshot.sessionId),
         this.activeSessionsKey(),
         this.eventsKey(snapshot.sessionId),
@@ -174,6 +177,7 @@ export class RedisGameSessionAuthority {
         this.lastActivityKey(snapshot.sessionId),
         this.phaseDeadlineKey(snapshot.sessionId),
         this.holderActiveSessionKey(snapshot.holderId),
+        this.snapshotVersionKey(snapshot.sessionId),
         JSON.stringify(snapshot),
         ttlMs,
         snapshot.lastActivityAt,
@@ -181,6 +185,7 @@ export class RedisGameSessionAuthority {
         snapshot.status,
         snapshot.sessionId,
         this.now().valueOf(),
+        snapshot.nextEventId,
       ),
       (cause): DurableSessionError => ({ type: 'authority-unavailable', cause }),
     ).map((saved) => saved === 1);
@@ -210,7 +215,10 @@ export class RedisGameSessionAuthority {
             snapshot.status = 'abandoned';
             return snapshot;
           }
-          if (!lifecycle?.startsWith('grace:')) return snapshot;
+          if (!lifecycle?.startsWith('grace:')) {
+            snapshot.reconnectGraceDeadline = undefined;
+            return snapshot;
+          }
           snapshot.reconnectGraceDeadline =
             lifecycle.split('|')[1] ?? lifecycle.slice('grace:'.length);
           return snapshot;

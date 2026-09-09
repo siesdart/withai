@@ -765,7 +765,15 @@ describe('Mafia Game Session API lifecycle acceptance', () => {
   });
 
   it('retains an active SSE session past the idle expiry and expires it after closing', async () => {
-    const fixture = await createLifecycleFixture();
+    const fixture = await createLifecycleFixture({
+      dayDurations: {
+        discussionDurationMs: 20 * 60 * 1000,
+        nominationDurationMs: 20 * 60 * 1000,
+        finalDefenceDurationMs: 20 * 60 * 1000,
+        verdictDurationMs: 20 * 60 * 1000,
+        nightDurationMs: 20 * 60 * 1000,
+      },
+    });
     try {
       const created = await request(fixture.app.getHttpServer())
         .post('/game-sessions/mafia')
@@ -775,7 +783,8 @@ describe('Mafia Game Session API lifecycle acceptance', () => {
       const guestCookie = firstSetCookie(created.headers['set-cookie']);
       const stream = await openSse(fixture.app, sessionId, guestCookie);
 
-      await fixture.clock.advanceBy(15 * 60 * 1000 + 1);
+      for (let elapsed = 0; elapsed < 15 * 60 * 1000 + 1; elapsed += 30 * 1000)
+        await fixture.clock.advanceBy(30 * 1000);
       await request(fixture.app.getHttpServer())
         .get(`/game-sessions/${sessionId}/snapshot`)
         .set('Cookie', guestCookie)

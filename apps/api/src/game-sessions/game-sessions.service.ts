@@ -17,6 +17,7 @@ import {
   of,
   ReplaySubject,
   startWith,
+  takeWhile,
 } from 'rxjs';
 import { match, P } from 'ts-pattern';
 
@@ -410,7 +411,9 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
           // event after its supplied cursor.
           let cursor = lastEventId ?? snapshot.value.eventId;
           const connectionId = randomUUID();
-          return from(authority.acquireReconnectLease(sessionId, connectionId)).pipe(
+          return from(
+            authority.acquireReconnectLease(sessionId, connectionId, session.value.holderId),
+          ).pipe(
             mergeMap((lease) => {
               if (lease.isErr() || !lease.value) throw new Error('Game Session is unavailable.');
               return concat(
@@ -421,6 +424,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
                     const renewedLease = await authority.acquireReconnectLease(
                       sessionId,
                       connectionId,
+                      session.value.holderId,
                     );
                     if (renewedLease.isErr() || !renewedLease.value)
                       throw new Error('Game Session is unavailable.');
@@ -433,6 +437,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
                 ),
               );
             }),
+            takeWhile((projection) => projection.public.phase !== 'completed', true),
             finalize(() => {
               void this.releaseReconnectLeaseWithRetry(
                 authority,
@@ -461,7 +466,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       defer(() => {
         session.activeEventSubscribers += 1;
         const connectionId = randomUUID();
-        void this.authority?.acquireReconnectLease(sessionId, connectionId);
+        void this.authority?.acquireReconnectLease(sessionId, connectionId, session.holderId);
         if (session.reconnectGraceTimer) {
           this.clock.clearTimeout(session.reconnectGraceTimer);
           session.reconnectGraceTimer = undefined;

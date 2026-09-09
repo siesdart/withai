@@ -409,26 +409,66 @@ export class RedisGameSessionAuthority {
   acquireReconnectLease(
     sessionId: string,
     connectionId: string,
+    holderId: string,
   ): ResultAsync<boolean, DurableSessionError> {
     return ResultAsync.fromPromise(
       this.redis.eval(
-        `local lifecycle = redis.call('GET', KEYS[2])
+        `local lifecycle = redis.call('GET', KEYS[5])
          if lifecycle == 'abandoned' then return 0 end
          if string.sub(lifecycle or '', 1, 6) == 'grace:' then
            local deadline = tonumber(string.match(lifecycle, '^grace:(%d+)|'))
-           if not deadline or deadline <= tonumber(ARGV[4]) then return 0 end
-           redis.call('DEL', KEYS[2])
+           if not deadline or deadline <= tonumber(ARGV[4]) then
+             redis.call('DEL', KEYS[4])
+             redis.call('SET', KEYS[5], 'abandoned', 'PX', ARGV[5])
+             redis.call('SET', KEYS[6], 'abandoned', 'PX', ARGV[5])
+             redis.call('PEXPIRE', KEYS[1], ARGV[5])
+             redis.call('PEXPIRE', KEYS[2], ARGV[5])
+             redis.call('PEXPIRE', KEYS[3], ARGV[5])
+             redis.call('PEXPIRE', KEYS[9], ARGV[5])
+             redis.call('PEXPIRE', KEYS[10], ARGV[5])
+             redis.call('ZREM', KEYS[7], ARGV[6])
+             if redis.call('GET', KEYS[8]) == ARGV[6] then redis.call('DEL', KEYS[8]) end
+             return 0
+           end
+           redis.call('DEL', KEYS[5])
+         elseif string.sub(lifecycle or '', 1, 6) == 'lease:' then
+           local leaseDeadline = tonumber(string.match(lifecycle, '^lease:(%d+)|'))
+           if not leaseDeadline or leaseDeadline <= tonumber(ARGV[4]) then
+             redis.call('DEL', KEYS[4])
+             redis.call('SET', KEYS[5], 'abandoned', 'PX', ARGV[5])
+             redis.call('SET', KEYS[6], 'abandoned', 'PX', ARGV[5])
+             redis.call('PEXPIRE', KEYS[1], ARGV[5])
+             redis.call('PEXPIRE', KEYS[2], ARGV[5])
+             redis.call('PEXPIRE', KEYS[3], ARGV[5])
+             redis.call('PEXPIRE', KEYS[9], ARGV[5])
+             redis.call('PEXPIRE', KEYS[10], ARGV[5])
+             redis.call('ZREM', KEYS[7], ARGV[6])
+             if redis.call('GET', KEYS[8]) == ARGV[6] then redis.call('DEL', KEYS[8]) end
+             return 0
+           end
          end
-         redis.call('ZADD', KEYS[1], ARGV[1], ARGV[2])
-         redis.call('PEXPIRE', KEYS[1], ARGV[3])
+         redis.call('ZADD', KEYS[4], ARGV[1], ARGV[2])
+         redis.call('PEXPIRE', KEYS[4], ARGV[3])
+         redis.call('SET', KEYS[5], 'lease:' .. ARGV[1] .. '|' .. ARGV[1], 'PX', ARGV[7])
          return 1`,
-        2,
+        10,
+        this.snapshotKey(sessionId),
+        this.snapshotVersionKey(sessionId),
+        this.eventsKey(sessionId),
         this.reconnectLeasesKey(sessionId),
         this.lifecycleKey(sessionId),
+        this.statusKey(sessionId),
+        this.activeSessionsKey(),
+        this.holderActiveSessionKey(holderId),
+        this.lastActivityKey(sessionId),
+        this.phaseDeadlineKey(sessionId),
         this.now().valueOf() + reconnectGraceMs,
         connectionId,
         reconnectGraceMs,
         this.now().valueOf(),
+        abandonedSessionTtlMs,
+        sessionId,
+        sessionTtlMs,
       ),
       (cause): DurableSessionError => ({ type: 'authority-unavailable', cause }),
     ).map((acquired) => acquired === 1);
@@ -473,12 +513,17 @@ export class RedisGameSessionAuthority {
          redis.call('ZREMRANGEBYSCORE', KEYS[2], '-inf', ARGV[2])
          if redis.call('ZCARD', KEYS[2]) > 0 then return 0 end
          if not redis.call('GET', KEYS[1]) then return 0 end
+         if redis.call('GET', KEYS[4]) ~= 'in-progress' then
+           redis.call('DEL', KEYS[3])
+           return 1
+         end
          redis.call('SET', KEYS[3], 'grace:' .. ARGV[5] .. '|' .. ARGV[3], 'PX', ARGV[4])
          return 1`,
-        3,
+        4,
         this.snapshotKey(sessionId),
         this.reconnectLeasesKey(sessionId),
         this.lifecycleKey(sessionId),
+        this.statusKey(sessionId),
         connectionId,
         this.now().valueOf(),
         reconnectGraceDeadline,

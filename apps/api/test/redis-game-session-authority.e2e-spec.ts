@@ -83,7 +83,7 @@ describe('RedisGameSessionAuthority', () => {
       value: [{ eventId: 1 }, { eventId: 2 }],
     });
 
-    await authority.acquireReconnectLease('session-1', 'connection-1');
+    await authority.acquireReconnectLease('session-1', 'connection-1', 'holder-1');
     await expect(
       authority.releaseReconnectLeaseAndBeginGrace(
         'session-1',
@@ -216,7 +216,7 @@ describe('RedisGameSessionAuthority', () => {
     redisClients.push(redis);
     const authority = new RedisGameSessionAuthority(redis);
 
-    await authority.acquireReconnectLease('session-1', 'connection-a');
+    await authority.acquireReconnectLease('session-1', 'connection-a', 'holder-1');
     await expect(authority.releaseReconnectLease('session-1', 'connection-b')).resolves.toEqual({
       value: false,
     });
@@ -234,7 +234,7 @@ describe('RedisGameSessionAuthority', () => {
     if (projection.isErr()) throw new Error('Expected a Human Player projection.');
 
     await authority.save(snapshot, { eventId: 1, projection: projection.value });
-    await authority.acquireReconnectLease('leased-session', 'connection-1');
+    await authority.acquireReconnectLease('leased-session', 'connection-1', 'holder-1');
     await authority.expireInactiveSessions();
     await expect(authority.load('leased-session')).resolves.toMatchObject({
       value: { sessionId: 'leased-session', status: 'in-progress' },
@@ -270,7 +270,7 @@ describe('RedisGameSessionAuthority', () => {
     if (projection.isErr()) throw new Error('Expected a Human Player projection.');
 
     await authority.save(snapshot, { eventId: 1, projection: projection.value });
-    await authority.acquireReconnectLease('abandoned-session', 'connection-1');
+    await authority.acquireReconnectLease('abandoned-session', 'connection-1', 'holder-1');
     const expiredDeadline = '2020-01-01T00:00:00.000Z';
     await authority.releaseReconnectLeaseAndBeginGrace(
       'abandoned-session',
@@ -300,7 +300,7 @@ describe('RedisGameSessionAuthority', () => {
     if (projection.isErr()) throw new Error('Expected a Human Player projection.');
 
     await authority.save(snapshot, { eventId: 1, projection: projection.value });
-    await authority.acquireReconnectLease('expired-reconnect-session', 'connection-1');
+    await authority.acquireReconnectLease('expired-reconnect-session', 'connection-1', 'holder-1');
     await authority.releaseReconnectLeaseAndBeginGrace(
       'expired-reconnect-session',
       'connection-1',
@@ -308,8 +308,49 @@ describe('RedisGameSessionAuthority', () => {
     );
 
     await expect(
-      authority.acquireReconnectLease('expired-reconnect-session', 'connection-2'),
+      authority.acquireReconnectLease('expired-reconnect-session', 'connection-2', 'holder-1'),
     ).resolves.toEqual({ value: false });
+  });
+
+  it('abandons an orphaned reconnect lease after its expiry and releases the active holder', async () => {
+    const redis = new RedisMock();
+    redisClients.push(redis);
+    let now = new Date('2026-09-05T00:00:00.000Z');
+    const authority = new RedisGameSessionAuthority(redis, 'withai:game-sessions', () => now);
+    const snapshot = createSnapshot('orphaned-lease-session');
+    const projection = createMafiaSession('orphaned-lease-session').projectionFor(
+      'participant-1',
+      1,
+    );
+    if (projection.isErr()) throw new Error('Expected a Human Player projection.');
+
+    await authority.save(snapshot, { eventId: 1, projection: projection.value });
+    await authority.acquireReconnectLease('orphaned-lease-session', 'connection-1', 'holder-1');
+    now = new Date(now.valueOf() + 60_001);
+
+    await expect(
+      authority.acquireReconnectLease('orphaned-lease-session', 'connection-2', 'holder-1'),
+    ).resolves.toEqual({ value: false });
+    await expect(authority.load('orphaned-lease-session')).resolves.toMatchObject({
+      value: { status: 'abandoned' },
+    });
+
+    const replacement = createSnapshot('replacement-session');
+    const replacementProjection = createMafiaSession('replacement-session').projectionFor(
+      'participant-1',
+      1,
+    );
+    if (replacementProjection.isErr()) throw new Error('Expected a Human Player projection.');
+    await expect(
+      authority.create(
+        replacement,
+        { eventId: 1, projection: replacementProjection.value },
+        'holder-1',
+        '2026-09-05',
+        3,
+        undefined,
+      ),
+    ).resolves.toEqual({ value: { type: 'created' } });
   });
 
   it('rejects a phase-deadline claim once authoritative state has changed', async () => {

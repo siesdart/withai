@@ -133,6 +133,7 @@ const createLifecycleFixture = async (options?: {
   prefix?: string;
   redis?: Redis;
   dayDurations?: MafiaDayDurations;
+  randomIntExclusive?: (maxExclusive: number) => number;
 }): Promise<LifecycleFixture> => {
   const clock = options?.clock ?? new ControlledGameSessionClock();
   const gatewaySpy = options?.gatewaySpy ?? createGatewaySpy();
@@ -148,8 +149,10 @@ const createLifecycleFixture = async (options?: {
     .compile();
   Object.assign(moduleRef.get(GameSessionsService), {
     authority: new RedisGameSessionAuthority(redis, prefix, () => clock.now()),
-    ...(options?.dayDurations && {
-      mafiaModule: new MafiaGameModule(undefined, options.dayDurations, () => clock.now()),
+    ...((options?.dayDurations || options?.randomIntExclusive) && {
+      mafiaModule: new MafiaGameModule(options.randomIntExclusive, options.dayDurations, () =>
+        clock.now(),
+      ),
     }),
   });
 
@@ -732,7 +735,7 @@ describe('Mafia Game Session API lifecycle acceptance', () => {
   });
 
   it('abandons a disconnected SSE session after its grace period while preserving its Night fallback', async () => {
-    const fixture = await createLifecycleFixture();
+    const fixture = await createLifecycleFixture({ randomIntExclusive: () => 0 });
     try {
       const created = await request(fixture.app.getHttpServer())
         .post('/game-sessions/mafia')

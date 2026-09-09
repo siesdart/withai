@@ -3,7 +3,8 @@ import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import Redis from 'ioredis';
 import { ResultAsync, err, ok, type Result } from 'neverthrow';
-import { filter, flatMap, map } from 'remeda';
+import { filter, map } from 'remeda';
+import { match } from 'ts-pattern';
 
 import type { MafiaGameSessionProjectionEntity } from '../entities/mafia-game-session-projection.entity';
 import type {
@@ -63,7 +64,7 @@ export type DurableSessionError =
 
 type RedisCommands = Pick<
   Redis,
-  'eval' | 'get' | 'set' | 'zadd' | 'zrange' | 'zrangebyscore' | 'del' | 'quit'
+  'eval' | 'get' | 'set' | 'zadd' | 'zrange' | 'zrangebyscore' | 'zrem' | 'del' | 'quit'
 >;
 
 const millisecondsPerMinute = 60 * 1000;
@@ -367,11 +368,14 @@ export class RedisGameSessionAuthority {
     return ResultAsync.fromPromise(
       this.redis.zrangebyscore(key, '-inf', '+inf'),
       (cause): DurableSessionError => ({ type: 'authority-unavailable', cause }),
-    ).andThen((sessionIds) =>
-      ResultAsync.combine(map(sessionIds, (sessionId) => this.load(sessionId))).map((snapshots) =>
-        flatMap(snapshots, (snapshot) => (snapshot ? [snapshot] : [])),
-      ),
-    );
+    )
+      .andThen((sessionIds) =>
+        ResultAsync.fromPromise(
+          Promise.all(map(sessionIds, (sessionId) => this.loadActiveSnapshot(sessionId))),
+          (cause): DurableSessionError => ({ type: 'authority-unavailable', cause }),
+        ),
+      )
+      .map((snapshots) => filter(snapshots, (snapshot) => snapshot !== undefined));
   }
 
   eventsAfter(
@@ -755,6 +759,32 @@ export class RedisGameSessionAuthority {
     } catch {
       return err({ type: 'invalid-authority-data', key });
     }
+  }
+
+  private async loadActiveSnapshot(sessionId: string): Promise<DurableSessionSnapshot | undefined> {
+    const loaded = await this.load(sessionId);
+    return loaded.match(
+      async (snapshot) => {
+        if (snapshot) return snapshot;
+        await this.removeFromActiveIndex(sessionId);
+        return undefined;
+      },
+      async (error) =>
+        match(error)
+          .with({ type: 'invalid-authority-data' }, async () => {
+            await this.removeFromActiveIndex(sessionId);
+            return undefined;
+          })
+          .with({ type: 'authority-unavailable' }, () => undefined)
+          .exhaustive(),
+    );
+  }
+
+  private removeFromActiveIndex(sessionId: string): ResultAsync<void, DurableSessionError> {
+    return ResultAsync.fromPromise(
+      this.redis.zrem(this.activeSessionsKey(), sessionId),
+      (cause): DurableSessionError => ({ type: 'authority-unavailable', cause }),
+    ).map(() => undefined);
   }
 
   private parseMany<Value>(values: string[], key: string): Result<Value[], DurableSessionError> {

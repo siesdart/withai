@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from '@jest/globals';
+import { afterEach, describe, expect, it, jest } from '@jest/globals';
 import { MafiaGameSession, type MafiaParticipant } from '@repo/mafia';
 import dayjs from 'dayjs';
 import type { Redis } from 'ioredis';
@@ -243,6 +243,73 @@ describe('RedisGameSessionAuthority', () => {
     await authority.releaseReconnectLease('leased-session', 'connection-1');
     await authority.expireInactiveSessions();
     await expect(authority.load('leased-session')).resolves.toEqual({ value: undefined });
+  });
+
+  it('keeps healthy snapshots recoverable while pruning missing and corrupt active entries', async () => {
+    const redis = new RedisMock();
+    redisClients.push(redis);
+    const prefix = 'withai:active-snapshot-pruning';
+    const authority = new RedisGameSessionAuthority(redis, prefix);
+    const snapshot = createSnapshot('healthy-session');
+    const projection = createMafiaSession('healthy-session').projectionFor('participant-1', 1);
+    if (projection.isErr()) throw new Error('Expected a Human Player projection.');
+
+    await authority.save(snapshot, { eventId: 1, projection: projection.value });
+    await redis.zadd(`${prefix}:active-sessions`, 0, 'missing-session', 0, 'corrupt-session');
+    await redis.set(`${prefix}:snapshots:corrupt-session`, '{');
+
+    await expect(authority.activeSnapshots()).resolves.toMatchObject({
+      value: [{ sessionId: 'healthy-session' }],
+    });
+    await expect(redis.zrangebyscore(`${prefix}:active-sessions`, '-inf', '+inf')).resolves.toEqual(
+      ['healthy-session'],
+    );
+    await expect(redis.get(`${prefix}:snapshots:corrupt-session`)).resolves.toBe('{');
+  });
+
+  it('retries a temporarily unavailable indexed snapshot without blocking healthy recovery', async () => {
+    const redis = new RedisMock();
+    redisClients.push(redis);
+    const prefix = 'withai:active-snapshot-retry';
+    const authority = new RedisGameSessionAuthority(redis, prefix);
+    const healthy = createSnapshot('healthy-session');
+    const retrying = createSnapshot('retrying-session');
+    const healthyProjection = createMafiaSession('healthy-session').projectionFor(
+      'participant-1',
+      1,
+    );
+    const retryingProjection = createMafiaSession('retrying-session').projectionFor(
+      'participant-1',
+      1,
+    );
+    if (healthyProjection.isErr() || retryingProjection.isErr())
+      throw new Error('Expected Human Player projections.');
+
+    await authority.save(healthy, { eventId: 1, projection: healthyProjection.value });
+    await authority.save(retrying, { eventId: 1, projection: retryingProjection.value });
+    const originalGet = redis.get.bind(redis);
+    const get = jest.spyOn(redis, 'get');
+    let retryingSnapshotFailed = false;
+    get.mockImplementation((key) => {
+      if (!retryingSnapshotFailed && key === `${prefix}:snapshots:retrying-session`) {
+        retryingSnapshotFailed = true;
+        return Promise.reject(new Error('Temporary Redis read failure.'));
+      }
+      return originalGet(key);
+    });
+
+    await expect(authority.activeSnapshots()).resolves.toMatchObject({
+      value: [{ sessionId: 'healthy-session' }],
+    });
+    get.mockRestore();
+    const recovered = await authority.activeSnapshots();
+    if (recovered.isErr()) throw new Error('Expected indexed snapshots to recover.');
+    expect(recovered.value).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sessionId: 'healthy-session' }),
+        expect.objectContaining({ sessionId: 'retrying-session' }),
+      ]),
+    );
   });
 
   it('persists authorized read activity before evaluating idle expiry', async () => {

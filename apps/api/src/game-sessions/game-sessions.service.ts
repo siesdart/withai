@@ -142,7 +142,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     }
     await this.lifecycle.recoverDurableSessions();
     this.cleanupTimer = this.clock.setInterval(
-      () => this.lifecycle.cleanupExpiredSessions(),
+      () => void this.lifecycle.cleanupExpiredSessions(),
       gameSessionsConfig.cleanupIntervalMs,
     );
     this.cleanupTimer.unref?.();
@@ -169,7 +169,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     if (!this.authority && this.requiresDurableAuthority()) {
       return err({ type: 'durability-unavailable' });
     }
-    this.lifecycle.cleanupExpiredSessions();
+    void this.lifecycle.cleanupExpiredSessions();
     const holderId = this.guestCookies.read(cookie) ?? randomUUID();
     const activeSessionId = this.activeSessionIdsByHolder.get(holderId);
     if (!this.authority && activeSessionId) {
@@ -370,7 +370,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     sessionId: string,
     cookie: string | undefined,
   ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
-    this.lifecycle.cleanupExpiredSessions();
+    void this.lifecycle.cleanupExpiredSessions();
     return this.sessionForHolder(sessionId, cookie).andThen((session) => {
       if (session.status === 'completed') return this.projectionFor(session);
       return this.activeSessionForHolder(sessionId, cookie).andThen((activeSession) =>
@@ -464,7 +464,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     cookie: string | undefined,
     lastEventId: number | undefined,
   ): Result<Observable<MafiaGameSessionProjectionEntity>, GameSessionError> {
-    this.lifecycle.cleanupExpiredSessions();
+    void this.lifecycle.cleanupExpiredSessions();
     const readableSession = this.sessionForHolder(sessionId, cookie);
     if (readableSession.isErr()) return err(readableSession.error);
     if (readableSession.value.status === 'completed')

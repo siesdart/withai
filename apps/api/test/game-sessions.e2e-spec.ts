@@ -845,6 +845,68 @@ describe('Mafia Game Session API lifecycle acceptance', () => {
     }
   });
 
+  it('retries durable recovery on cleanup after a temporary snapshot read failure', async () => {
+    const clock = new ControlledGameSessionClock();
+    const gatewaySpy = createGatewaySpy();
+    const redis = new RedisMock();
+    const prefix = `withai:lifecycle:${randomUUID()}`;
+    const dayDurations = {
+      discussionDurationMs: 20 * 60 * 1000,
+      nominationDurationMs: 20 * 60 * 1000,
+      finalDefenceDurationMs: 20 * 60 * 1000,
+      verdictDurationMs: 20 * 60 * 1000,
+      nightDurationMs: 20 * 60 * 1000,
+    };
+    const first = await createLifecycleFixture({
+      clock,
+      gatewaySpy,
+      prefix,
+      redis,
+      dayDurations,
+    });
+    try {
+      const created = await request(first.app.getHttpServer())
+        .post('/game-sessions/mafia')
+        .send({ participantCount: 5 })
+        .expect(201);
+      const sessionId = String(created.body.sessionId);
+      await first.close();
+
+      const originalGet = redis.get.bind(redis);
+      const getSpy = jest.spyOn(redis, 'get');
+      let snapshotReadFailed = false;
+      getSpy.mockImplementation((key) => {
+        if (!snapshotReadFailed && key === `${prefix}:snapshots:${sessionId}`) {
+          snapshotReadFailed = true;
+          return Promise.reject(new Error('Temporary Redis read failure.'));
+        }
+        return originalGet(key);
+      });
+      const second = await createLifecycleFixture({
+        clock,
+        gatewaySpy,
+        prefix,
+        redis,
+        dayDurations,
+      });
+      try {
+        const sessions = Reflect.get(second.app.get(GameSessionsService), 'sessions');
+        if (!(sessions instanceof Map)) throw new Error('Expected an in-memory session map.');
+        expect(sessions.has(sessionId)).toBe(false);
+
+        await clock.advanceBy(60_001);
+        await flushMicrotasks(100);
+
+        expect(sessions.has(sessionId)).toBe(true);
+      } finally {
+        getSpy.mockRestore();
+        await second.close();
+      }
+    } finally {
+      redis.disconnect();
+    }
+  }, 30_000);
+
   it('cancels delayed Agent public replies when their phase becomes obsolete', async () => {
     const fixture = await createLifecycleFixture({
       dayDurations: {

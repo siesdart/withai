@@ -57,6 +57,8 @@ type LifecycleRuntime = {
 };
 
 export class GameSessionLifecycle {
+  private recoveringDurableSessions = false;
+
   constructor(private readonly runtime: LifecycleRuntime) {}
 
   schedulePhaseTransition(session: StoredGameSessionEntity) {
@@ -227,9 +229,11 @@ export class GameSessionLifecycle {
     session.reconnectGraceTimer.unref?.();
   }
 
-  cleanupExpiredSessions() {
-    void this.runtime.persistence.authorityFor()?.expireInactiveSessions();
-    void this.sweepReconnectGraceDeadlines();
+  async cleanupExpiredSessions() {
+    const authority = this.runtime.persistence.authorityFor();
+    if (authority) await authority.expireInactiveSessions();
+    await this.recoverDurableSessions();
+    await this.sweepReconnectGraceDeadlines();
     const now = this.runtime.now();
     for (const [sessionId, session] of this.runtime.state.sessions) {
       const limit =
@@ -256,47 +260,56 @@ export class GameSessionLifecycle {
 
   async recoverDurableSessions() {
     const authority = this.runtime.persistence.authorityFor();
-    if (!authority) return;
-    const snapshots = await authority.activeSnapshots();
-    if (snapshots.isErr()) return;
-    await Promise.all(
-      pipe(
-        snapshots.value,
-        filter((snapshot) => snapshot.status === 'in-progress'),
-        map(async (snapshot) => {
-          const session = this.runtime.persistence.restore(snapshot);
-          this.runtime.state.sessions.set(snapshot.sessionId, session);
-          if (session.reconnectGraceDeadline) {
-            const remaining = session.reconnectGraceDeadline.diff(
-              this.runtime.now(),
-              'millisecond',
-            );
-            if (remaining <= 0) {
-              await authority.abandonIfReconnectExpired(
-                snapshot.sessionId,
-                session.reconnectGraceDeadline.toISOString(),
-                snapshot.holderId,
+    if (!authority || this.recoveringDurableSessions) return;
+    this.recoveringDurableSessions = true;
+    try {
+      const snapshots = await authority.activeSnapshots();
+      if (snapshots.isErr()) return;
+      await Promise.all(
+        pipe(
+          snapshots.value,
+          filter(
+            (snapshot) =>
+              snapshot.status === 'in-progress' &&
+              !this.runtime.state.sessions.has(snapshot.sessionId),
+          ),
+          map(async (snapshot) => {
+            const session = this.runtime.persistence.restore(snapshot);
+            this.runtime.state.sessions.set(snapshot.sessionId, session);
+            if (session.reconnectGraceDeadline) {
+              const remaining = session.reconnectGraceDeadline.diff(
+                this.runtime.now(),
+                'millisecond',
               );
-              return;
+              if (remaining <= 0) {
+                await authority.abandonIfReconnectExpired(
+                  snapshot.sessionId,
+                  session.reconnectGraceDeadline.toISOString(),
+                  snapshot.holderId,
+                );
+                return;
+              }
+              this.scheduleReconnectGrace(session, remaining);
             }
-            this.scheduleReconnectGrace(session, remaining);
-          }
-          const events = await authority.eventsAfter(snapshot.sessionId, 0);
-          if (events.isOk())
-            for (const event of events.value) session.events.next(event.projection);
-          if (session.agentActionsPending) {
-            const actions = await this.runtime.phaseOperations.submitAgentActions(session);
-            if (actions.isErr()) {
-              this.runtime.phaseOperations.retryAgentActions(snapshot.sessionId);
-              return;
+            const events = await authority.eventsAfter(snapshot.sessionId, 0);
+            if (events.isOk())
+              for (const event of events.value) session.events.next(event.projection);
+            if (session.agentActionsPending) {
+              const actions = await this.runtime.phaseOperations.submitAgentActions(session);
+              if (actions.isErr()) {
+                this.runtime.phaseOperations.retryAgentActions(snapshot.sessionId);
+                return;
+              }
             }
-          }
-          this.runtime.agentActions.resumeScheduledTasks(session);
-          const recovered = await this.recoverExpiredPhaseDurably(session);
-          if (recovered.isOk()) this.schedulePhaseTransition(session);
-        }),
-      ),
-    );
+            this.runtime.agentActions.resumeScheduledTasks(session);
+            const recovered = await this.recoverExpiredPhaseDurably(session);
+            if (recovered.isOk()) this.schedulePhaseTransition(session);
+          }),
+        ),
+      );
+    } finally {
+      this.recoveringDurableSessions = false;
+    }
   }
 
   private async sweepReconnectGraceDeadlines() {

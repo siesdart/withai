@@ -43,6 +43,7 @@ type LifecyclePhaseOperations = {
   ): Result<MafiaGameSessionProjectionEntity, GameSessionError>;
   submitAgentActions(session: StoredGameSessionEntity): Promise<Result<void, GameSessionError>>;
   retryAgentActions(sessionId: string): void;
+  retryPhaseTransition(sessionId: string): void;
 };
 
 type LifecycleRuntime = {
@@ -110,7 +111,11 @@ export class GameSessionLifecycle {
           nextProjection.value.sessionId,
           projection.value.public.phaseDeadline,
         );
-        await this.runtime.persistence.hydrate(nextProjection.value.sessionId);
+        const hydrated = await this.runtime.persistence.hydrate(nextProjection.value.sessionId);
+        if (hydrated.isErr()) {
+          this.runtime.phaseOperations.retryPhaseTransition(nextProjection.value.sessionId);
+          return;
+        }
         const latest = this.runtime.state.sessions.get(nextProjection.value.sessionId);
         if (latest) this.schedulePhaseTransition(latest);
       };
@@ -127,7 +132,7 @@ export class GameSessionLifecycle {
               void resolve();
             }
           },
-          () => undefined,
+          () => this.runtime.phaseOperations.retryPhaseTransition(projection.value.sessionId),
         );
     }, delayMs);
     session.phaseTimer.unref?.();

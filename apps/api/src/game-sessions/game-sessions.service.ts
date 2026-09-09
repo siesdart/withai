@@ -76,6 +76,8 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
   private readonly idempotencyKeys = new Map<string, IdempotencyRecord<string>>();
   private readonly sessionMutationTails = new Map<string, Promise<void>>();
   private readonly agentActionRetryTimers = new Map<string, NodeJS.Timeout>();
+  private readonly phaseTransitionRetryTimers = new Map<string, NodeJS.Timeout>();
+  private readonly scheduledAgentRetryTimers = new Map<string, NodeJS.Timeout>();
   private readonly guestCookies = createGuestCookieSigner(
     gameSessionsConfig.guestCookieName,
     guestCookieSecret(),
@@ -125,6 +127,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         publishProjection: this.publishProjection.bind(this),
         submitAgentActions: this.submitAndCommitAgentActions.bind(this),
         retryAgentActions: this.retryAgentActions.bind(this),
+        retryPhaseTransition: this.retryPhaseTransition.bind(this),
       },
       clock: this.clock,
       agentActions: this.agentActions,
@@ -151,6 +154,10 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     }
     for (const timer of this.agentActionRetryTimers.values()) this.clock.clearTimeout(timer);
     this.agentActionRetryTimers.clear();
+    for (const timer of this.phaseTransitionRetryTimers.values()) this.clock.clearTimeout(timer);
+    this.phaseTransitionRetryTimers.clear();
+    for (const timer of this.scheduledAgentRetryTimers.values()) this.clock.clearTimeout(timer);
+    this.scheduledAgentRetryTimers.clear();
     void this.authority?.close();
   }
 
@@ -1032,6 +1039,47 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     timer.unref?.();
   }
 
+  private retryPhaseTransition(sessionId: string, attempt = 0) {
+    if (this.phaseTransitionRetryTimers.has(sessionId)) return;
+    const delayMs = Math.min(1000 * 2 ** attempt, 30_000);
+    const timer = this.clock.setTimeout(() => {
+      this.phaseTransitionRetryTimers.delete(sessionId);
+      void (async () => {
+        const hydrated = await this.hydrateAuthoritativeSession(sessionId);
+        if (hydrated.isErr()) {
+          this.retryPhaseTransition(sessionId, attempt + 1);
+          return;
+        }
+        const session = this.sessions.get(sessionId);
+        if (!session || session.status !== 'in-progress') return;
+        this.lifecycle.schedulePhaseTransition(session);
+      })();
+    }, delayMs);
+    this.phaseTransitionRetryTimers.set(sessionId, timer);
+    timer.unref?.();
+  }
+
+  private retryScheduledAgentTasks(sessionId: string, attempt = 0) {
+    if (this.scheduledAgentRetryTimers.has(sessionId)) return;
+    const delayMs = Math.min(1000 * 2 ** attempt, 30_000);
+    const timer = this.clock.setTimeout(() => {
+      this.scheduledAgentRetryTimers.delete(sessionId);
+      void (async () => {
+        const hydrated = await this.hydrateAuthoritativeSession(sessionId);
+        if (hydrated.isErr()) {
+          this.retryScheduledAgentTasks(sessionId, attempt + 1);
+          return;
+        }
+        const session = this.sessions.get(sessionId);
+        if (!session || session.status !== 'in-progress') return;
+        this.agentActions.resumeScheduledTasks(session);
+        this.lifecycle.schedulePhaseTransition(session);
+      })();
+    }, delayMs);
+    this.scheduledAgentRetryTimers.set(sessionId, timer);
+    timer.unref?.();
+  }
+
   private async commitAgentMutation(
     staleSession: StoredGameSessionEntity,
     mutate: (session: StoredGameSessionEntity) => boolean,
@@ -1040,7 +1088,10 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     const sessionId = staleSession.gameSession.snapshot().sessionId;
     if (this.authority) {
       const hydrated = await this.hydrateAuthoritativeSession(sessionId);
-      if (hydrated.isErr()) return;
+      if (hydrated.isErr()) {
+        this.retryScheduledAgentTasks(sessionId);
+        return;
+      }
     }
     const session = this.sessions.get(sessionId);
     if (!session || session.status !== 'in-progress') return;
@@ -1051,6 +1102,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         return;
       }
       if (attempt < 1) await this.commitAgentMutation(staleSession, mutate, attempt + 1);
+      else this.retryScheduledAgentTasks(sessionId);
       return;
     }
     const published = await this.publishAgentProjection(session);
@@ -1058,7 +1110,10 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       this.lifecycle.schedulePhaseTransition(session);
       return;
     }
-    if (attempt >= 1) return;
+    if (attempt >= 1) {
+      this.retryScheduledAgentTasks(sessionId);
+      return;
+    }
     await this.commitAgentMutation(staleSession, mutate, attempt + 1);
   }
 

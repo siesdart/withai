@@ -280,7 +280,12 @@ export class RedisGameSessionAuthority {
            end
          end
          local activeSessionId = redis.call('GET', KEYS[10])
-         if activeSessionId then return 'active:' .. activeSessionId end
+         if activeSessionId then
+           if ARGV[8] == '1' then
+             redis.call('SET', KEYS[5], ARGV[9] .. string.char(10) .. activeSessionId, 'PX', ARGV[2])
+           end
+           return 'active:' .. activeSessionId
+         end
          local count = tonumber(redis.call('GET', KEYS[4]) or '0')
          if count >= tonumber(ARGV[7]) then return 4 end
          count = redis.call('INCR', KEYS[4])

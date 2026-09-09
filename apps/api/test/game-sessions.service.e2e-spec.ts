@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, jest } from '@jest/globals';
 import { MafiaGameSession } from '@repo/mafia';
 import RedisMock from 'ioredis-mock';
-import { ok } from 'neverthrow';
+import { errAsync, ok } from 'neverthrow';
 
 import { RedisGameSessionAuthority } from '../src/game-sessions/durability/redis-game-session-authority';
 import { GameSessionsService } from '../src/game-sessions/game-sessions.service';
@@ -136,6 +136,35 @@ describe('GameSessionsService', () => {
     expect(service.publishSessionProjection(created.value.projection.sessionId)).toMatchObject({
       value: { public: { phase: 'discussion' } },
     });
+  });
+
+  it('retries a phase timer after an authority claim failure', async () => {
+    jest.useFakeTimers({ now: new Date('2026-08-27T17:11:51.000Z') });
+    const redis = new RedisMock();
+    const authority = new RedisGameSessionAuthority(redis, 'withai:claim-retry-test');
+    const service = new GameSessionsService({
+      decidePublicSpeech: () => ({ type: 'remain-silent' }),
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
+    });
+    Object.assign(service, { authority });
+    const created = await service.createMafiaSession(undefined, 5, undefined);
+    if (created.isErr()) throw new Error('Expected a durable session.');
+    const claimPhaseDeadline = jest
+      .spyOn(authority, 'claimPhaseDeadline')
+      .mockReturnValueOnce(
+        errAsync({ type: 'authority-unavailable', cause: new Error('offline') }),
+      );
+
+    const deadlineMs = Date.parse(created.value.projection.public.phaseDeadline) - Date.now();
+    await jest.advanceTimersByTimeAsync(deadlineMs);
+    await jest.advanceTimersByTimeAsync(1000);
+    await jest.runOnlyPendingTimersAsync();
+
+    expect(claimPhaseDeadline).toHaveBeenCalledTimes(2);
+    redis.disconnect();
   });
 
   it('retains a durable phase timer after a subscriber hydrates the session', async () => {

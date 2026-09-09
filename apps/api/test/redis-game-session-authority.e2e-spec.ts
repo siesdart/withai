@@ -370,4 +370,56 @@ describe('RedisGameSessionAuthority', () => {
       authority.claimPhaseDeadline('deadline-session', snapshot.phaseDeadline),
     ).resolves.toEqual({ value: false });
   });
+
+  it('binds a Creation Idempotency Key when returning an active session', async () => {
+    const redis = new RedisMock();
+    redisClients.push(redis);
+    const authority = new RedisGameSessionAuthority(redis, 'withai:active-key-binding-test');
+    const activeSnapshot = createSnapshot('active-session');
+    const activeProjection = createMafiaSession('active-session').projectionFor('participant-1', 1);
+    if (activeProjection.isErr()) throw new Error('Expected a Human Player projection.');
+    await expect(
+      authority.create(
+        activeSnapshot,
+        { eventId: 1, projection: activeProjection.value },
+        'holder-1',
+        '2026-09-05',
+        3,
+        undefined,
+      ),
+    ).resolves.toEqual({ value: { type: 'created' } });
+
+    const requestSnapshot = createSnapshot('new-session');
+    const requestProjection = createMafiaSession('new-session').projectionFor('participant-1', 1);
+    if (requestProjection.isErr()) throw new Error('Expected a Human Player projection.');
+    await expect(
+      authority.create(
+        requestSnapshot,
+        { eventId: 1, projection: requestProjection.value },
+        'holder-1',
+        '2026-09-05',
+        3,
+        { key: 'active-session-request-key', fingerprint: '5' },
+      ),
+    ).resolves.toEqual({ value: { type: 'active-session', sessionId: 'active-session' } });
+
+    await expect(
+      authority.loadCreationIdempotency('holder-1', 'active-session-request-key'),
+    ).resolves.toEqual({ value: { fingerprint: '5', sessionId: 'active-session' } });
+    await expect(
+      authority.create(
+        requestSnapshot,
+        { eventId: 1, projection: requestProjection.value },
+        'holder-1',
+        '2026-09-05',
+        3,
+        { key: 'active-session-request-key', fingerprint: '5' },
+      ),
+    ).resolves.toEqual({
+      value: {
+        type: 'replayed',
+        record: { fingerprint: '5', sessionId: 'active-session' },
+      },
+    });
+  });
 });

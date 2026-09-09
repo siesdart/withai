@@ -142,6 +142,10 @@ _Avoid_: Dead player, observer
 The daily number of Game Sessions a non-authenticated Human Player may create.
 _Avoid_: Rate limit, quota
 
+**Creation Idempotency Key**:
+A guest-scoped client key that identifies one request to create or reuse a Game Session. For 24 hours from its first use, the same key and request must resolve to the same Game Session, including when that session was already active at the key's first use.
+_Avoid_: Request ID, creation token
+
 ## Mafia ruleset
 
 **Mafia**:

@@ -348,6 +348,7 @@ describe('GameSessionAgentOrchestrator', () => {
         submitAgentActions: async () => ok(undefined),
         retryAgentActions: () => undefined,
         retryPhaseTransition: () => undefined,
+        retryPhaseTransitionAfterClaimLease: () => undefined,
       },
       clock: nativeGameSessionClock,
       agentActions,

@@ -71,6 +71,7 @@ const millisecondsPerMinute = 60 * 1000;
 const sessionTtlMs = gameSessionsConfig.sessionIdleTtlHours * 60 * millisecondsPerMinute;
 const replayEventTtlMs = sessionTtlMs;
 const reconnectGraceMs = gameSessionsConfig.reconnectGraceMs;
+const phaseDeadlineClaimLeaseMs = gameSessionsConfig.phaseDeadlineClaimLeaseMs;
 const abandonedSessionTtlMs = gameSessionsConfig.abandonedSessionTtlMinutes * millisecondsPerMinute;
 const inProgressIdleTtlMs = gameSessionsConfig.inProgressIdleTtlMinutes * millisecondsPerMinute;
 
@@ -682,7 +683,7 @@ export class RedisGameSessionAuthority {
         this.statusKey(sessionId),
         this.phaseDeadlineKey(sessionId),
         phaseDeadline,
-        reconnectGraceMs,
+        phaseDeadlineClaimLeaseMs,
       ),
       (cause): DurableSessionError => ({ type: 'authority-unavailable', cause }),
     ).map((claimed) => claimed === 1);

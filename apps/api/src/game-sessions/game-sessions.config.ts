@@ -6,6 +6,7 @@ export const gameSessionsConfig = {
   abandonedSessionTtlMinutes: 60,
   inProgressIdleTtlMinutes: 15,
   reconnectGraceMs: 60 * 1000,
+  phaseDeadlineClaimLeaseMs: 60 * 1000,
   cleanupIntervalMs: 60 * 1000,
   eventReplayBufferSize: 10_000,
 } as const;

@@ -1,10 +1,26 @@
+/* oxlint-disable typescript/no-unsafe-type-assertion -- The controller is exercised with the narrow HTTP surface it uses. */
+import { EventEmitter } from 'node:events';
+
 import { afterEach, describe, expect, it, jest } from '@jest/globals';
 import { MafiaGameSession } from '@repo/mafia';
+import type { Request, Response } from 'express';
 import RedisMock from 'ioredis-mock';
-import { errAsync, ok } from 'neverthrow';
+import { errAsync, ok, okAsync, type Result } from 'neverthrow';
+import { Observable } from 'rxjs';
 
 import { RedisGameSessionAuthority } from '../src/game-sessions/durability/redis-game-session-authority';
+import { MafiaGameSessionProjectionEntity } from '../src/game-sessions/entities/mafia-game-session-projection.entity';
+import type { GameSessionError } from '../src/game-sessions/game-session-error';
+import { GameSessionsController } from '../src/game-sessions/game-sessions.controller';
 import { GameSessionsService } from '../src/game-sessions/game-sessions.service';
+
+const createDeferred = <Value>() => {
+  let resolve: (value: Value) => void;
+  const promise = new Promise<Value>((promiseResolve) => {
+    resolve = promiseResolve;
+  });
+  return { promise, resolve: (value: Value) => resolve(value) };
+};
 
 describe('GameSessionsService', () => {
   afterEach(() => {
@@ -165,6 +181,77 @@ describe('GameSessionsService', () => {
 
     expect(claimPhaseDeadline).toHaveBeenCalledTimes(2);
     redis.disconnect();
+  });
+
+  it('retries a phase timer after another replica holds its deadline claim', async () => {
+    jest.useFakeTimers({ now: new Date('2026-08-27T17:11:51.000Z') });
+    const redis = new RedisMock();
+    const authority = new RedisGameSessionAuthority(redis, 'withai:claim-lease-retry-test');
+    const service = new GameSessionsService({
+      decidePublicSpeech: () => ({ type: 'remain-silent' }),
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
+    });
+    Object.assign(service, { authority });
+    const created = await service.createMafiaSession(undefined, 5, undefined);
+    if (created.isErr()) throw new Error('Expected a durable session.');
+    const claimPhaseDeadline = jest
+      .spyOn(authority, 'claimPhaseDeadline')
+      .mockReturnValueOnce(okAsync(false));
+
+    const deadlineMs = Date.parse(created.value.projection.public.phaseDeadline) - Date.now();
+    await jest.advanceTimersByTimeAsync(deadlineMs);
+    await jest.advanceTimersByTimeAsync(0);
+    expect(claimPhaseDeadline).toHaveBeenCalledTimes(1);
+
+    await jest.advanceTimersByTimeAsync(59_999);
+    expect(claimPhaseDeadline).toHaveBeenCalledTimes(1);
+    await jest.advanceTimersByTimeAsync(1);
+    await jest.runOnlyPendingTimersAsync();
+
+    expect(claimPhaseDeadline).toHaveBeenCalledTimes(2);
+    redis.disconnect();
+  });
+
+  it('does not subscribe to SSE after the client disconnects during hydration', async () => {
+    const service = new GameSessionsService({
+      decidePublicSpeech: () => ({ type: 'remain-silent' }),
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
+    });
+    const controller = new GameSessionsController(service);
+    type EventsResult = Result<Observable<MafiaGameSessionProjectionEntity>, GameSessionError>;
+    const eventsFor = createDeferred<EventsResult>();
+    jest.spyOn(service, 'eventsFor').mockReturnValue(eventsFor.promise);
+    const request = Object.assign(new EventEmitter(), {
+      destroyed: false,
+      headers: {},
+    }) as unknown as Request;
+    const flushHeaders = jest.fn();
+    const write = jest.fn();
+    const response = {
+      end: jest.fn(),
+      flushHeaders,
+      set: jest.fn(),
+      write,
+    } as unknown as Response;
+    let subscribed = false;
+    const events = new Observable<MafiaGameSessionProjectionEntity>(() => {
+      subscribed = true;
+    });
+
+    const handling = controller.events('session-id', request, response);
+    request.emit('close');
+    eventsFor.resolve(ok(events));
+    await handling;
+
+    expect(subscribed).toBe(false);
+    expect(flushHeaders).not.toHaveBeenCalled();
+    expect(write).not.toHaveBeenCalled();
   });
 
   it('retains a durable phase timer after a subscriber hydrates the session', async () => {

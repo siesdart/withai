@@ -28,6 +28,7 @@ import {
 } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import type { Result } from 'neverthrow';
+import type { Subscription } from 'rxjs';
 import { match } from 'ts-pattern';
 
 import { retryAfterSeconds } from './cooldown/cooldown';
@@ -383,6 +384,13 @@ export class GameSessionsController {
     @Req() request: Request,
     @Res() response: Response,
   ): Promise<void> {
+    let subscription: Subscription | undefined;
+    let closed = request.destroyed;
+    const close = () => {
+      closed = true;
+      subscription?.unsubscribe();
+    };
+    request.once('close', close);
     const events = this.resolveGameSessionResult(
       await this.gameSessionsService.eventsFor(
         sessionId,
@@ -390,6 +398,10 @@ export class GameSessionsController {
         this.lastEventId(request.headers['last-event-id']),
       ),
     );
+    if (closed || request.destroyed) {
+      request.off('close', close);
+      return;
+    }
     response.set({
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive',
@@ -398,7 +410,7 @@ export class GameSessionsController {
     response.flushHeaders();
 
     let sentSnapshot = false;
-    const subscription = events.subscribe({
+    subscription = events.subscribe({
       next: (projection) => {
         const eventId = sentSnapshot ? `id: ${projection.eventId}\n` : '';
         sentSnapshot = true;
@@ -407,7 +419,6 @@ export class GameSessionsController {
       error: () => response.end(),
       complete: () => response.end(),
     });
-    request.once('close', () => subscription.unsubscribe());
   }
 
   private async projectionFor(sessionId: string, cookie: string | undefined) {

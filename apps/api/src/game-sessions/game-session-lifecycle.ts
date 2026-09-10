@@ -44,6 +44,7 @@ type LifecyclePhaseOperations = {
   submitAgentActions(session: StoredGameSessionEntity): Promise<Result<void, GameSessionError>>;
   retryAgentActions(sessionId: string): void;
   retryPhaseTransition(sessionId: string): void;
+  retryPhaseTransitionAfterClaimLease(sessionId: string): void;
 };
 
 type LifecycleRuntime = {
@@ -132,7 +133,11 @@ export class GameSessionLifecycle {
           (claimed) => {
             if (claimed) {
               void resolve();
+              return;
             }
+            this.runtime.phaseOperations.retryPhaseTransitionAfterClaimLease(
+              projection.value.sessionId,
+            );
           },
           () => this.runtime.phaseOperations.retryPhaseTransition(projection.value.sessionId),
         );

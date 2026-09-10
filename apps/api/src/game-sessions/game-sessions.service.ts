@@ -128,6 +128,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         submitAgentActions: this.submitAndCommitAgentActions.bind(this),
         retryAgentActions: this.retryAgentActions.bind(this),
         retryPhaseTransition: this.retryPhaseTransition.bind(this),
+        retryPhaseTransitionAfterClaimLease: this.retryPhaseTransitionAfterClaimLease.bind(this),
       },
       clock: this.clock,
       agentActions: this.agentActions,
@@ -1055,6 +1056,25 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         this.lifecycle.schedulePhaseTransition(session);
       })();
     }, delayMs);
+    this.phaseTransitionRetryTimers.set(sessionId, timer);
+    timer.unref?.();
+  }
+
+  private retryPhaseTransitionAfterClaimLease(sessionId: string) {
+    if (this.phaseTransitionRetryTimers.has(sessionId)) return;
+    const timer = this.clock.setTimeout(() => {
+      this.phaseTransitionRetryTimers.delete(sessionId);
+      void (async () => {
+        const hydrated = await this.hydrateAuthoritativeSession(sessionId);
+        if (hydrated.isErr()) {
+          this.retryPhaseTransition(sessionId);
+          return;
+        }
+        const session = this.sessions.get(sessionId);
+        if (!session || session.status !== 'in-progress') return;
+        this.lifecycle.schedulePhaseTransition(session);
+      })();
+    }, gameSessionsConfig.phaseDeadlineClaimLeaseMs);
     this.phaseTransitionRetryTimers.set(sessionId, timer);
     timer.unref?.();
   }

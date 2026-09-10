@@ -222,6 +222,8 @@ describe('Mafia Game Session API', () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(gameSessionClock)
       .useValue(clock)
+      .overrideProvider(agentDecisionGateway)
+      .useValue(createGatewaySpy())
       .compile();
     Object.assign(moduleRef.get(GameSessionsService), {
       authority: new RedisGameSessionAuthority(redis, 'withai:game-sessions', () => clock.now()),
@@ -238,14 +240,14 @@ describe('Mafia Game Session API', () => {
     await app.listen(0, '127.0.0.1');
   });
 
-  afterAll(async () => {
-    await app.close();
-    redis.disconnect();
-  });
-
   afterEach(() => {
     jest.useRealTimers();
     clock.reset();
+  });
+
+  afterAll(async () => {
+    await app.close();
+    redis.disconnect();
   });
 
   it('creates an anonymous session with only the human player private information', async () => {

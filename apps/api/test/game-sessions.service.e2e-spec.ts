@@ -51,6 +51,44 @@ describe('GameSessionsService', () => {
     redis.disconnect();
   });
 
+  it('does not treat an autonomous projection as Human Player activity', async () => {
+    let now = new Date('2026-09-11T00:00:00.000Z');
+    const service = new GameSessionsService(
+      {
+        decidePublicSpeech: () => ({ type: 'remain-silent' }),
+        decideFinalDefence: () => ({
+          opening: 'I will defend myself.',
+          followUp: 'Please listen.',
+        }),
+        decideMafiaChatOpening: () => 'I propose a target.',
+        decideMafiaChatReply: () => 'I will commit my action.',
+        selectMafiaTarget: () => undefined,
+      },
+      {
+        now: () => now,
+        setTimeout,
+        clearTimeout,
+        setInterval,
+        clearInterval,
+      },
+    );
+    const created = await service.createMafiaSession(undefined, 5, undefined);
+    if (created.isErr()) throw new Error('Expected a Game Session.');
+    const sessions = (
+      service as unknown as {
+        sessions: Map<string, { lastAccessedAt: { toISOString(): string } }>;
+      }
+    ).sessions;
+
+    now = new Date('2026-09-11T00:16:00.000Z');
+    expect(service.publishSessionProjection(created.value.projection.sessionId)).toMatchObject({
+      value: { sessionId: created.value.projection.sessionId },
+    });
+    expect(sessions.get(created.value.projection.sessionId)?.lastAccessedAt.toISOString()).toBe(
+      '2026-09-11T00:00:00.000Z',
+    );
+  });
+
   it('converges concurrent idempotent creation requests on one Redis session', async () => {
     const redis = new RedisMock();
     const authority = new RedisGameSessionAuthority(redis);

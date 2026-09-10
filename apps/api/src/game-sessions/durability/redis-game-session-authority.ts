@@ -182,6 +182,8 @@ export class RedisGameSessionAuthority {
          if deadline and deadline <= tonumber(ARGV[7]) then return 0 end
          local currentVersion = redis.call('GET', KEYS[8])
          if not currentVersion or tonumber(currentVersion) ~= tonumber(ARGV[8]) then return 0 end
+         local lifecycle = redis.call('GET', KEYS[9])
+         if lifecycle == 'abandoned' or lifecycle == 'idle-expired' then return 0 end
          redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2])
          redis.call('SET', KEYS[5], ARGV[3], 'PX', ARGV[2])
          redis.call('SET', KEYS[6], ARGV[4], 'PX', ARGV[2])
@@ -193,7 +195,7 @@ export class RedisGameSessionAuthority {
            redis.call('ZREM', KEYS[2], ARGV[6])
          end
          return 1`,
-        8,
+        9,
         this.snapshotKey(snapshot.sessionId),
         this.activeSessionsKey(),
         this.eventsKey(snapshot.sessionId),
@@ -202,6 +204,7 @@ export class RedisGameSessionAuthority {
         this.phaseDeadlineKey(snapshot.sessionId),
         this.holderActiveSessionKey(snapshot.holderId),
         this.snapshotVersionKey(snapshot.sessionId),
+        this.lifecycleKey(snapshot.sessionId),
         JSON.stringify(snapshot),
         ttlMs,
         snapshot.lastActivityAt,

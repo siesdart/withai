@@ -979,7 +979,6 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
   private publishProjection(
     session: StoredGameSessionEntity,
   ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
-    if (session.status === 'in-progress') this.touch(session);
     session.nextEventId += 1;
     return session.gameSession
       .projectionFor(session.humanParticipantId, session.nextEventId)

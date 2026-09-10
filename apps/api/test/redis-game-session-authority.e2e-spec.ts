@@ -352,6 +352,12 @@ describe('RedisGameSessionAuthority', () => {
     await expect(
       authority.acquireReconnectLease(snapshot.sessionId, 'connection-1', snapshot.holderId),
     ).resolves.toEqual({ value: false });
+    await expect(authority.saveSnapshot(snapshot)).resolves.toEqual({ value: false });
+    await expect(authority.activeSnapshots()).resolves.toMatchObject({
+      value: expect.not.arrayContaining([
+        expect.objectContaining({ sessionId: snapshot.sessionId }),
+      ]),
+    });
     await expect(authority.load(snapshot.sessionId)).resolves.toMatchObject({
       value: { status: 'expired' },
     });

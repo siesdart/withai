@@ -1149,37 +1149,39 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     staleSession: StoredGameSessionEntity,
     mutate: (session: StoredGameSessionEntity) => boolean,
     attempt = 0,
-  ): Promise<void> {
+    schedulePhaseTransition = true,
+  ): Promise<Result<void, GameSessionError>> {
     const sessionId = staleSession.gameSession.snapshot().sessionId;
     if (this.authority) {
       const hydrated = await this.hydrateAuthoritativeSession(sessionId);
       if (hydrated.isErr()) {
         this.retryScheduledAgentTasks(sessionId);
-        return;
+        return err(hydrated.error);
       }
     }
     const session = this.sessions.get(sessionId);
-    if (!session || session.status !== 'in-progress') return;
+    if (!session || session.status !== 'in-progress') return ok(undefined);
     if (!mutate(session)) {
       const saved = await this.durability.saveSnapshot(session);
       if (saved.isOk() && saved.value) {
-        this.lifecycle.schedulePhaseTransition(session);
-        return;
+        if (schedulePhaseTransition) this.lifecycle.schedulePhaseTransition(session);
+        return ok(undefined);
       }
-      if (attempt < 1) await this.commitAgentMutation(staleSession, mutate, attempt + 1);
-      else this.retryScheduledAgentTasks(sessionId);
-      return;
+      if (attempt < 1)
+        return this.commitAgentMutation(staleSession, mutate, attempt + 1, schedulePhaseTransition);
+      this.retryScheduledAgentTasks(sessionId);
+      return err({ type: 'durability-unavailable' });
     }
     const published = await this.publishAgentProjection(session);
     if (published.isOk()) {
-      this.lifecycle.schedulePhaseTransition(session);
-      return;
+      if (schedulePhaseTransition) this.lifecycle.schedulePhaseTransition(session);
+      return ok(undefined);
     }
     if (attempt >= 1) {
       this.retryScheduledAgentTasks(sessionId);
-      return;
+      return err(published.error);
     }
-    await this.commitAgentMutation(staleSession, mutate, attempt + 1);
+    return this.commitAgentMutation(staleSession, mutate, attempt + 1, schedulePhaseTransition);
   }
 
   private async releaseReconnectLeaseWithRetry(
@@ -1287,12 +1289,14 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     if (hydrated.isErr()) return hydrated;
     const session = this.sessions.get(sessionId);
     if (session) {
-      if (session.agentActionsPending) {
+      if (session.status === 'in-progress' && session.agentActionsPending) {
         const actions = await this.submitAndCommitAgentActions(session, true);
         if (actions.isErr()) this.retryAgentActions(sessionId);
       }
-      this.agentActions.resumeScheduledTasks(session);
-      this.lifecycle.schedulePhaseTransition(session);
+      if (session.status === 'in-progress') {
+        this.agentActions.resumeScheduledTasks(session);
+        this.lifecycle.schedulePhaseTransition(session);
+      }
     }
     return hydrated;
   }

@@ -83,7 +83,14 @@ export class GameSessionLifecycle {
     session.phaseTimer = clock.setTimeout(() => {
       const resolve = async () => {
         if (session.status !== 'in-progress') return;
-        const advanced = session.gameSession.advanceDayPhase(clock.now());
+        const phaseNow = clock.now();
+        if (this.runtime.agentActions.hasDueScheduledTasks(session)) {
+          const drained = await this.runtime.agentActions.drainDueScheduledTasks(session);
+          if (drained.isErr()) return;
+        }
+        const current = this.runtime.state.sessions.get(projection.value.sessionId);
+        if (!current || current.status !== 'in-progress') return;
+        const advanced = current.gameSession.advanceDayPhase(phaseNow);
         if (advanced.isErr()) return;
         if (advanced.value.type === 'not-due') {
           const authority = this.runtime.persistence.authorityFor();
@@ -92,16 +99,16 @@ export class GameSessionLifecycle {
               projection.value.sessionId,
               projection.value.public.phaseDeadline,
             );
-          this.schedulePhaseTransition(session);
+          this.schedulePhaseTransition(current);
           return;
         }
-        this.runtime.agentActions.clearTimers(session);
-        session.agentActionsPending = true;
-        const nextProjection = this.runtime.phaseOperations.publishProjection(session);
+        this.runtime.agentActions.clearTimers(current);
+        current.agentActionsPending = true;
+        const nextProjection = this.runtime.phaseOperations.publishProjection(current);
         if (nextProjection.isErr()) return;
-        const saved = await this.runtime.persistence.save(session, nextProjection.value);
+        const saved = await this.runtime.persistence.save(current, nextProjection.value);
         if (saved.isOk() && saved.value) {
-          const actions = await this.runtime.phaseOperations.submitAgentActions(session);
+          const actions = await this.runtime.phaseOperations.submitAgentActions(current);
           if (actions.isErr()) {
             this.runtime.phaseOperations.retryAgentActions(nextProjection.value.sessionId);
             return;
@@ -161,37 +168,44 @@ export class GameSessionLifecycle {
   async recoverExpiredPhaseDurably(
     session: StoredGameSessionEntity,
   ): Promise<Result<void, GameSessionError>> {
-    const expected = session.gameSession
-      .projectionFor(session.humanParticipantId, session.nextEventId)
+    if (session.status !== 'in-progress') return ok(undefined);
+    if (this.runtime.agentActions.hasDueScheduledTasks(session)) {
+      const drained = await this.runtime.agentActions.drainDueScheduledTasks(session);
+      if (drained.isErr()) return drained;
+    }
+    const current = this.runtime.state.sessions.get(session.gameSession.snapshot().sessionId);
+    if (!current || current.status !== 'in-progress') return ok(undefined);
+    const expected = current.gameSession
+      .projectionFor(current.humanParticipantId, current.nextEventId)
       .map((projection) => projection.public.phaseDeadline);
     if (expected.isErr()) return err({ type: 'invalid-mafia-projection', cause: expected.error });
-    const advanced = session.gameSession.advanceDayPhase(this.runtime.clock.now());
+    const advanced = current.gameSession.advanceDayPhase(this.runtime.clock.now());
     if (advanced.isErr()) return err({ type: 'invalid-mafia-projection', cause: advanced.error });
     if (advanced.value.type === 'not-due') return ok(undefined);
-    this.runtime.agentActions.clearTimers(session);
-    session.agentActionsPending = true;
-    const projection = this.runtime.phaseOperations.publishProjection(session);
+    this.runtime.agentActions.clearTimers(current);
+    current.agentActionsPending = true;
+    const projection = this.runtime.phaseOperations.publishProjection(current);
     if (projection.isErr()) return projection.map(() => undefined);
     const authority = this.runtime.persistence.authorityFor();
     if (!authority) return err({ type: 'durability-unavailable' });
     const saved = await authority.resolveExpiredPhase(
       expected.value,
-      this.runtime.persistence.snapshotFor(session, projection.value),
+      this.runtime.persistence.snapshotFor(current, projection.value),
       { eventId: projection.value.eventId, projection: projection.value },
     );
     if (saved.isErr()) return err({ type: 'durability-unavailable' });
     if (!saved.value) {
       const hydrated = await this.runtime.persistence.hydrate(
-        session.gameSession.snapshot().sessionId,
+        current.gameSession.snapshot().sessionId,
       );
       return hydrated.isErr() ? err(hydrated.error) : ok(undefined);
     }
-    const actions = await this.runtime.phaseOperations.submitAgentActions(session);
+    const actions = await this.runtime.phaseOperations.submitAgentActions(current);
     if (actions.isErr()) {
       this.runtime.phaseOperations.retryAgentActions(projection.value.sessionId);
       return actions;
     }
-    this.schedulePhaseTransition(session);
+    this.schedulePhaseTransition(current);
     return ok(undefined);
   }
 
@@ -312,9 +326,12 @@ export class GameSessionLifecycle {
             if (session.scheduledAgentMafiaChatReplies.length > 0) {
               this.runtime.phaseOperations.retryMafiaChatReplies(snapshot.sessionId);
             }
-            this.runtime.agentActions.resumeScheduledTasks(session);
             const recovered = await this.recoverExpiredPhaseDurably(session);
-            if (recovered.isOk()) this.schedulePhaseTransition(session);
+            if (recovered.isErr()) return;
+            const current = this.runtime.state.sessions.get(snapshot.sessionId);
+            if (!current || current.status !== 'in-progress') return;
+            this.runtime.agentActions.resumeScheduledTasks(current);
+            this.schedulePhaseTransition(current);
           }),
         ),
       );

@@ -2,14 +2,15 @@ import { randomInt } from 'node:crypto';
 
 import type { MafiaAgentSpeechContext } from '@repo/mafia';
 import dayjs from 'dayjs';
-import type { Result } from 'neverthrow';
-import { filter, find, map, pipe } from 'remeda';
+import { ok, type Result } from 'neverthrow';
+import { filter, find, map, pipe, sortBy } from 'remeda';
 import { match } from 'ts-pattern';
 
 import type { AgentDecisionGateway } from './agent-decision.gateway';
 import type { MafiaGameSessionProjectionEntity } from './entities/mafia-game-session-projection.entity';
 import type {
   StoredGameSessionEntity,
+  ScheduledAgentFinalDefence,
   ScheduledAgentPublicSpeech,
 } from './entities/stored-game-session.entity';
 import {
@@ -26,9 +27,17 @@ type PublishProjection = (
 type CommitAgentMutation = (
   session: StoredGameSessionEntity,
   mutate: (session: StoredGameSessionEntity) => boolean,
-) => Promise<void>;
+  schedulePhaseTransition?: boolean,
+) => Promise<Result<void, GameSessionError>>;
+
+type DueScheduledTask = {
+  dueAt: string;
+  commit(): Promise<Result<void, GameSessionError>>;
+};
 
 export class GameSessionAgentOrchestrator {
+  private readonly drainingSessionIds = new Set<string>();
+
   constructor(
     private readonly agentDecisions: AgentDecisionGateway,
     private readonly publishProjection: PublishProjection,
@@ -45,6 +54,7 @@ export class GameSessionAgentOrchestrator {
   }
 
   resumeScheduledTasks(session: StoredGameSessionEntity) {
+    if (session.status !== 'in-progress') return;
     for (const speech of session.scheduledAgentPublicSpeeches) {
       if (!session.publicSpeechAgentTimers.has(scheduledAgentPublicSpeechKey(speech)))
         this.schedulePublicSpeechReply(session, speech.participantId, speech);
@@ -55,6 +65,31 @@ export class GameSessionAgentOrchestrator {
     }
     if (session.scheduledMafiaTargetFallbackAt && !session.mafiaTargetFallbackTimer)
       this.scheduleMafiaTargetFallback(session, session.scheduledMafiaTargetFallbackAt);
+  }
+
+  async drainDueScheduledTasks(
+    session: StoredGameSessionEntity,
+  ): Promise<Result<void, GameSessionError>> {
+    if (session.status !== 'in-progress') return ok(undefined);
+    const sessionId = session.gameSession.snapshot().sessionId;
+    this.drainingSessionIds.add(sessionId);
+    try {
+      const dueTasks = sortBy(
+        this.dueScheduledTasks(session, this.clock.now().valueOf()),
+        (task) => task.dueAt,
+      );
+      const result = await this.consumeDueScheduledTasks(dueTasks);
+      return result;
+    } finally {
+      this.drainingSessionIds.delete(sessionId);
+    }
+  }
+
+  hasDueScheduledTasks(session: StoredGameSessionEntity) {
+    return (
+      session.status === 'in-progress' &&
+      this.dueScheduledTasks(session, this.clock.now().valueOf()).length > 0
+    );
   }
 
   submitDayActions(session: StoredGameSessionEntity) {
@@ -180,23 +215,8 @@ export class GameSessionAgentOrchestrator {
       session.scheduledAgentPublicSpeeches.push(scheduled);
     const delayMs = Math.max(0, dayjs(scheduled.dueAt).diff(this.clock.now()));
     const timer = this.clock.setTimeout(() => {
-      void this.commitAgentMutation(session, (current) => {
-        current.publicSpeechAgentTimers.delete(scheduledKey);
-        if (
-          // Remeda has no predicate-based membership helper.
-          !current.scheduledAgentPublicSpeeches.some((candidate) =>
-            this.sameScheduledSpeech(candidate, scheduled),
-          )
-        )
-          return false;
-        current.scheduledAgentPublicSpeeches = filter(
-          current.scheduledAgentPublicSpeeches,
-          (candidate) => !this.sameScheduledSpeech(candidate, scheduled),
-        );
-        return current.gameSession
-          .submitPublicSpeech(scheduled.participantId, scheduled.content, this.clock.now())
-          .isOk();
-      });
+      if (this.isDraining(session)) return;
+      void this.commitPublicSpeech(session, scheduled);
     }, delayMs);
     session.publicSpeechAgentTimers.set(scheduledKey, timer);
     timer.unref?.();
@@ -216,15 +236,8 @@ export class GameSessionAgentOrchestrator {
     session.scheduledMafiaTargetFallbackAt = fallbackAt;
     const delayMs = Math.max(0, dayjs(fallbackAt).diff(this.clock.now()));
     session.mafiaTargetFallbackTimer = this.clock.setTimeout(() => {
-      void this.commitAgentMutation(session, (current) => {
-        current.mafiaTargetFallbackTimer = undefined;
-        if (current.scheduledMafiaTargetFallbackAt !== fallbackAt) return false;
-        current.scheduledMafiaTargetFallbackAt = undefined;
-        if (this.humanMafiaTarget(current)) return false;
-        const before = JSON.stringify(current.gameSession.snapshot());
-        this.submitMafiaAgentTarget(current);
-        return before !== JSON.stringify(current.gameSession.snapshot());
-      });
+      if (this.isDraining(session)) return;
+      void this.commitMafiaTargetFallback(session, fallbackAt);
     }, delayMs);
     session.mafiaTargetFallbackTimer.unref?.();
   }
@@ -308,18 +321,8 @@ export class GameSessionAgentOrchestrator {
     session.scheduledAgentFinalDefence = scheduled;
     const delayMs = Math.max(0, dayjs(scheduled.dueAt).diff(this.clock.now()));
     session.agentFinalDefenceTimer = this.clock.setTimeout(() => {
-      void this.commitAgentMutation(session, (current) => {
-        current.agentFinalDefenceTimer = undefined;
-        if (
-          !current.scheduledAgentFinalDefence ||
-          !sameScheduledAgentFinalDefence(current.scheduledAgentFinalDefence, scheduled)
-        )
-          return false;
-        current.scheduledAgentFinalDefence = undefined;
-        return current.gameSession
-          .submitFinalDefence(scheduled.participantId, scheduled.content, this.clock.now())
-          .isOk();
-      });
+      if (this.isDraining(session)) return;
+      void this.commitFinalDefence(session, scheduled);
     }, delayMs);
     session.agentFinalDefenceTimer.unref?.();
   }
@@ -341,5 +344,122 @@ export class GameSessionAgentOrchestrator {
 
   private sameScheduledSpeech(left: ScheduledAgentPublicSpeech, right: ScheduledAgentPublicSpeech) {
     return scheduledAgentPublicSpeechKey(left) === scheduledAgentPublicSpeechKey(right);
+  }
+
+  private dueScheduledTasks(session: StoredGameSessionEntity, now: number): DueScheduledTask[] {
+    const publicSpeeches = pipe(
+      session.scheduledAgentPublicSpeeches,
+      filter((speech) => dayjs(speech.dueAt).valueOf() <= now),
+      map((speech): DueScheduledTask => ({
+        dueAt: speech.dueAt,
+        commit: () => this.commitPublicSpeech(session, speech, false),
+      })),
+    );
+    const finalDefence = session.scheduledAgentFinalDefence;
+    const finalDefenceTask =
+      finalDefence && dayjs(finalDefence.dueAt).valueOf() <= now
+        ? [
+            {
+              dueAt: finalDefence.dueAt,
+              commit: () => this.commitFinalDefence(session, finalDefence, false),
+            },
+          ]
+        : [];
+    const fallbackAt = session.scheduledMafiaTargetFallbackAt;
+    const fallbackTask =
+      fallbackAt && dayjs(fallbackAt).valueOf() <= now
+        ? [
+            {
+              dueAt: fallbackAt,
+              commit: () => this.commitMafiaTargetFallback(session, fallbackAt, false),
+            },
+          ]
+        : [];
+    return [...publicSpeeches, ...finalDefenceTask, ...fallbackTask];
+  }
+
+  private isDraining(session: StoredGameSessionEntity) {
+    return this.drainingSessionIds.has(session.gameSession.snapshot().sessionId);
+  }
+
+  private async consumeDueScheduledTasks(
+    dueTasks: DueScheduledTask[],
+  ): Promise<Result<void, GameSessionError>> {
+    const [task, ...remaining] = dueTasks;
+    if (!task) return ok(undefined);
+    const committed = await task.commit();
+    if (committed.isErr()) return committed;
+    return this.consumeDueScheduledTasks(remaining);
+  }
+
+  private commitPublicSpeech(
+    session: StoredGameSessionEntity,
+    scheduled: ScheduledAgentPublicSpeech,
+    schedulePhaseTransition = true,
+  ) {
+    const scheduledKey = scheduledAgentPublicSpeechKey(scheduled);
+    return this.commitAgentMutation(
+      session,
+      (current) => {
+        current.publicSpeechAgentTimers.delete(scheduledKey);
+        if (
+          !find(current.scheduledAgentPublicSpeeches, (candidate) =>
+            this.sameScheduledSpeech(candidate, scheduled),
+          )
+        )
+          return false;
+        current.scheduledAgentPublicSpeeches = filter(
+          current.scheduledAgentPublicSpeeches,
+          (candidate) => !this.sameScheduledSpeech(candidate, scheduled),
+        );
+        return current.gameSession
+          .submitPublicSpeech(scheduled.participantId, scheduled.content, this.clock.now())
+          .isOk();
+      },
+      schedulePhaseTransition,
+    );
+  }
+
+  private commitFinalDefence(
+    session: StoredGameSessionEntity,
+    scheduled: ScheduledAgentFinalDefence,
+    schedulePhaseTransition = true,
+  ) {
+    return this.commitAgentMutation(
+      session,
+      (current) => {
+        current.agentFinalDefenceTimer = undefined;
+        if (
+          !current.scheduledAgentFinalDefence ||
+          !sameScheduledAgentFinalDefence(current.scheduledAgentFinalDefence, scheduled)
+        )
+          return false;
+        current.scheduledAgentFinalDefence = undefined;
+        return current.gameSession
+          .submitFinalDefence(scheduled.participantId, scheduled.content, this.clock.now())
+          .isOk();
+      },
+      schedulePhaseTransition,
+    );
+  }
+
+  private commitMafiaTargetFallback(
+    session: StoredGameSessionEntity,
+    fallbackAt: string,
+    schedulePhaseTransition = true,
+  ) {
+    return this.commitAgentMutation(
+      session,
+      (current) => {
+        current.mafiaTargetFallbackTimer = undefined;
+        if (current.scheduledMafiaTargetFallbackAt !== fallbackAt) return false;
+        current.scheduledMafiaTargetFallbackAt = undefined;
+        if (this.humanMafiaTarget(current)) return false;
+        const before = JSON.stringify(current.gameSession.snapshot());
+        this.submitMafiaAgentTarget(current);
+        return before !== JSON.stringify(current.gameSession.snapshot());
+      },
+      schedulePhaseTransition,
+    );
   }
 }

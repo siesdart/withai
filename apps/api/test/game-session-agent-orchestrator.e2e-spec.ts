@@ -145,7 +145,7 @@ describe('GameSessionAgentOrchestrator', () => {
     const orchestrator = new GameSessionAgentOrchestrator(
       new SequencedMafiaTargetGateway(),
       async () => ok(new MafiaGameSessionProjectionEntity()),
-      async () => undefined,
+      async () => ok(undefined),
     );
 
     orchestrator.submitDayActions(session);
@@ -214,7 +214,7 @@ describe('GameSessionAgentOrchestrator', () => {
     const orchestrator = new GameSessionAgentOrchestrator(
       decisions,
       async () => ok(new MafiaGameSessionProjectionEntity()),
-      async () => undefined,
+      async () => ok(undefined),
     );
 
     orchestrator.submitDayActions(session);
@@ -236,7 +236,7 @@ describe('GameSessionAgentOrchestrator', () => {
     const orchestrator = new GameSessionAgentOrchestrator(
       decisions,
       async () => ok(new MafiaGameSessionProjectionEntity()),
-      async () => undefined,
+      async () => ok(undefined),
     );
 
     orchestrator.publishPublicSpeechReplies(session);
@@ -244,6 +244,50 @@ describe('GameSessionAgentOrchestrator', () => {
     jest.advanceTimersByTime(1_000);
 
     expect(decisions.publicSpeechDecisionCount).toBe(4);
+  });
+
+  it('drains overdue public speeches by due time and snapshot order', async () => {
+    const session = createSession();
+    const committedContents: string[] = [];
+    const orchestrator = new GameSessionAgentOrchestrator(
+      new SequencedMafiaTargetGateway(),
+      async () => ok(new MafiaGameSessionProjectionEntity()),
+      async (_stale, mutate) => {
+        const next = session.scheduledAgentPublicSpeeches[0];
+        if (next) committedContents.push(next.content);
+        mutate(session);
+        return ok(undefined);
+      },
+    );
+    session.scheduledAgentPublicSpeeches = [
+      { participantId: 'participant-2', content: 'first tie', dueAt: '2026-08-28T00:00:00.000Z' },
+      { participantId: 'participant-3', content: 'second tie', dueAt: '2026-08-28T00:00:00.000Z' },
+    ];
+
+    await expect(orchestrator.drainDueScheduledTasks(session)).resolves.toEqual(ok(undefined));
+
+    expect(committedContents).toEqual(['first tie', 'second tie']);
+    expect(session.scheduledAgentPublicSpeeches).toEqual([]);
+  });
+
+  it('does not resume or drain Scheduled Agent Actions for a terminal Game Session', async () => {
+    const session = createSession();
+    const commitAgentMutation = jest.fn(async () => ok(undefined));
+    const orchestrator = new GameSessionAgentOrchestrator(
+      new SequencedMafiaTargetGateway(),
+      async () => ok(new MafiaGameSessionProjectionEntity()),
+      commitAgentMutation,
+    );
+    session.status = 'abandoned';
+    session.scheduledAgentPublicSpeeches = [
+      { participantId: 'participant-2', content: 'late reply', dueAt: '2026-08-28T00:00:00.000Z' },
+    ];
+
+    orchestrator.resumeScheduledTasks(session);
+    await expect(orchestrator.drainDueScheduledTasks(session)).resolves.toEqual(ok(undefined));
+
+    expect(commitAgentMutation).not.toHaveBeenCalled();
+    expect(session.publicSpeechAgentTimers.size).toBe(0);
   });
 
   it('schedules a newly restored public reply while retaining a local timer', async () => {
@@ -266,7 +310,7 @@ describe('GameSessionAgentOrchestrator', () => {
     const orchestrator = new GameSessionAgentOrchestrator(
       new SequencedMafiaTargetGateway(),
       async () => ok(new MafiaGameSessionProjectionEntity()),
-      async () => undefined,
+      async () => ok(undefined),
     );
     const durability = new GameSessionDurability(
       () => authority,
@@ -322,7 +366,7 @@ describe('GameSessionAgentOrchestrator', () => {
     const agentActions = new GameSessionAgentOrchestrator(
       new SequencedMafiaTargetGateway(),
       async () => ok(new MafiaGameSessionProjectionEntity()),
-      async () => undefined,
+      async () => ok(undefined),
     );
     const lifecycle = new GameSessionLifecycle({
       state: {
@@ -401,7 +445,7 @@ describe('GameSessionAgentOrchestrator', () => {
       async (_stale, mutate) => {
         const current = sessions.get('session-1');
         if (current && mutate(current)) committedFollowUps += 1;
-        if (current && mutate(current)) committedFollowUps += 1;
+        return ok(undefined);
       },
     );
 

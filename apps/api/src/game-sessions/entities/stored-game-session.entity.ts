@@ -12,6 +12,11 @@ export type ScheduledAgentPublicSpeech = {
   dueAt: string;
 };
 
+export const scheduledAgentPublicSpeechKey = ({
+  participantId,
+  dueAt,
+}: ScheduledAgentPublicSpeech) => JSON.stringify([participantId, dueAt]);
+
 export type ScheduledAgentFinalDefence = {
   participantId: string;
   content: string;
@@ -39,7 +44,7 @@ export type StoredGameSessionEntity = {
   >;
   phaseTimer: NodeJS.Timeout | undefined;
   agentFinalDefenceTimer: NodeJS.Timeout | undefined;
-  publicSpeechAgentTimers: Set<NodeJS.Timeout>;
+  publicSpeechAgentTimers: Map<string, NodeJS.Timeout>;
   mafiaTargetFallbackTimer: NodeJS.Timeout | undefined;
   scheduledAgentPublicSpeeches: ScheduledAgentPublicSpeech[];
   scheduledAgentFinalDefence: ScheduledAgentFinalDefence | undefined;

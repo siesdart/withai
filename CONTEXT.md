@@ -42,6 +42,10 @@ _Avoid_: Room, match
 A Game Session whose Phase is completed. Its Human Player may read its outcome and completed records for 24 hours after completion, but may not take further actions; the retention period does not extend when it is read.
 _Avoid_: Archived game, finished room
 
+**Abandoned Game Session**:
+An in-progress Game Session whose Reconnect Lease has expired. It cannot be reconnected to or receive further actions.
+_Avoid_: Timed-out session, disconnected session
+
 **Reconnect Lease**:
 The Human Player's right to restore an interrupted live subscription, valid only until the most recent successful subscription heartbeat plus the reconnect grace duration. An expired Reconnect Lease abandons the in-progress Game Session and cannot be renewed.
 _Avoid_: Connection timeout, session lock

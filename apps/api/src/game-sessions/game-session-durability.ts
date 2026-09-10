@@ -8,7 +8,10 @@ import {
   RedisGameSessionAuthority,
 } from './durability/redis-game-session-authority';
 import type { MafiaGameSessionProjectionEntity } from './entities/mafia-game-session-projection.entity';
-import type { StoredGameSessionEntity } from './entities/stored-game-session.entity';
+import {
+  scheduledAgentPublicSpeechKey,
+  type StoredGameSessionEntity,
+} from './entities/stored-game-session.entity';
 import type { GameSessionClock } from './game-session-clock';
 import type { GameSessionError } from './game-session-error';
 import { gameSessionsConfig } from './game-sessions.config';
@@ -148,7 +151,7 @@ export class GameSessionDurability {
       ),
       phaseTimer: undefined,
       agentFinalDefenceTimer: undefined,
-      publicSpeechAgentTimers: new Set(),
+      publicSpeechAgentTimers: new Map(),
       mafiaTargetFallbackTimer: undefined,
       scheduledAgentPublicSpeeches: snapshot.scheduledAgentPublicSpeeches ?? [],
       scheduledAgentFinalDefence: snapshot.scheduledAgentFinalDefence,
@@ -178,9 +181,12 @@ export class GameSessionDurability {
       next.agentFinalDefenceTimer = previous.agentFinalDefenceTimer;
       previous.agentFinalDefenceTimer = undefined;
     }
-    if (next.scheduledAgentPublicSpeeches.length > 0) {
-      next.publicSpeechAgentTimers = previous.publicSpeechAgentTimers;
-      previous.publicSpeechAgentTimers = new Set();
+    for (const speech of next.scheduledAgentPublicSpeeches) {
+      const key = scheduledAgentPublicSpeechKey(speech);
+      const timer = previous.publicSpeechAgentTimers.get(key);
+      if (!timer) continue;
+      next.publicSpeechAgentTimers.set(key, timer);
+      previous.publicSpeechAgentTimers.delete(key);
     }
     if (next.scheduledMafiaTargetFallbackAt) {
       next.mafiaTargetFallbackTimer = previous.mafiaTargetFallbackTimer;

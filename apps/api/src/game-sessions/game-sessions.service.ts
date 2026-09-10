@@ -247,7 +247,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       discussionTimeAdjustmentIdempotencyKeys: new Map(),
       phaseTimer: undefined,
       agentFinalDefenceTimer: undefined,
-      publicSpeechAgentTimers: new Set(),
+      publicSpeechAgentTimers: new Map(),
       mafiaTargetFallbackTimer: undefined,
       scheduledAgentPublicSpeeches: [],
       scheduledAgentFinalDefence: undefined,

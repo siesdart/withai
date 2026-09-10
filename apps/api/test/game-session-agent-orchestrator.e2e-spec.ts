@@ -12,10 +12,15 @@ import type {
 } from '../src/game-sessions/agent-decision.gateway';
 import { RedisGameSessionAuthority } from '../src/game-sessions/durability/redis-game-session-authority';
 import { MafiaGameSessionProjectionEntity } from '../src/game-sessions/entities/mafia-game-session-projection.entity';
-import type { StoredGameSessionEntity } from '../src/game-sessions/entities/stored-game-session.entity';
+import {
+  type StoredGameSessionEntity,
+  scheduledAgentPublicSpeechKey,
+} from '../src/game-sessions/entities/stored-game-session.entity';
 import { GameSessionAgentOrchestrator } from '../src/game-sessions/game-session-agent-orchestrator';
 import { nativeGameSessionClock } from '../src/game-sessions/game-session-clock';
 import { GameSessionDurability } from '../src/game-sessions/game-session-durability';
+import { GameSessionLifecycle } from '../src/game-sessions/game-session-lifecycle';
+import { gameSessionsConfig } from '../src/game-sessions/game-sessions.config';
 
 class SequencedMafiaTargetGateway implements AgentDecisionGateway {
   private readonly targets = ['participant-3', 'participant-4', 'participant-5'];
@@ -91,7 +96,7 @@ const createSession = (): StoredGameSessionEntity => ({
   discussionTimeAdjustmentIdempotencyKeys: new Map(),
   phaseTimer: undefined,
   agentFinalDefenceTimer: undefined,
-  publicSpeechAgentTimers: new Set(),
+  publicSpeechAgentTimers: new Map(),
   mafiaTargetFallbackTimer: undefined,
   scheduledAgentPublicSpeeches: [],
   scheduledAgentFinalDefence: undefined,
@@ -236,6 +241,124 @@ describe('GameSessionAgentOrchestrator', () => {
     jest.advanceTimersByTime(1_000);
 
     expect(decisions.publicSpeechDecisionCount).toBe(4);
+  });
+
+  it('schedules a newly restored public reply while retaining a local timer', async () => {
+    const redis = new RedisMock();
+    const authority = new RedisGameSessionAuthority(redis, 'withai:agent-speech-timers');
+    const sessions = new Map<string, StoredGameSessionEntity>();
+    const session = createSession();
+    const existing = {
+      participantId: 'participant-2',
+      content: 'I need more evidence.',
+      dueAt: '2026-08-28T00:00:00.500Z',
+    };
+    const restored = {
+      participantId: 'participant-3',
+      content: 'Agent Mafia is suspicious.',
+      dueAt: '2026-08-28T00:00:00.750Z',
+    };
+    session.scheduledAgentPublicSpeeches = [existing];
+
+    const orchestrator = new GameSessionAgentOrchestrator(
+      new SequencedMafiaTargetGateway(),
+      async () => ok(new MafiaGameSessionProjectionEntity()),
+      async () => undefined,
+    );
+    const durability = new GameSessionDurability(
+      () => authority,
+      nativeGameSessionClock,
+      sessions,
+      (replaced) => orchestrator.clearTimers(replaced),
+    );
+    orchestrator.resumeScheduledTasks(session);
+    session.scheduledAgentPublicSpeeches.push(restored);
+    const projection = session.gameSession.projectionFor(session.humanParticipantId, 0);
+    if (projection.isErr()) throw new Error('Expected a Game Session projection.');
+    const created = await authority.create(
+      durability.snapshotFor(session, projection.value),
+      { eventId: projection.value.eventId, projection: projection.value },
+      session.holderId,
+      '2026-08-28',
+      10,
+      undefined,
+    );
+    if (created.isErr()) throw new Error('Expected a durable Game Session.');
+    sessions.set('session-1', session);
+
+    await durability.hydrate('session-1');
+    const hydrated = sessions.get('session-1');
+    if (!hydrated) throw new Error('Expected a hydrated Game Session.');
+    orchestrator.resumeScheduledTasks(hydrated);
+
+    expect(hydrated.publicSpeechAgentTimers.size).toBe(2);
+    expect(hydrated.publicSpeechAgentTimers.has(scheduledAgentPublicSpeechKey(existing))).toBe(
+      true,
+    );
+    expect(hydrated.publicSpeechAgentTimers.has(scheduledAgentPublicSpeechKey(restored))).toBe(
+      true,
+    );
+    redis.disconnect();
+  });
+
+  it('cleans up an Abandoned Game Session at its retention limit', async () => {
+    const now = dayjs('2026-08-28T00:00:00.000Z');
+    const abandoned = createSession();
+    const completed = createSession();
+    abandoned.status = 'abandoned';
+    abandoned.lastAccessedAt = now.subtract(
+      gameSessionsConfig.abandonedSessionTtlMinutes,
+      'minute',
+    );
+    completed.status = 'completed';
+    completed.lastAccessedAt = abandoned.lastAccessedAt;
+    const sessions = new Map([
+      ['abandoned', abandoned],
+      ['completed', completed],
+    ]);
+    const agentActions = new GameSessionAgentOrchestrator(
+      new SequencedMafiaTargetGateway(),
+      async () => ok(new MafiaGameSessionProjectionEntity()),
+      async () => undefined,
+    );
+    const lifecycle = new GameSessionLifecycle({
+      state: {
+        sessions,
+        guestSessionCounts: new Map(),
+        idempotencyKeys: new Map(),
+      },
+      persistence: {
+        authorityFor: () => undefined,
+        save: async () => ok(true),
+        hydrate: async () => ok(undefined),
+        snapshotFor: () => {
+          throw new Error('Unexpected snapshot.');
+        },
+        restore: () => {
+          throw new Error('Unexpected restore.');
+        },
+      },
+      phaseOperations: {
+        projectionFor: () => {
+          throw new Error('Unexpected projection.');
+        },
+        publishProjection: () => {
+          throw new Error('Unexpected projection.');
+        },
+        submitAgentActions: async () => ok(undefined),
+        retryAgentActions: () => undefined,
+        retryPhaseTransition: () => undefined,
+      },
+      clock: nativeGameSessionClock,
+      agentActions,
+      now: () => now,
+      utcDay: () => now.format('YYYY-MM-DD'),
+    });
+
+    await lifecycle.cleanupExpiredSessions();
+
+    expect(sessions.has('abandoned')).toBe(false);
+    expect(sessions.has('completed')).toBe(true);
   });
 
   it('consumes an Agent Final Defence follow-up only once after a durable session refresh', async () => {

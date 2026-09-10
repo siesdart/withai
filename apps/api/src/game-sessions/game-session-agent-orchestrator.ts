@@ -12,6 +12,7 @@ import type {
   StoredGameSessionEntity,
   ScheduledAgentPublicSpeech,
 } from './entities/stored-game-session.entity';
+import { scheduledAgentPublicSpeechKey } from './entities/stored-game-session.entity';
 import { nativeGameSessionClock, type GameSessionClock } from './game-session-clock';
 import type { GameSessionError } from './game-session-error';
 
@@ -41,8 +42,8 @@ export class GameSessionAgentOrchestrator {
   }
 
   resumeScheduledTasks(session: StoredGameSessionEntity) {
-    if (session.publicSpeechAgentTimers.size === 0) {
-      for (const speech of session.scheduledAgentPublicSpeeches)
+    for (const speech of session.scheduledAgentPublicSpeeches) {
+      if (!session.publicSpeechAgentTimers.has(scheduledAgentPublicSpeechKey(speech)))
         this.schedulePublicSpeechReply(session, speech.participantId, speech);
     }
     if (session.scheduledAgentFinalDefence && !session.agentFinalDefenceTimer) {
@@ -125,7 +126,7 @@ export class GameSessionAgentOrchestrator {
   clearTimers(session: StoredGameSessionEntity) {
     if (session.agentFinalDefenceTimer) this.clock.clearTimeout(session.agentFinalDefenceTimer);
     if (session.mafiaTargetFallbackTimer) this.clock.clearTimeout(session.mafiaTargetFallbackTimer);
-    for (const timer of session.publicSpeechAgentTimers) this.clock.clearTimeout(timer);
+    for (const timer of session.publicSpeechAgentTimers.values()) this.clock.clearTimeout(timer);
     session.agentFinalDefenceTimer = undefined;
     session.publicSpeechAgentTimers.clear();
     session.mafiaTargetFallbackTimer = undefined;
@@ -148,12 +149,18 @@ export class GameSessionAgentOrchestrator {
     scheduled = this.publicSpeechFor(session, participantId),
   ) {
     if (!scheduled) return;
-    if (!session.scheduledAgentPublicSpeeches.includes(scheduled))
+    const scheduledKey = scheduledAgentPublicSpeechKey(scheduled);
+    if (session.publicSpeechAgentTimers.has(scheduledKey)) return;
+    if (
+      !session.scheduledAgentPublicSpeeches.some((candidate) =>
+        this.sameScheduledSpeech(candidate, scheduled),
+      )
+    )
       session.scheduledAgentPublicSpeeches.push(scheduled);
     const delayMs = Math.max(0, dayjs(scheduled.dueAt).diff(this.clock.now()));
     const timer = this.clock.setTimeout(() => {
       void this.commitAgentMutation(session, (current) => {
-        current.publicSpeechAgentTimers.delete(timer);
+        current.publicSpeechAgentTimers.delete(scheduledKey);
         if (
           // Remeda has no predicate-based membership helper.
           !current.scheduledAgentPublicSpeeches.some((candidate) =>
@@ -170,7 +177,7 @@ export class GameSessionAgentOrchestrator {
           .isOk();
       });
     }, delayMs);
-    session.publicSpeechAgentTimers.add(timer);
+    session.publicSpeechAgentTimers.set(scheduledKey, timer);
     timer.unref?.();
   }
 
@@ -313,6 +320,6 @@ export class GameSessionAgentOrchestrator {
   }
 
   private sameScheduledSpeech(left: ScheduledAgentPublicSpeech, right: ScheduledAgentPublicSpeech) {
-    return left.participantId === right.participantId && left.dueAt === right.dueAt;
+    return scheduledAgentPublicSpeechKey(left) === scheduledAgentPublicSpeechKey(right);
   }
 }

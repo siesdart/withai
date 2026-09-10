@@ -239,7 +239,9 @@ export class GameSessionLifecycle {
       const limit =
         session.status === 'in-progress'
           ? gameSessionsConfig.inProgressIdleTtlMinutes
-          : gameSessionsConfig.sessionIdleTtlHours * 60;
+          : session.status === 'abandoned'
+            ? gameSessionsConfig.abandonedSessionTtlMinutes
+            : gameSessionsConfig.sessionIdleTtlHours * 60;
       if (
         session.activeEventSubscribers > 0 ||
         now.diff(session.lastAccessedAt, 'minute', true) < limit

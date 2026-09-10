@@ -10,6 +10,7 @@ import {
 import type { MafiaGameSessionProjectionEntity } from './entities/mafia-game-session-projection.entity';
 import {
   scheduledAgentPublicSpeechKey,
+  sameScheduledAgentFinalDefence,
   type StoredGameSessionEntity,
 } from './entities/stored-game-session.entity';
 import type { GameSessionClock } from './game-session-clock';
@@ -71,7 +72,12 @@ export class GameSessionDurability {
       session.gameSession.snapshot().sessionId,
       now.toISOString(),
     );
-    if (touched.isErr() || !touched.value) return err({ type: 'durability-unavailable' });
+    if (touched.isErr()) return err({ type: 'durability-unavailable' });
+    if (!touched.value)
+      return err({
+        type: 'unavailable-to-guest',
+        sessionId: session.gameSession.snapshot().sessionId,
+      });
     session.lastAccessedAt = now;
     return ok(undefined);
   }
@@ -177,18 +183,36 @@ export class GameSessionDurability {
     previous: StoredGameSessionEntity,
     next: StoredGameSessionEntity,
   ) {
-    if (next.scheduledAgentFinalDefence) {
+    if (
+      next.scheduledAgentFinalDefence &&
+      previous.scheduledAgentFinalDefence &&
+      previous.agentFinalDefenceTimer &&
+      sameScheduledAgentFinalDefence(
+        previous.scheduledAgentFinalDefence,
+        next.scheduledAgentFinalDefence,
+      )
+    ) {
       next.agentFinalDefenceTimer = previous.agentFinalDefenceTimer;
       previous.agentFinalDefenceTimer = undefined;
     }
     for (const speech of next.scheduledAgentPublicSpeeches) {
       const key = scheduledAgentPublicSpeechKey(speech);
+      if (
+        !previous.scheduledAgentPublicSpeeches.some(
+          (candidate) => scheduledAgentPublicSpeechKey(candidate) === key,
+        )
+      )
+        continue;
       const timer = previous.publicSpeechAgentTimers.get(key);
       if (!timer) continue;
       next.publicSpeechAgentTimers.set(key, timer);
       previous.publicSpeechAgentTimers.delete(key);
     }
-    if (next.scheduledMafiaTargetFallbackAt) {
+    if (
+      next.scheduledMafiaTargetFallbackAt &&
+      next.scheduledMafiaTargetFallbackAt === previous.scheduledMafiaTargetFallbackAt &&
+      previous.mafiaTargetFallbackTimer
+    ) {
       next.mafiaTargetFallbackTimer = previous.mafiaTargetFallbackTimer;
       previous.mafiaTargetFallbackTimer = undefined;
     }

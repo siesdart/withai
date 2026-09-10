@@ -332,6 +332,28 @@ describe('RedisGameSessionAuthority', () => {
     });
   });
 
+  it('does not revive an idle-expired Game Session through activity or a reconnect lease', async () => {
+    const redis = new RedisMock();
+    redisClients.push(redis);
+    const authority = new RedisGameSessionAuthority(redis);
+    const snapshot = createSnapshot('idle-expired-session', '2020-01-01T00:00:00.000Z');
+    const projection = createMafiaSession('idle-expired-session').projectionFor('participant-1', 1);
+    if (projection.isErr()) throw new Error('Expected a Human Player projection.');
+
+    await authority.save(snapshot, { eventId: 1, projection: projection.value });
+    await authority.expireInactiveSessions();
+
+    await expect(authority.touch(snapshot.sessionId, dayjs().toISOString())).resolves.toEqual({
+      value: false,
+    });
+    await expect(
+      authority.acquireReconnectLease(snapshot.sessionId, 'connection-1', snapshot.holderId),
+    ).resolves.toEqual({ value: false });
+    await expect(authority.load(snapshot.sessionId)).resolves.toMatchObject({
+      value: { status: 'expired' },
+    });
+  });
+
   it('abandons an expired grace period and rejects later writes', async () => {
     const redis = new RedisMock();
     redisClients.push(redis);

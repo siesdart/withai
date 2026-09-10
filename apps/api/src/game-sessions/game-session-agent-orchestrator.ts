@@ -12,7 +12,10 @@ import type {
   StoredGameSessionEntity,
   ScheduledAgentPublicSpeech,
 } from './entities/stored-game-session.entity';
-import { scheduledAgentPublicSpeechKey } from './entities/stored-game-session.entity';
+import {
+  scheduledAgentPublicSpeechKey,
+  sameScheduledAgentFinalDefence,
+} from './entities/stored-game-session.entity';
 import { nativeGameSessionClock, type GameSessionClock } from './game-session-clock';
 import type { GameSessionError } from './game-session-error';
 
@@ -291,8 +294,7 @@ export class GameSessionAgentOrchestrator {
         current.agentFinalDefenceTimer = undefined;
         if (
           !current.scheduledAgentFinalDefence ||
-          current.scheduledAgentFinalDefence.participantId !== scheduled.participantId ||
-          current.scheduledAgentFinalDefence.dueAt !== scheduled.dueAt
+          !sameScheduledAgentFinalDefence(current.scheduledAgentFinalDefence, scheduled)
         )
           return false;
         current.scheduledAgentFinalDefence = undefined;

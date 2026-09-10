@@ -14,8 +14,17 @@ export type ScheduledAgentPublicSpeech = {
 
 export const scheduledAgentPublicSpeechKey = ({
   participantId,
+  content,
   dueAt,
-}: ScheduledAgentPublicSpeech) => JSON.stringify([participantId, dueAt]);
+}: ScheduledAgentPublicSpeech) => JSON.stringify([participantId, content, dueAt]);
+
+export const sameScheduledAgentFinalDefence = (
+  left: ScheduledAgentFinalDefence,
+  right: ScheduledAgentFinalDefence,
+) =>
+  left.participantId === right.participantId &&
+  left.content === right.content &&
+  left.dueAt === right.dueAt;
 
 export type ScheduledAgentFinalDefence = {
   participantId: string;

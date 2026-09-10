@@ -174,7 +174,10 @@ export class RedisGameSessionAuthority {
     return ResultAsync.fromPromise(
       this.redis.eval(
         `if not redis.call('GET', KEYS[1]) then return 0 end
-         if redis.call('GET', KEYS[4]) == 'abandoned' then return 0 end
+         local lifecycle = redis.call('GET', KEYS[4])
+         if lifecycle == 'abandoned' or lifecycle == 'idle-expired' then return 0 end
+         local deadline = tonumber(string.match(lifecycle or '', '^[^:]+:(%d+)|'))
+         if deadline and deadline <= tonumber(ARGV[7]) then return 0 end
          local currentVersion = redis.call('GET', KEYS[8])
          if not currentVersion or tonumber(currentVersion) ~= tonumber(ARGV[8]) then return 0 end
          redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2])
@@ -418,7 +421,10 @@ export class RedisGameSessionAuthority {
       this.redis.eval(
         `if not redis.call('GET', KEYS[1]) then return 0 end
          if redis.call('GET', KEYS[3]) ~= 'in-progress' then return 0 end
-         if redis.call('GET', KEYS[4]) == 'abandoned' then return 0 end
+         local lifecycle = redis.call('GET', KEYS[4])
+         if lifecycle == 'abandoned' or lifecycle == 'idle-expired' then return 0 end
+         local deadline = tonumber(string.match(lifecycle or '', '^[^:]+:(%d+)|'))
+         if deadline and deadline <= tonumber(ARGV[5]) then return 0 end
          redis.call('SET', KEYS[2], ARGV[1], 'PX', ARGV[2])
          redis.call('ZADD', KEYS[5], ARGV[3], ARGV[4])
          return 1`,
@@ -432,6 +438,7 @@ export class RedisGameSessionAuthority {
         sessionTtlMs,
         dayjs(lastActivityAt).valueOf(),
         sessionId,
+        this.now().valueOf(),
       ),
       (cause): DurableSessionError => ({ type: 'authority-unavailable', cause }),
     ).map((touched) => touched === 1);
@@ -445,7 +452,7 @@ export class RedisGameSessionAuthority {
     return ResultAsync.fromPromise(
       this.redis.eval(
         `local lifecycle = redis.call('GET', KEYS[5])
-         if lifecycle == 'abandoned' then return 0 end
+         if lifecycle == 'abandoned' or lifecycle == 'idle-expired' then return 0 end
          if string.sub(lifecycle or '', 1, 6) == 'grace:' then
            local deadline = tonumber(string.match(lifecycle, '^grace:(%d+)|'))
            if not deadline or deadline <= tonumber(ARGV[4]) then

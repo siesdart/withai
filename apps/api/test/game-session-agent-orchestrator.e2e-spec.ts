@@ -362,7 +362,7 @@ describe('GameSessionAgentOrchestrator', () => {
     expect(sessions.has('completed')).toBe(true);
   });
 
-  it('consumes an Agent Final Defence follow-up only once after a durable session refresh', async () => {
+  it('replaces a stale Final Defence timer with the authoritative scheduled action', async () => {
     const redis = new RedisMock();
     const authority = new RedisGameSessionAuthority(redis, 'withai:agent-timers');
     const sessions = new Map<string, StoredGameSessionEntity>();
@@ -419,9 +419,16 @@ describe('GameSessionAgentOrchestrator', () => {
     );
     if (created.isErr()) throw new Error('Expected a durable Game Session.');
     sessions.set('session-1', session);
+    session.scheduledAgentFinalDefence = {
+      ...session.scheduledAgentFinalDefence!,
+      content: 'stale follow-up',
+    };
 
     const hydrated = await durability.hydrate('session-1');
     expect(hydrated.isOk()).toBe(true);
+    const refreshed = sessions.get('session-1');
+    if (!refreshed) throw new Error('Expected a refreshed Game Session.');
+    orchestrator.resumeScheduledTasks(refreshed);
     jest.advanceTimersByTime(1_000);
 
     expect(committedFollowUps).toBe(1);

@@ -409,6 +409,14 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       const touched = await this.touchAuthoritativeSession(session.value);
       if (touched.isErr())
         return err<Observable<MafiaGameSessionProjectionEntity>, GameSessionError>(touched.error);
+      const connectionId = randomUUID();
+      const lease = await authority.acquireReconnectLease(
+        sessionId,
+        connectionId,
+        session.value.holderId,
+      );
+      if (lease.isErr()) return err({ type: 'durability-unavailable' });
+      if (!lease.value) return err({ type: 'unavailable-to-guest', sessionId });
       const snapshot = this.projectionFor(session.value);
       if (snapshot.isErr())
         return err<Observable<MafiaGameSessionProjectionEntity>, GameSessionError>(snapshot.error);
@@ -418,33 +426,26 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
           // reconnect still needs every missed, identified Public Information
           // event after its supplied cursor.
           let cursor = lastEventId ?? snapshot.value.eventId;
-          const connectionId = randomUUID();
-          return from(
-            authority.acquireReconnectLease(sessionId, connectionId, session.value.holderId),
+          return concat(
+            from([snapshot.value]),
+            this.clockInterval(250).pipe(
+              startWith(0),
+              concatMap(async () => {
+                const renewedLease = await authority.acquireReconnectLease(
+                  sessionId,
+                  connectionId,
+                  session.value.holderId,
+                );
+                if (renewedLease.isErr() || !renewedLease.value)
+                  throw new Error('Game Session is unavailable.');
+                const events = await authority.eventsAfter(sessionId, cursor);
+                if (events.isErr()) throw new Error('Game Session authority is unavailable.');
+                if (events.value.length > 0) cursor = events.value.at(-1)!.eventId;
+                return events.value;
+              }),
+              mergeMap((events) => from(events.map((event) => event.projection))),
+            ),
           ).pipe(
-            mergeMap((lease) => {
-              if (lease.isErr() || !lease.value) throw new Error('Game Session is unavailable.');
-              return concat(
-                from([snapshot.value]),
-                this.clockInterval(250).pipe(
-                  startWith(0),
-                  concatMap(async () => {
-                    const renewedLease = await authority.acquireReconnectLease(
-                      sessionId,
-                      connectionId,
-                      session.value.holderId,
-                    );
-                    if (renewedLease.isErr() || !renewedLease.value)
-                      throw new Error('Game Session is unavailable.');
-                    const events = await authority.eventsAfter(sessionId, cursor);
-                    if (events.isErr()) throw new Error('Game Session authority is unavailable.');
-                    if (events.value.length > 0) cursor = events.value.at(-1)!.eventId;
-                    return events.value;
-                  }),
-                  mergeMap((events) => from(events.map((event) => event.projection))),
-                ),
-              );
-            }),
             takeWhile((projection) => projection.public.phase !== 'completed', true),
             finalize(() => {
               void this.releaseReconnectLeaseWithRetry(

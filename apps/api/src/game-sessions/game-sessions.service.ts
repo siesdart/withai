@@ -1294,6 +1294,8 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         if (actions.isErr()) this.retryAgentActions(sessionId);
       }
       if (session.status === 'in-progress') {
+        if (session.scheduledAgentMafiaChatReplies.length > 0)
+          this.retryMafiaChatReplies(sessionId);
         this.agentActions.resumeScheduledTasks(session);
         this.lifecycle.schedulePhaseTransition(session);
       }

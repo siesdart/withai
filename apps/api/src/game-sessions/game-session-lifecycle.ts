@@ -327,7 +327,10 @@ export class GameSessionLifecycle {
               this.runtime.phaseOperations.retryMafiaChatReplies(snapshot.sessionId);
             }
             const recovered = await this.recoverExpiredPhaseDurably(session);
-            if (recovered.isErr()) return;
+            if (recovered.isErr()) {
+              this.runtime.phaseOperations.retryPhaseTransition(snapshot.sessionId);
+              return;
+            }
             const current = this.runtime.state.sessions.get(snapshot.sessionId);
             if (!current || current.status !== 'in-progress') return;
             this.runtime.agentActions.resumeScheduledTasks(current);
@@ -347,6 +350,17 @@ export class GameSessionLifecycle {
     if (snapshots.isErr()) return;
     await Promise.all(
       map(snapshots.value, async (snapshot) => {
+        if (
+          snapshot.reconnectLeaseDeadline &&
+          dayjs(snapshot.reconnectLeaseDeadline).isBefore(this.runtime.now())
+        ) {
+          await authority.abandonIfReconnectLeaseExpired(
+            snapshot.sessionId,
+            snapshot.reconnectLeaseDeadline,
+            snapshot.holderId,
+          );
+          return;
+        }
         if (
           !snapshot.reconnectGraceDeadline ||
           !dayjs(snapshot.reconnectGraceDeadline).isBefore(this.runtime.now())

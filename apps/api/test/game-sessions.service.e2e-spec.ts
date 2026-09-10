@@ -81,6 +81,82 @@ describe('GameSessionsService', () => {
     redis.disconnect();
   });
 
+  it('retries pending Agent Mafia Night Chat replies after request hydration', async () => {
+    jest.useFakeTimers();
+    const redis = new RedisMock();
+    const authority = new RedisGameSessionAuthority(redis);
+    const agentDecisions = {
+      decidePublicSpeech: () => ({ type: 'remain-silent' as const }),
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
+    };
+    const firstService = new GameSessionsService(agentDecisions);
+    Object.assign(firstService, { authority });
+    const created = await firstService.createMafiaSession(undefined, 5, 'pending-mafia-chat-key');
+    if (created.isErr()) throw new Error('Expected a durable session.');
+    const stored = await authority.load(created.value.projection.sessionId);
+    if (stored.isErr() || !stored.value) throw new Error('Expected an authoritative snapshot.');
+    await authority.saveSnapshot({
+      ...stored.value,
+      scheduledAgentMafiaChatReplies: [
+        { participantId: 'participant-1', content: 'I will commit my action.' },
+      ],
+    });
+
+    const restartedService = new GameSessionsService(agentDecisions);
+    Object.assign(restartedService, { authority });
+    const cookie = `withai_guest=${restartedService.signGuestId(created.value.holderId)}`;
+    await restartedService.getProjection(created.value.projection.sessionId, cookie);
+    await jest.advanceTimersByTimeAsync(1000);
+
+    await expect(authority.load(created.value.projection.sessionId)).resolves.toMatchObject({
+      value: { scheduledAgentMafiaChatReplies: [] },
+    });
+    redis.disconnect();
+  });
+
+  it('retries durable Phase recovery after a transient startup failure', async () => {
+    jest.useFakeTimers({ now: new Date('2026-09-11T00:00:00.000Z') });
+    const redis = new RedisMock();
+    const authority = new RedisGameSessionAuthority(redis);
+    const agentDecisions = {
+      decidePublicSpeech: () => ({ type: 'remain-silent' as const }),
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
+    };
+    const firstService = new GameSessionsService(agentDecisions);
+    Object.assign(firstService, { authority });
+    const created = await firstService.createMafiaSession(undefined, 5, 'startup-recovery-key');
+    if (created.isErr()) throw new Error('Expected a durable session.');
+
+    jest.clearAllTimers();
+    jest.setSystemTime(new Date('2026-09-11T00:10:00.000Z'));
+    const resolveExpiredPhase = jest
+      .spyOn(authority, 'resolveExpiredPhase')
+      .mockImplementationOnce(() =>
+        errAsync({ type: 'authority-unavailable', cause: 'temporary' }),
+      );
+    const restartedService = new GameSessionsService(agentDecisions);
+    Object.assign(restartedService, { authority });
+
+    await restartedService.onModuleInit();
+    await jest.advanceTimersByTimeAsync(1001);
+    await jest.advanceTimersByTimeAsync(1);
+
+    expect(resolveExpiredPhase).toHaveBeenCalledTimes(1);
+    const recoveredEvents = await authority.eventsAfter(created.value.projection.sessionId, 1);
+    if (recoveredEvents.isErr()) throw new Error('Expected recovered Phase events.');
+    expect(recoveredEvents.value).toEqual(
+      expect.arrayContaining([expect.objectContaining({ eventId: 2 })]),
+    );
+    restartedService.onModuleDestroy();
+    redis.disconnect();
+  });
+
   it('does not treat an autonomous projection as Human Player activity', async () => {
     let now = new Date('2026-09-11T00:00:00.000Z');
     const service = new GameSessionsService(

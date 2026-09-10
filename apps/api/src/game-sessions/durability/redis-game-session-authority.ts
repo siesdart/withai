@@ -27,6 +27,7 @@ export type DurableSessionSnapshot = {
   lastActivityAt: string;
   status: GameSessionStatus;
   reconnectGraceDeadline: string | undefined;
+  reconnectLeaseDeadline?: string;
   cooldowns?: {
     publicSpeech: string | undefined;
     finalDefence: string | undefined;
@@ -126,7 +127,10 @@ export class RedisGameSessionAuthority {
          end
          redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2])
          redis.call('SET', KEYS[4], ARGV[3], 'PX', ARGV[2])
-         redis.call('SET', KEYS[6], ARGV[9], 'PX', ARGV[2])
+         local previousActivity = redis.call('GET', KEYS[6])
+         if not previousActivity or previousActivity < ARGV[9] then
+           redis.call('SET', KEYS[6], ARGV[9], 'PX', ARGV[2])
+         end
          redis.call('SET', KEYS[7], ARGV[10], 'PX', ARGV[2])
          redis.call('SET', KEYS[8], ARGV[11], 'PX', ARGV[2])
          if ARGV[11] == 'in-progress' then
@@ -185,7 +189,10 @@ export class RedisGameSessionAuthority {
          local lifecycle = redis.call('GET', KEYS[9])
          if lifecycle == 'abandoned' or lifecycle == 'idle-expired' then return 0 end
          redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2])
-         redis.call('SET', KEYS[5], ARGV[3], 'PX', ARGV[2])
+         local previousActivity = redis.call('GET', KEYS[5])
+         if not previousActivity or previousActivity < ARGV[3] then
+           redis.call('SET', KEYS[5], ARGV[3], 'PX', ARGV[2])
+         end
          redis.call('SET', KEYS[6], ARGV[4], 'PX', ARGV[2])
          redis.call('SET', KEYS[4], ARGV[5], 'PX', ARGV[2])
          if ARGV[5] == 'in-progress' then
@@ -244,6 +251,12 @@ export class RedisGameSessionAuthority {
           }
           if (lifecycle === 'idle-expired') {
             snapshot.status = 'expired';
+            return snapshot;
+          }
+          if (lifecycle?.startsWith('lease:')) {
+            const deadline = lifecycle.split('|')[1] ?? lifecycle.slice('lease:'.length);
+            snapshot.reconnectLeaseDeadline = new Date(Number(deadline)).toISOString();
+            snapshot.reconnectGraceDeadline = undefined;
             return snapshot;
           }
           if (!lifecycle?.startsWith('grace:')) {
@@ -428,7 +441,10 @@ export class RedisGameSessionAuthority {
          if lifecycle == 'abandoned' or lifecycle == 'idle-expired' then return 0 end
          local deadline = tonumber(string.match(lifecycle or '', '^[^:]+:(%d+)|'))
          if deadline and deadline <= tonumber(ARGV[5]) then return 0 end
-         redis.call('SET', KEYS[2], ARGV[1], 'PX', ARGV[2])
+         local previousActivity = redis.call('GET', KEYS[2])
+         if not previousActivity or previousActivity < ARGV[1] then
+           redis.call('SET', KEYS[2], ARGV[1], 'PX', ARGV[2])
+         end
          redis.call('ZADD', KEYS[5], ARGV[3], ARGV[4])
          return 1`,
         5,
@@ -635,6 +651,49 @@ export class RedisGameSessionAuthority {
     ).map((abandoned) => abandoned === 1);
   }
 
+  abandonIfReconnectLeaseExpired(
+    sessionId: string,
+    reconnectLeaseDeadline: string,
+    holderId: string,
+  ): ResultAsync<boolean, DurableSessionError> {
+    return ResultAsync.fromPromise(
+      this.redis.eval(
+        `if not redis.call('GET', KEYS[1]) then return 0 end
+         redis.call('ZREMRANGEBYSCORE', KEYS[3], '-inf', ARGV[2])
+         if redis.call('ZCARD', KEYS[3]) > 0 then return 0 end
+         if redis.call('GET', KEYS[6]) ~= 'lease:' .. ARGV[5] .. '|' .. ARGV[5] then return 0 end
+         if redis.call('GET', KEYS[7]) ~= 'in-progress' then return 0 end
+         redis.call('SET', KEYS[6], 'abandoned', 'PX', ARGV[3])
+         redis.call('SET', KEYS[7], 'abandoned', 'PX', ARGV[3])
+         redis.call('PEXPIRE', KEYS[1], ARGV[3])
+         redis.call('PEXPIRE', KEYS[2], ARGV[3])
+         redis.call('PEXPIRE', KEYS[8], ARGV[3])
+         redis.call('PEXPIRE', KEYS[9], ARGV[3])
+         redis.call('PEXPIRE', KEYS[4], ARGV[3])
+         redis.call('ZREM', KEYS[5], ARGV[4])
+         if redis.call('GET', KEYS[10]) == ARGV[4] then redis.call('DEL', KEYS[10]) end
+         return 1`,
+        10,
+        this.snapshotKey(sessionId),
+        this.snapshotVersionKey(sessionId),
+        this.reconnectLeasesKey(sessionId),
+        this.eventsKey(sessionId),
+        this.activeSessionsKey(),
+        this.lifecycleKey(sessionId),
+        this.statusKey(sessionId),
+        this.lastActivityKey(sessionId),
+        this.phaseDeadlineKey(sessionId),
+        this.holderActiveSessionKey(holderId),
+        reconnectLeaseDeadline,
+        this.now().valueOf(),
+        abandonedSessionTtlMs,
+        sessionId,
+        Date.parse(reconnectLeaseDeadline),
+      ),
+      (cause): DurableSessionError => ({ type: 'authority-unavailable', cause }),
+    ).map((abandoned) => abandoned === 1);
+  }
+
   expireInactiveSessions(): ResultAsync<void, DurableSessionError> {
     return this.activeSnapshots().andThen((snapshots) =>
       ResultAsync.combine(
@@ -718,7 +777,10 @@ export class RedisGameSessionAuthority {
          if not currentVersion or tonumber(currentVersion) ~= tonumber(ARGV[2]) - 1 then return 0 end
          redis.call('SET', KEYS[1], ARGV[3], 'PX', ARGV[4])
          redis.call('SET', KEYS[4], ARGV[2], 'PX', ARGV[4])
-         redis.call('SET', KEYS[5], ARGV[5], 'PX', ARGV[4])
+         local previousActivity = redis.call('GET', KEYS[5])
+         if not previousActivity or previousActivity < ARGV[5] then
+           redis.call('SET', KEYS[5], ARGV[5], 'PX', ARGV[4])
+         end
          redis.call('SET', KEYS[7], ARGV[6], 'PX', ARGV[4])
          if ARGV[6] == 'in-progress' then
            redis.call('SET', KEYS[8], ARGV[10], 'PX', ARGV[4])

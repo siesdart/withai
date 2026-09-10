@@ -111,6 +111,58 @@ describe('RedisGameSessionAuthority', () => {
     });
   });
 
+  it('does not let a stale CAS save regress authoritative Human Player activity', async () => {
+    const redis = new RedisMock();
+    redisClients.push(redis);
+    const authority = new RedisGameSessionAuthority(redis);
+    const snapshot = createSnapshot('activity-session', '2026-09-11T00:00:00.000Z');
+    const projection = createMafiaSession('activity-session').projectionFor('participant-1', 1);
+    if (projection.isErr()) throw new Error('Expected a Human Player projection.');
+
+    await authority.save(snapshot, { eventId: 1, projection: projection.value });
+    await authority.touch('activity-session', '2026-09-11T00:10:00.000Z');
+    await authority.save(
+      { ...snapshot, nextEventId: 2 },
+      { eventId: 2, projection: projection.value },
+    );
+
+    await expect(authority.load('activity-session')).resolves.toMatchObject({
+      value: { lastActivityAt: '2026-09-11T00:10:00.000Z' },
+    });
+  });
+
+  it('abandons an expired Reconnect Lease left by a stopped replica', async () => {
+    let now = new Date('2026-09-11T00:00:00.000Z');
+    const redis = new RedisMock();
+    redisClients.push(redis);
+    const authority = new RedisGameSessionAuthority(
+      redis,
+      'withai:expired-reconnect-lease',
+      () => now,
+    );
+    const snapshot = createSnapshot('lease-session', now.toISOString());
+    const projection = createMafiaSession('lease-session').projectionFor('participant-1', 1);
+    if (projection.isErr()) throw new Error('Expected a Human Player projection.');
+
+    await authority.save(snapshot, { eventId: 1, projection: projection.value });
+    await authority.acquireReconnectLease('lease-session', 'connection-1', snapshot.holderId);
+    const leased = await authority.load('lease-session');
+    if (leased.isErr() || !leased.value?.reconnectLeaseDeadline)
+      throw new Error('Expected an active Reconnect Lease.');
+
+    now = new Date(Date.parse(leased.value.reconnectLeaseDeadline) + 1);
+    await expect(
+      authority.abandonIfReconnectLeaseExpired(
+        'lease-session',
+        leased.value.reconnectLeaseDeadline,
+        snapshot.holderId,
+      ),
+    ).resolves.toEqual({ value: true });
+    await expect(authority.load('lease-session')).resolves.toMatchObject({
+      value: { status: 'abandoned' },
+    });
+  });
+
   it('enforces a Guest Play Allowance atomically for a UTC day', async () => {
     const redis = new RedisMock();
     redisClients.push(redis);
@@ -167,7 +219,7 @@ describe('RedisGameSessionAuthority', () => {
     const projection = gameSession.projectionFor('participant-1', 1);
     if (projection.isErr()) throw new Error('Expected a Human Player projection.');
     const first = {
-      ...createSnapshot('snapshot-race-session'),
+      ...createSnapshot('snapshot-race-session', '2026-09-05T00:00:00.000Z'),
       gameSession: gameSession.snapshot(),
       nextEventId: 1,
     };

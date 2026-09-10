@@ -434,10 +434,10 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         return err<Observable<MafiaGameSessionProjectionEntity>, GameSessionError>(snapshot.error);
       return ok<Observable<MafiaGameSessionProjectionEntity>, GameSessionError>(
         defer(() => {
-          // A snapshot is intentionally id-less at the transport boundary. A
-          // reconnect still needs every missed, identified Public Information
-          // event after its supplied cursor.
-          let cursor = lastEventId ?? snapshot.value.eventId;
+          // A current projection is a complete snapshot. Starting from its
+          // event version ensures the stream never follows it with older
+          // projections from a reconnect cursor.
+          let cursor = snapshot.value.eventId;
           return concat(
             from([snapshot.value]),
             this.clockInterval(250).pipe(

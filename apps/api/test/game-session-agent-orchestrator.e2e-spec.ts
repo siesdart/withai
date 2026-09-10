@@ -246,6 +246,24 @@ describe('GameSessionAgentOrchestrator', () => {
     expect(decisions.publicSpeechDecisionCount).toBe(4);
   });
 
+  it('removes fired public-speech timer handles before committing', () => {
+    const session = createSession();
+    const timerCountsAtCommit: number[] = [];
+    const orchestrator = new GameSessionAgentOrchestrator(
+      new CountingPublicSpeechGateway(),
+      async () => ok(new MafiaGameSessionProjectionEntity()),
+      async () => {
+        timerCountsAtCommit.push(session.publicSpeechAgentTimers.size);
+        return ok(undefined);
+      },
+    );
+
+    orchestrator.publishPublicSpeechReplies(session);
+    jest.advanceTimersByTime(500);
+
+    expect(timerCountsAtCommit).toEqual([3, 2, 1, 0]);
+  });
+
   it('drains overdue public speeches by due time and snapshot order', async () => {
     const session = createSession();
     const committedContents: string[] = [];
@@ -268,6 +286,41 @@ describe('GameSessionAgentOrchestrator', () => {
 
     expect(committedContents).toEqual(['first tie', 'second tie']);
     expect(session.scheduledAgentPublicSpeeches).toEqual([]);
+  });
+
+  it('applies an overdue public speech at its scheduled time', async () => {
+    const session = createSession();
+    const orchestrator = new GameSessionAgentOrchestrator(
+      new SequencedMafiaTargetGateway(),
+      async () => ok(new MafiaGameSessionProjectionEntity()),
+      async (_stale, mutate) => {
+        mutate(session);
+        return ok(undefined);
+      },
+    );
+    const scheduledAt = new Date('2026-08-28T00:00:01.000Z');
+    session.gameSession.advanceDayPhase(scheduledAt);
+    session.scheduledAgentPublicSpeeches = [
+      {
+        participantId: 'participant-2',
+        content: 'I was scheduled before the deadline.',
+        dueAt: scheduledAt.toISOString(),
+      },
+    ];
+    jest.setSystemTime(new Date('2026-08-28T00:00:02.000Z'));
+
+    await expect(orchestrator.drainDueScheduledTasks(session)).resolves.toEqual(ok(undefined));
+
+    const projection = session.gameSession.projectionFor('participant-1', 1);
+    if (projection.isErr()) throw new Error('Expected a Human Player projection.');
+    expect(projection.value.timeline).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'chat',
+          message: expect.objectContaining({ content: 'I was scheduled before the deadline.' }),
+        }),
+      ]),
+    );
   });
 
   it('does not resume or drain Scheduled Agent Actions for a terminal Game Session', async () => {

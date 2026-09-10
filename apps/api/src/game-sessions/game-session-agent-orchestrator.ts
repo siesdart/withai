@@ -215,6 +215,7 @@ export class GameSessionAgentOrchestrator {
       session.scheduledAgentPublicSpeeches.push(scheduled);
     const delayMs = Math.max(0, dayjs(scheduled.dueAt).diff(this.clock.now()));
     const timer = this.clock.setTimeout(() => {
+      session.publicSpeechAgentTimers.delete(scheduledKey);
       if (this.isDraining(session)) return;
       void this.commitPublicSpeech(session, scheduled);
     }, delayMs);
@@ -236,6 +237,7 @@ export class GameSessionAgentOrchestrator {
     session.scheduledMafiaTargetFallbackAt = fallbackAt;
     const delayMs = Math.max(0, dayjs(fallbackAt).diff(this.clock.now()));
     session.mafiaTargetFallbackTimer = this.clock.setTimeout(() => {
+      session.mafiaTargetFallbackTimer = undefined;
       if (this.isDraining(session)) return;
       void this.commitMafiaTargetFallback(session, fallbackAt);
     }, delayMs);
@@ -255,7 +257,7 @@ export class GameSessionAgentOrchestrator {
     });
   }
 
-  private submitMafiaAgentTarget(session: StoredGameSessionEntity) {
+  private submitMafiaAgentTarget(session: StoredGameSessionEntity, now = this.clock.now()) {
     let coordinator: { participantId: string; context: MafiaAgentSpeechContext } | undefined;
     this.forEachMafiaAgent(session, (participantId, context) => {
       coordinator ??= { participantId, context };
@@ -263,7 +265,7 @@ export class GameSessionAgentOrchestrator {
     if (!coordinator) return;
     const targetParticipantId = this.mafiaTargetFor(session, coordinator.context);
     if (targetParticipantId)
-      session.gameSession.submitMafiaTarget(coordinator.participantId, targetParticipantId);
+      session.gameSession.submitMafiaTarget(coordinator.participantId, targetParticipantId, now);
   }
 
   private forEachMafiaAgent(
@@ -321,6 +323,7 @@ export class GameSessionAgentOrchestrator {
     session.scheduledAgentFinalDefence = scheduled;
     const delayMs = Math.max(0, dayjs(scheduled.dueAt).diff(this.clock.now()));
     session.agentFinalDefenceTimer = this.clock.setTimeout(() => {
+      session.agentFinalDefenceTimer = undefined;
       if (this.isDraining(session)) return;
       void this.commitFinalDefence(session, scheduled);
     }, delayMs);
@@ -413,7 +416,11 @@ export class GameSessionAgentOrchestrator {
           (candidate) => !this.sameScheduledSpeech(candidate, scheduled),
         );
         return current.gameSession
-          .submitPublicSpeech(scheduled.participantId, scheduled.content, this.clock.now())
+          .submitPublicSpeech(
+            scheduled.participantId,
+            scheduled.content,
+            dayjs(scheduled.dueAt).toDate(),
+          )
           .isOk();
       },
       schedulePhaseTransition,
@@ -436,7 +443,11 @@ export class GameSessionAgentOrchestrator {
           return false;
         current.scheduledAgentFinalDefence = undefined;
         return current.gameSession
-          .submitFinalDefence(scheduled.participantId, scheduled.content, this.clock.now())
+          .submitFinalDefence(
+            scheduled.participantId,
+            scheduled.content,
+            dayjs(scheduled.dueAt).toDate(),
+          )
           .isOk();
       },
       schedulePhaseTransition,
@@ -456,7 +467,7 @@ export class GameSessionAgentOrchestrator {
         current.scheduledMafiaTargetFallbackAt = undefined;
         if (this.humanMafiaTarget(current)) return false;
         const before = JSON.stringify(current.gameSession.snapshot());
-        this.submitMafiaAgentTarget(current);
+        this.submitMafiaAgentTarget(current, dayjs(fallbackAt).toDate());
         return before !== JSON.stringify(current.gameSession.snapshot());
       },
       schedulePhaseTransition,

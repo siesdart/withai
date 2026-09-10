@@ -491,7 +491,7 @@ describe('Mafia Game Session API', () => {
           eventResponse.setEncoding('utf8');
           eventResponse.on('data', (chunk) => {
             body += chunk;
-            if (body.includes(`id: ${speechEventId}`)) {
+            if (body.includes('event: snapshot')) {
               eventResponse.destroy();
               resolve(body);
             }
@@ -505,12 +505,10 @@ describe('Mafia Game Session API', () => {
     const frames = catchUpBody.trim().split('\n\n');
     expect(frames[0]).toContain('event: snapshot');
     expect(frames[0]).not.toContain('\nid: ');
-    const replayedIds = frames.slice(1).map((frame) => {
-      const match = /^id: (\d+)/m.exec(frame);
-      if (!match) throw new Error('Expected each replay frame to have an event ID.');
-      return Number(match[1]);
+    expect(JSON.parse(frames[0].replace(/^event: snapshot\ndata: /, ''))).toMatchObject({
+      eventId: speechEventId,
     });
-    expect(replayedIds).toEqual(Array.from({ length: speechEventId - 1 }, (_, index) => index + 2));
+    expect(frames).toHaveLength(1);
   }, 40_000);
 
   it('throttles new public speech while allowing an idempotent retry', async () => {

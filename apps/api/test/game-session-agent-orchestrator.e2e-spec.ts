@@ -100,6 +100,7 @@ const createSession = (): StoredGameSessionEntity => ({
   mafiaTargetFallbackTimer: undefined,
   scheduledAgentPublicSpeeches: [],
   scheduledAgentFinalDefence: undefined,
+  scheduledAgentMafiaChatReplies: [],
   scheduledMafiaTargetFallbackAt: undefined,
   agentActionsPending: false,
   reconnectGraceTimer: undefined,
@@ -149,8 +150,10 @@ describe('GameSessionAgentOrchestrator', () => {
 
     orchestrator.submitDayActions(session);
     session.gameSession.submitMafiaChat('participant-1', 'What about Hana?');
+    orchestrator.prepareMafiaChatReplies(session);
     await orchestrator.publishMafiaChatReplies(session);
     session.gameSession.submitMafiaChat('participant-1', 'I disagree.');
+    orchestrator.prepareMafiaChatReplies(session);
     await orchestrator.publishMafiaChatReplies(session);
     jest.runOnlyPendingTimers();
 
@@ -347,6 +350,7 @@ describe('GameSessionAgentOrchestrator', () => {
         },
         submitAgentActions: async () => ok(undefined),
         retryAgentActions: () => undefined,
+        retryMafiaChatReplies: () => undefined,
         retryPhaseTransition: () => undefined,
         retryPhaseTransitionAfterClaimLease: () => undefined,
       },

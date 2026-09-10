@@ -85,12 +85,12 @@ export class GameSessionDurability {
   async hydrate(sessionId: string): Promise<Result<void, GameSessionError>> {
     const authority = this.authorityFor();
     if (!authority) return ok(undefined);
+    const events = await authority.eventsAfter(sessionId, 0);
+    if (events.isErr()) return err({ type: 'durability-unavailable' });
     const loaded = await authority.load(sessionId);
     if (loaded.isErr()) return err({ type: 'durability-unavailable' });
     if (!loaded.value) return err({ type: 'session-not-found', sessionId });
     const session = this.restore(loaded.value);
-    const events = await authority.eventsAfter(sessionId, 0);
-    if (events.isErr()) return err({ type: 'durability-unavailable' });
     for (const event of events.value) session.events.next(event.projection);
     this.replace(sessionId, session);
     return ok(undefined);
@@ -123,6 +123,7 @@ export class GameSessionDurability {
       },
       scheduledAgentPublicSpeeches: session.scheduledAgentPublicSpeeches,
       scheduledAgentFinalDefence: session.scheduledAgentFinalDefence,
+      scheduledAgentMafiaChatReplies: session.scheduledAgentMafiaChatReplies,
       scheduledMafiaTargetFallbackAt: session.scheduledMafiaTargetFallbackAt,
       agentActionsPending: session.agentActionsPending,
     };
@@ -161,6 +162,7 @@ export class GameSessionDurability {
       mafiaTargetFallbackTimer: undefined,
       scheduledAgentPublicSpeeches: snapshot.scheduledAgentPublicSpeeches ?? [],
       scheduledAgentFinalDefence: snapshot.scheduledAgentFinalDefence,
+      scheduledAgentMafiaChatReplies: snapshot.scheduledAgentMafiaChatReplies ?? [],
       scheduledMafiaTargetFallbackAt: snapshot.scheduledMafiaTargetFallbackAt,
       agentActionsPending: snapshot.agentActionsPending ?? false,
       reconnectGraceTimer: undefined,

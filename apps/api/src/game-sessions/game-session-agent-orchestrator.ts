@@ -119,11 +119,29 @@ export class GameSessionAgentOrchestrator {
     }
   }
 
-  async publishMafiaChatReplies(session: StoredGameSessionEntity) {
-    this.publishMafiaAgentMessages(session, (context, targetName) =>
-      this.agentDecisions.decideMafiaChatReply(context, targetName),
-    );
-    await this.publishProjection(session);
+  prepareMafiaChatReplies(session: StoredGameSessionEntity) {
+    this.forEachMafiaAgent(session, (participantId, context) => {
+      const targetParticipantId = this.mafiaTargetFor(session, context);
+      const targetName =
+        targetParticipantId && this.participantNameFor(context, targetParticipantId);
+      if (!targetParticipantId || !targetName) return;
+      session.scheduledAgentMafiaChatReplies.push({
+        participantId,
+        content: this.agentDecisions.decideMafiaChatReply(context, targetName),
+      });
+    });
+  }
+
+  publishMafiaChatReplies(
+    session: StoredGameSessionEntity,
+  ): Promise<Result<MafiaGameSessionProjectionEntity, GameSessionError> | undefined> {
+    if (session.scheduledAgentMafiaChatReplies.length === 0) return Promise.resolve(undefined);
+    const replies = session.scheduledAgentMafiaChatReplies;
+    session.scheduledAgentMafiaChatReplies = [];
+    for (const reply of replies) {
+      session.gameSession.submitMafiaChat(reply.participantId, reply.content);
+    }
+    return this.publishProjection(session);
   }
 
   clearTimers(session: StoredGameSessionEntity) {

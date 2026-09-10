@@ -9,6 +9,7 @@ import { match } from 'ts-pattern';
 import type { MafiaGameSessionProjectionEntity } from '../entities/mafia-game-session-projection.entity';
 import type {
   ScheduledAgentFinalDefence,
+  ScheduledAgentMafiaChatReply,
   ScheduledAgentPublicSpeech,
 } from '../entities/stored-game-session.entity';
 import type { GameSessionStatus } from '../game-session-status';
@@ -37,6 +38,7 @@ export type DurableSessionSnapshot = {
   >;
   scheduledAgentPublicSpeeches?: ScheduledAgentPublicSpeech[];
   scheduledAgentFinalDefence?: ScheduledAgentFinalDefence;
+  scheduledAgentMafiaChatReplies?: ScheduledAgentMafiaChatReply[];
   scheduledMafiaTargetFallbackAt?: string;
   agentActionsPending?: boolean;
 };
@@ -408,12 +410,10 @@ export class RedisGameSessionAuthority {
     eventId: number,
   ): ResultAsync<DurablePublicEvent[], DurableSessionError> {
     const key = this.eventsKey(sessionId);
-    return ResultAsync.fromPromise(this.redis.zrange(key, 0, -1), (cause): DurableSessionError => ({
-      type: 'authority-unavailable',
-      cause,
-    }))
-      .andThen((values) => this.parseMany<DurablePublicEvent>(values, key))
-      .map((events) => filter(events, (event) => event.eventId > eventId));
+    return ResultAsync.fromPromise(
+      this.redis.zrangebyscore(key, `(${eventId}`, '+inf'),
+      (cause): DurableSessionError => ({ type: 'authority-unavailable', cause }),
+    ).andThen((values) => this.parseMany<DurablePublicEvent>(values, key));
   }
 
   touch(sessionId: string, lastActivityAt: string): ResultAsync<boolean, DurableSessionError> {

@@ -43,6 +43,7 @@ type LifecyclePhaseOperations = {
   ): Result<MafiaGameSessionProjectionEntity, GameSessionError>;
   submitAgentActions(session: StoredGameSessionEntity): Promise<Result<void, GameSessionError>>;
   retryAgentActions(sessionId: string): void;
+  retryMafiaChatReplies(sessionId: string): void;
   retryPhaseTransition(sessionId: string): void;
   retryPhaseTransitionAfterClaimLease(sessionId: string): void;
 };
@@ -307,6 +308,9 @@ export class GameSessionLifecycle {
                 this.runtime.phaseOperations.retryAgentActions(snapshot.sessionId);
                 return;
               }
+            }
+            if (session.scheduledAgentMafiaChatReplies.length > 0) {
+              this.runtime.phaseOperations.retryMafiaChatReplies(snapshot.sessionId);
             }
             this.runtime.agentActions.resumeScheduledTasks(session);
             const recovered = await this.recoverExpiredPhaseDurably(session);

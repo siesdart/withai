@@ -32,6 +32,11 @@ export type ScheduledAgentFinalDefence = {
   dueAt: string;
 };
 
+export type ScheduledAgentMafiaChatReply = {
+  participantId: string;
+  content: string;
+};
+
 export type StoredGameSessionEntity = {
   holderId: string;
   humanParticipantId: string;
@@ -57,6 +62,7 @@ export type StoredGameSessionEntity = {
   mafiaTargetFallbackTimer: NodeJS.Timeout | undefined;
   scheduledAgentPublicSpeeches: ScheduledAgentPublicSpeech[];
   scheduledAgentFinalDefence: ScheduledAgentFinalDefence | undefined;
+  scheduledAgentMafiaChatReplies: ScheduledAgentMafiaChatReply[];
   scheduledMafiaTargetFallbackAt: string | undefined;
   agentActionsPending: boolean;
   reconnectGraceTimer: NodeJS.Timeout | undefined;

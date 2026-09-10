@@ -78,6 +78,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
   private readonly agentActionRetryTimers = new Map<string, NodeJS.Timeout>();
   private readonly phaseTransitionRetryTimers = new Map<string, NodeJS.Timeout>();
   private readonly scheduledAgentRetryTimers = new Map<string, NodeJS.Timeout>();
+  private readonly mafiaChatReplyRetryTimers = new Map<string, NodeJS.Timeout>();
   private readonly guestCookies = createGuestCookieSigner(
     gameSessionsConfig.guestCookieName,
     guestCookieSecret(),
@@ -127,6 +128,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         publishProjection: this.publishProjection.bind(this),
         submitAgentActions: this.submitAndCommitAgentActions.bind(this),
         retryAgentActions: this.retryAgentActions.bind(this),
+        retryMafiaChatReplies: this.retryMafiaChatReplies.bind(this),
         retryPhaseTransition: this.retryPhaseTransition.bind(this),
         retryPhaseTransitionAfterClaimLease: this.retryPhaseTransitionAfterClaimLease.bind(this),
       },
@@ -159,6 +161,8 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     this.phaseTransitionRetryTimers.clear();
     for (const timer of this.scheduledAgentRetryTimers.values()) this.clock.clearTimeout(timer);
     this.scheduledAgentRetryTimers.clear();
+    for (const timer of this.mafiaChatReplyRetryTimers.values()) this.clock.clearTimeout(timer);
+    this.mafiaChatReplyRetryTimers.clear();
     void this.authority?.close();
   }
 
@@ -252,6 +256,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       mafiaTargetFallbackTimer: undefined,
       scheduledAgentPublicSpeeches: [],
       scheduledAgentFinalDefence: undefined,
+      scheduledAgentMafiaChatReplies: [],
       scheduledMafiaTargetFallbackAt: undefined,
       agentActionsPending: true,
       reconnectGraceTimer: undefined,
@@ -352,7 +357,13 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
             currentProjection.value.public.phaseDeadline,
           );
           if (claimed.isErr()) return err({ type: 'durability-unavailable' });
-          if (!claimed.value) return currentProjection;
+          if (!claimed.value) {
+            const refreshed = await this.hydrateAuthoritativeSession(sessionId);
+            if (refreshed.isErr()) return err(refreshed.error);
+            const refreshedSession = this.sessions.get(sessionId);
+            if (!refreshedSession) return err({ type: 'session-not-found', sessionId });
+            return this.projectionFor(refreshedSession);
+          }
         }
         const recovery = await this.lifecycle.recoverExpiredPhaseDurably(session);
         if (recovery.isErr()) return err(recovery.error);
@@ -601,7 +612,8 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
             );
           });
       },
-      afterCommit: (session) => this.agentActions.publishMafiaChatReplies(session),
+      beforeSave: (session) => this.agentActions.prepareMafiaChatReplies(session),
+      afterCommit: (session) => this.deliverMafiaChatReplies(session),
     });
   }
 
@@ -1038,6 +1050,32 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       })();
     }, delayMs);
     this.agentActionRetryTimers.set(sessionId, timer);
+    timer.unref?.();
+  }
+
+  private async deliverMafiaChatReplies(session: StoredGameSessionEntity): Promise<void> {
+    const published = await this.agentActions.publishMafiaChatReplies(session);
+    if (!published || published.isOk()) return;
+    this.retryMafiaChatReplies(session.gameSession.snapshot().sessionId);
+  }
+
+  private retryMafiaChatReplies(sessionId: string, attempt = 0) {
+    if (this.mafiaChatReplyRetryTimers.has(sessionId)) return;
+    const delayMs = Math.min(1000 * 2 ** attempt, 30_000);
+    const timer = this.clock.setTimeout(() => {
+      this.mafiaChatReplyRetryTimers.delete(sessionId);
+      void (async () => {
+        const hydrated = await this.hydrateAuthoritativeSession(sessionId);
+        if (hydrated.isErr()) {
+          this.retryMafiaChatReplies(sessionId, attempt + 1);
+          return;
+        }
+        const session = this.sessions.get(sessionId);
+        if (!session || session.scheduledAgentMafiaChatReplies.length === 0) return;
+        await this.deliverMafiaChatReplies(session);
+      })();
+    }, delayMs);
+    this.mafiaChatReplyRetryTimers.set(sessionId, timer);
     timer.unref?.();
   }
 

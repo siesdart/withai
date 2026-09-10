@@ -82,6 +82,9 @@ describe('RedisGameSessionAuthority', () => {
     await expect(authority.eventsAfter('session-1', 0)).resolves.toMatchObject({
       value: [{ eventId: 1 }, { eventId: 2 }],
     });
+    await expect(authority.eventsAfter('session-1', 1)).resolves.toMatchObject({
+      value: [{ eventId: 2 }],
+    });
 
     const reconnectGraceDeadline = dayjs().add(5, 'minute').toISOString();
     await authority.acquireReconnectLease('session-1', 'connection-1', 'holder-1');

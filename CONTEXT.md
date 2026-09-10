@@ -107,7 +107,7 @@ The required opening public statement made by an Agent who is the Nominee during
 _Avoid_: Auto-reply
 
 **Scheduled Agent Action**:
-An Agent action whose payload has been decided or is required, is durably pending, and must be consumed at most once before it changes a Game Session. It includes delayed and reactive Public Chat or Mafia Night Chat statements, Final Defence statements, Mafia Night Target fallback, and required Phase-entry actions.
+An Agent action whose payload has been decided or is required, is durably pending, and must be consumed at most once before it changes a Game Session. It includes delayed and reactive Public Chat or Mafia Night Chat statements, Final Defence statements, Mafia Night Target fallback, and required Phase-entry actions. A pending action resumes after durable recovery; an authorized read may trigger that recovery but never consumes the action itself.
 _Avoid_: Timer, callback, background job
 
 **Nomination**:

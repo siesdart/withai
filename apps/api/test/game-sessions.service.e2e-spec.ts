@@ -51,6 +51,36 @@ describe('GameSessionsService', () => {
     redis.disconnect();
   });
 
+  it('consumes pending phase-entry actions when request hydration restores a session', async () => {
+    const redis = new RedisMock();
+    const authority = new RedisGameSessionAuthority(redis);
+    const agentDecisions = {
+      decidePublicSpeech: () => ({ type: 'remain-silent' as const }),
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
+    };
+    const firstService = new GameSessionsService(agentDecisions);
+    Object.assign(firstService, { authority });
+    const created = await firstService.createMafiaSession(undefined, 5, 'pending-actions-key');
+    if (created.isErr()) throw new Error('Expected a durable session.');
+    const stored = await authority.load(created.value.projection.sessionId);
+    if (stored.isErr() || !stored.value) throw new Error('Expected an authoritative snapshot.');
+    await authority.saveSnapshot({ ...stored.value, agentActionsPending: true });
+
+    const restartedService = new GameSessionsService(agentDecisions);
+    Object.assign(restartedService, { authority });
+    const cookie = `withai_guest=${restartedService.signGuestId(created.value.holderId)}`;
+    await expect(
+      restartedService.getProjection(created.value.projection.sessionId, cookie),
+    ).resolves.toMatchObject({ value: { sessionId: created.value.projection.sessionId } });
+    await expect(authority.load(created.value.projection.sessionId)).resolves.toMatchObject({
+      value: { agentActionsPending: false },
+    });
+    redis.disconnect();
+  });
+
   it('does not treat an autonomous projection as Human Player activity', async () => {
     let now = new Date('2026-09-11T00:00:00.000Z');
     const service = new GameSessionsService(

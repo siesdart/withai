@@ -602,6 +602,32 @@ describe('RedisGameSessionAuthority', () => {
     });
   });
 
+  it('does not resolve a phase after lifecycle expiry wins the race', async () => {
+    const redis = new RedisMock();
+    redisClients.push(redis);
+    const prefix = 'withai:expired-phase-recovery-test';
+    const authority = new RedisGameSessionAuthority(redis, prefix);
+    const initial = createSnapshot('expired-recovery-session');
+    const projection = createMafiaSession('expired-recovery-session').projectionFor(
+      'participant-1',
+      1,
+    );
+    if (projection.isErr()) throw new Error('Expected a Human Player projection.');
+    await authority.save(initial, { eventId: 1, projection: projection.value });
+    await redis.set(`${prefix}:lifecycles:expired-recovery-session`, 'idle-expired');
+
+    await expect(
+      authority.resolveExpiredPhase(
+        initial.phaseDeadline,
+        { ...initial, nextEventId: 2 },
+        { eventId: 2, projection: projection.value },
+      ),
+    ).resolves.toEqual({ value: false });
+    await expect(authority.load('expired-recovery-session')).resolves.toMatchObject({
+      value: { nextEventId: 1, status: 'expired' },
+    });
+  });
+
   it('binds a Creation Idempotency Key when returning an active session', async () => {
     const redis = new RedisMock();
     redisClients.push(redis);

@@ -325,6 +325,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
   getProjection(
     sessionId: string,
     cookie: string | undefined,
+    mutationLocked = false,
   ):
     | Result<MafiaGameSessionProjectionEntity, GameSessionError>
     | Promise<Result<MafiaGameSessionProjectionEntity, GameSessionError>> {
@@ -333,7 +334,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         ? err({ type: 'durability-unavailable' })
         : this.getProjectionFromMemory(sessionId, cookie);
     }
-    return this.hydrateAuthoritativeSession(sessionId).then(
+    return this.hydrateAuthoritativeSession(sessionId, mutationLocked).then(
       async (hydrated): Promise<Result<MafiaGameSessionProjectionEntity, GameSessionError>> => {
         if (hydrated.isErr())
           return err<MafiaGameSessionProjectionEntity, GameSessionError>(hydrated.error);
@@ -358,7 +359,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
           );
           if (claimed.isErr()) return err({ type: 'durability-unavailable' });
           if (!claimed.value) {
-            const refreshed = await this.hydrateAuthoritativeSession(sessionId);
+            const refreshed = await this.hydrateAuthoritativeSession(sessionId, mutationLocked);
             if (refreshed.isErr()) return err(refreshed.error);
             const refreshedSession = this.sessions.get(sessionId);
             if (!refreshedSession) return err({ type: 'session-not-found', sessionId });
@@ -875,7 +876,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     attempt = 0,
   ): Promise<Result<MafiaGameSessionProjectionEntity, GameSessionError>> {
     if (this.authority) {
-      const recovered = await this.getProjection(sessionId, cookie);
+      const recovered = await this.getProjection(sessionId, cookie, true);
       if (recovered.isErr())
         return err<MafiaGameSessionProjectionEntity, GameSessionError>(recovered.error);
     }
@@ -910,11 +911,11 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     await beforeSave?.(session);
     const saved = await this.saveAuthoritativeProjection(session, result.value);
     if (saved.isErr()) {
-      await this.hydrateAuthoritativeSession(sessionId);
+      await this.hydrateAuthoritativeSessionUnlocked(sessionId);
       return err({ type: 'durability-unavailable' });
     }
     if (!saved.value && attempt < 1) {
-      await this.hydrateAuthoritativeSession(sessionId);
+      await this.hydrateAuthoritativeSessionUnlocked(sessionId);
       return this.runIdempotentProjectionActionUnlocked(
         sessionId,
         cookie,
@@ -922,7 +923,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         attempt + 1,
       );
     }
-    if (!saved.value) await this.hydrateAuthoritativeSession(sessionId);
+    if (!saved.value) await this.hydrateAuthoritativeSessionUnlocked(sessionId);
     if (saved.value && committedAction) await afterCommit?.(session);
     return saved.value ? result : err({ type: 'durability-unavailable' });
   }
@@ -992,12 +993,12 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       }));
   }
 
-  private async publishAgentProjection(session: StoredGameSessionEntity) {
+  private async publishAgentProjection(session: StoredGameSessionEntity, hydrationLocked = false) {
     const projection = this.publishProjection(session);
     if (projection.isErr()) return projection;
     const saved = await this.saveAuthoritativeProjection(session, projection.value);
     if (saved.isOk() && saved.value) return projection;
-    await this.hydrateAuthoritativeSession(projection.value.sessionId);
+    await this.hydrateAfterAgentSaveFailure(projection.value.sessionId, hydrationLocked);
     return err<MafiaGameSessionProjectionEntity, GameSessionError>({
       type: 'durability-unavailable',
     });
@@ -1005,12 +1006,16 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
   private async submitAndCommitAgentActions(
     session: StoredGameSessionEntity,
+    hydrationLocked = false,
   ): Promise<Result<void, GameSessionError>> {
     if (!session.agentActionsPending) {
       session.agentActionsPending = true;
       const prepared = await this.durability.saveSnapshot(session);
       if (prepared.isErr() || !prepared.value) {
-        await this.hydrateAuthoritativeSession(session.gameSession.snapshot().sessionId);
+        await this.hydrateAfterAgentSaveFailure(
+          session.gameSession.snapshot().sessionId,
+          hydrationLocked,
+        );
         return err({ type: 'durability-unavailable' });
       }
     }
@@ -1019,10 +1024,13 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     session.agentActionsPending = false;
     const saved =
       beforeGame !== JSON.stringify(session.gameSession.snapshot())
-        ? await this.publishAgentProjection(session)
+        ? await this.publishAgentProjection(session, hydrationLocked)
         : await this.durability.saveSnapshot(session);
     if (saved.isOk() && saved.value) return ok(undefined);
-    await this.hydrateAuthoritativeSession(session.gameSession.snapshot().sessionId);
+    await this.hydrateAfterAgentSaveFailure(
+      session.gameSession.snapshot().sessionId,
+      hydrationLocked,
+    );
     return err({ type: 'durability-unavailable' });
   }
 
@@ -1038,9 +1046,8 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
           return;
         }
         const session = this.sessions.get(sessionId);
-        if (!session || !session.agentActionsPending) return;
-        const actions = await this.submitAndCommitAgentActions(session);
-        if (actions.isErr()) {
+        if (!session) return;
+        if (session.agentActionsPending) {
           this.retryAgentActions(sessionId, attempt + 1);
           return;
         }
@@ -1265,14 +1272,34 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
   private async hydrateAuthoritativeSession(
     sessionId: string,
+    mutationLocked = false,
+  ): Promise<Result<void, GameSessionError>> {
+    if (mutationLocked) return this.hydrateAuthoritativeSessionUnlocked(sessionId);
+    return this.withSessionMutation(sessionId, () =>
+      this.hydrateAuthoritativeSessionUnlocked(sessionId),
+    );
+  }
+
+  private async hydrateAuthoritativeSessionUnlocked(
+    sessionId: string,
   ): Promise<Result<void, GameSessionError>> {
     const hydrated = await this.durability.hydrate(sessionId);
     if (hydrated.isErr()) return hydrated;
     const session = this.sessions.get(sessionId);
     if (session) {
+      if (session.agentActionsPending) {
+        const actions = await this.submitAndCommitAgentActions(session, true);
+        if (actions.isErr()) this.retryAgentActions(sessionId);
+      }
       this.agentActions.resumeScheduledTasks(session);
       this.lifecycle.schedulePhaseTransition(session);
     }
     return hydrated;
+  }
+
+  private hydrateAfterAgentSaveFailure(sessionId: string, hydrationLocked: boolean) {
+    return hydrationLocked
+      ? this.hydrateAuthoritativeSessionUnlocked(sessionId)
+      : this.hydrateAuthoritativeSession(sessionId);
   }
 }

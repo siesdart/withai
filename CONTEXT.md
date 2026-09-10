@@ -46,6 +46,10 @@ _Avoid_: Archived game, finished room
 An in-progress Game Session whose Reconnect Lease has expired. It cannot be reconnected to or receive further actions.
 _Avoid_: Timed-out session, disconnected session
 
+**Expired Game Session**:
+An in-progress Game Session with no active Reconnect Lease or authorized read for the idle retention period. It cannot be read, reconnected to, or receive further actions, but its durable record remains only for its Creation Idempotency Key's remaining lifetime.
+_Avoid_: Abandoned Game Session, deleted session
+
 **Reconnect Lease**:
 The Human Player's right to restore an interrupted live subscription, valid only until the most recent successful subscription heartbeat plus the reconnect grace duration. An expired Reconnect Lease abandons the in-progress Game Session and cannot be renewed.
 _Avoid_: Connection timeout, session lock

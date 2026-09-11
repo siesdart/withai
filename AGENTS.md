@@ -8,7 +8,7 @@
 
 ## React: ALWAYS read docs before coding
 
-- Before any React work, find and read the relevant doc in `/react-best-practices`.
+- Before any React work, find and read the relevant doc in `/vercel-react-best-practices`.
 - Do not over-list hooks at the top of your components. Use the `/react-view-logic-boundaries` skill to separate them into custom hooks appropriately.
 - Use `/design-taste-frontend` and `/gpt-taste` as the only sources of design rules.
 - Since this application is primarily intended for mobile, prioritize a mobile-first approach when designing the UI.

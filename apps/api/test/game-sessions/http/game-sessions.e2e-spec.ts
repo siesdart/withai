@@ -14,13 +14,13 @@ import { AppModule } from '../../../src/app.module';
 import {
   agentDecisionGateway,
   type AgentDecisionGateway,
-} from '../../../src/game-sessions/agent-decision.gateway';
-import { RedisGameSessionAuthority } from '../../../src/game-sessions/durability/redis-game-session-authority';
+} from '../../../src/game-sessions/agents/agent-decision.gateway';
 import {
   gameSessionClock,
   type GameSessionClock,
-} from '../../../src/game-sessions/game-session-clock';
-import { GameSessionsService } from '../../../src/game-sessions/game-sessions.service';
+} from '../../../src/game-sessions/application/game-session-clock';
+import { GameSessionsService } from '../../../src/game-sessions/application/game-sessions.service';
+import { RedisGameSessionAuthority } from '../../../src/game-sessions/durability/redis-game-session-authority';
 
 const flushMicrotasks = async (remaining = 10): Promise<void> => {
   if (remaining === 0) return;

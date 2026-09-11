@@ -8,11 +8,11 @@ import RedisMock from 'ioredis-mock';
 import { errAsync, ok, okAsync, type Result } from 'neverthrow';
 import { Observable } from 'rxjs';
 
+import type { GameSessionError } from '../../../src/game-sessions/application/game-session-error';
+import { GameSessionsService } from '../../../src/game-sessions/application/game-sessions.service';
 import { RedisGameSessionAuthority } from '../../../src/game-sessions/durability/redis-game-session-authority';
-import { MafiaGameSessionProjectionEntity } from '../../../src/game-sessions/entities/mafia-game-session-projection.entity';
-import type { GameSessionError } from '../../../src/game-sessions/game-session-error';
-import { GameSessionsController } from '../../../src/game-sessions/game-sessions.controller';
-import { GameSessionsService } from '../../../src/game-sessions/game-sessions.service';
+import { GameSessionsController } from '../../../src/game-sessions/transport/game-sessions.controller';
+import { MafiaGameSessionProjectionEntity } from '../../../src/game-sessions/transport/mafia-game-session-projection.entity';
 
 const createDeferred = <Value>() => {
   let resolve: (value: Value) => void;
@@ -44,9 +44,9 @@ describe('GameSessionsService', () => {
 
     const restartedService = new GameSessionsService(agentDecisions);
     Object.assign(restartedService, { authority });
-    const cookie = `withai_guest=${restartedService.signGuestId(created.value.holderId)}`;
+    const holderId = created.value.holderId;
     await expect(
-      restartedService.getProjection(created.value.projection.sessionId, cookie),
+      restartedService.getProjection(created.value.projection.sessionId, holderId),
     ).resolves.toMatchObject({ value: { sessionId: created.value.projection.sessionId } });
     redis.disconnect();
   });
@@ -71,9 +71,9 @@ describe('GameSessionsService', () => {
 
     const restartedService = new GameSessionsService(agentDecisions);
     Object.assign(restartedService, { authority });
-    const cookie = `withai_guest=${restartedService.signGuestId(created.value.holderId)}`;
+    const holderId = created.value.holderId;
     await expect(
-      restartedService.getProjection(created.value.projection.sessionId, cookie),
+      restartedService.getProjection(created.value.projection.sessionId, holderId),
     ).resolves.toMatchObject({ value: { sessionId: created.value.projection.sessionId } });
     await expect(authority.load(created.value.projection.sessionId)).resolves.toMatchObject({
       value: { agentActionsPending: false },
@@ -111,10 +111,10 @@ describe('GameSessionsService', () => {
       .mockImplementationOnce(() =>
         errAsync({ type: 'authority-unavailable', cause: 'write failed' }),
       );
-    const cookie = `withai_guest=${restartedService.signGuestId(created.value.holderId)}`;
+    const holderId = created.value.holderId;
 
     await expect(
-      restartedService.getProjection(created.value.projection.sessionId, cookie),
+      restartedService.getProjection(created.value.projection.sessionId, holderId),
     ).resolves.toMatchObject({ error: { type: 'durability-unavailable' } });
     expect(save).toHaveBeenCalledTimes(1);
 
@@ -159,8 +159,8 @@ describe('GameSessionsService', () => {
 
     const restartedService = new GameSessionsService(agentDecisions);
     Object.assign(restartedService, { authority });
-    const cookie = `withai_guest=${restartedService.signGuestId(created.value.holderId)}`;
-    await restartedService.getProjection(created.value.projection.sessionId, cookie);
+    const holderId = created.value.holderId;
+    await restartedService.getProjection(created.value.projection.sessionId, holderId);
 
     await expect(authority.load(created.value.projection.sessionId)).resolves.toMatchObject({
       value: {
@@ -262,10 +262,10 @@ describe('GameSessionsService', () => {
     const right = new GameSessionsService(agentDecisions);
     Object.assign(left, { authority });
     Object.assign(right, { authority });
-    const cookie = `withai_guest=${left.signGuestId('holder-race')}`;
+    const holderId = 'holder-race';
     const [first, second] = await Promise.all([
-      left.createMafiaSession(cookie, 5, 'same-request'),
-      right.createMafiaSession(cookie, 5, 'same-request'),
+      left.createMafiaSession(holderId, 5, 'same-request'),
+      right.createMafiaSession(holderId, 5, 'same-request'),
     ]);
     expect(first).toMatchObject({ value: { projection: { sessionId: expect.any(String) } } });
     expect(second).toMatchObject({ value: { projection: { sessionId: expect.any(String) } } });
@@ -288,11 +288,11 @@ describe('GameSessionsService', () => {
     const secondTab = new GameSessionsService(agentDecisions);
     Object.assign(firstTab, { authority });
     Object.assign(secondTab, { authority });
-    const cookie = `withai_guest=${firstTab.signGuestId('holder-multi-tab')}`;
+    const holderId = 'holder-multi-tab';
 
     const [first, second] = await Promise.all([
-      firstTab.createMafiaSession(cookie, 5, 'first-tab-request'),
-      secondTab.createMafiaSession(cookie, 5, 'second-tab-request'),
+      firstTab.createMafiaSession(holderId, 5, 'first-tab-request'),
+      secondTab.createMafiaSession(holderId, 5, 'second-tab-request'),
     ]);
 
     if (first.isErr() || second.isErr()) throw new Error('Expected a shared active session.');
@@ -323,11 +323,7 @@ describe('GameSessionsService', () => {
     await expect(authority.expireInactiveSessions()).resolves.toEqual({ value: undefined });
 
     await expect(
-      service.createMafiaSession(
-        `withai_guest=${service.signGuestId(created.value.holderId)}`,
-        6,
-        'expired-creation-key',
-      ),
+      service.createMafiaSession(created.value.holderId, 6, 'expired-creation-key'),
     ).resolves.toEqual({
       error: { type: 'session-not-found', sessionId: created.value.projection.sessionId },
     });
@@ -351,13 +347,15 @@ describe('GameSessionsService', () => {
     jest.clearAllTimers();
     jest.setSystemTime(new Date('2026-08-27T17:13:51.001Z'));
 
-    const cookie = `withai_guest=${service.signGuestId(created.value.holderId)}`;
-    expect(await service.getProjection(created.value.projection.sessionId, cookie)).toMatchObject({
-      value: {
-        eventId: 3,
-        public: { dayNumber: 1, phase: 'discussion' },
+    const holderId = created.value.holderId;
+    expect(await service.getProjection(created.value.projection.sessionId, holderId)).toMatchObject(
+      {
+        value: {
+          eventId: 3,
+          public: { dayNumber: 1, phase: 'discussion' },
+        },
       },
-    });
+    );
   });
 
   it('retries a phase timer that fires before its deadline', async () => {
@@ -499,12 +497,12 @@ describe('GameSessionsService', () => {
     Object.assign(service, { authority });
     const created = await service.createMafiaSession(undefined, 5, undefined);
     if (created.isErr()) throw new Error('Expected a durable session.');
-    const cookie = `withai_guest=${service.signGuestId(created.value.holderId)}`;
-    const events = await service.eventsFor(created.value.projection.sessionId, cookie, undefined);
+    const holderId = created.value.holderId;
+    const events = await service.eventsFor(created.value.projection.sessionId, holderId, undefined);
     if (events.isErr()) throw new Error('Expected a durable SSE stream.');
     const subscription = events.value.subscribe();
     await expect(
-      service.getProjection(created.value.projection.sessionId, cookie),
+      service.getProjection(created.value.projection.sessionId, holderId),
     ).resolves.toMatchObject({
       value: { sessionId: created.value.projection.sessionId },
     });
@@ -576,8 +574,8 @@ describe('GameSessionsService', () => {
     const created = await service.createMafiaSession(undefined, 5, undefined);
     if (created.isErr()) throw new Error('Expected a durable session.');
     const claimPhaseDeadline = jest.spyOn(authority, 'claimPhaseDeadline');
-    const cookie = `withai_guest=${service.signGuestId(created.value.holderId)}`;
-    const projection = await service.getProjection(created.value.projection.sessionId, cookie);
+    const holderId = created.value.holderId;
+    const projection = await service.getProjection(created.value.projection.sessionId, holderId);
     expect(projection.isOk()).toBe(true);
 
     const runNextDueTimer = async () => {
@@ -623,15 +621,15 @@ describe('GameSessionsService', () => {
     const created = await service.createMafiaSession(undefined, 5, undefined);
     if (created.isErr()) throw new Error('Expected a session.');
 
-    const cookie = `withai_guest=${service.signGuestId(created.value.holderId)}`;
+    const holderId = created.value.holderId;
     jest.clearAllTimers();
     jest.setSystemTime(new Date(Date.parse(created.value.projection.public.phaseDeadline) + 1));
-    const discussion = await service.getProjection(created.value.projection.sessionId, cookie);
+    const discussion = await service.getProjection(created.value.projection.sessionId, holderId);
     if (discussion.isErr()) throw new Error('Expected the initial Night to resolve.');
     const { phaseDeadline } = discussion.value.public;
     const first = await service.adjustDiscussionTime(
       created.value.projection.sessionId,
-      cookie,
+      holderId,
       10,
       phaseDeadline,
       'first-discussion-time-adjustment-key',
@@ -643,7 +641,7 @@ describe('GameSessionsService', () => {
     expect(
       await service.adjustDiscussionTime(
         created.value.projection.sessionId,
-        cookie,
+        holderId,
         -10,
         adjustedDeadline,
         'second-discussion-time-adjustment-key',
@@ -654,7 +652,7 @@ describe('GameSessionsService', () => {
     expect(
       await service.adjustDiscussionTime(
         created.value.projection.sessionId,
-        cookie,
+        holderId,
         10,
         phaseDeadline,
         'first-discussion-time-adjustment-key',
@@ -663,7 +661,7 @@ describe('GameSessionsService', () => {
     expect(
       await service.adjustDiscussionTime(
         created.value.projection.sessionId,
-        cookie,
+        holderId,
         10,
         adjustedDeadline,
         'first-discussion-time-adjustment-key',
@@ -683,15 +681,15 @@ describe('GameSessionsService', () => {
     const created = await service.createMafiaSession(undefined, 5, undefined);
     if (created.isErr()) throw new Error('Expected a session.');
 
-    const cookie = `withai_guest=${service.signGuestId(created.value.holderId)}`;
+    const holderId = created.value.holderId;
     jest.clearAllTimers();
     jest.setSystemTime(new Date(Date.parse(created.value.projection.public.phaseDeadline) + 1));
-    const discussion = await service.getProjection(created.value.projection.sessionId, cookie);
+    const discussion = await service.getProjection(created.value.projection.sessionId, holderId);
     if (discussion.isErr()) throw new Error('Expected the initial Night to resolve.');
     expect(
       await service.adjustDiscussionTime(
         created.value.projection.sessionId,
-        cookie,
+        holderId,
         10,
         '2026-08-27T17:11:50.000Z',
         'stale-discussion-time-adjustment-key',

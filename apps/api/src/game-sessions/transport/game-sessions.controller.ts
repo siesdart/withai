@@ -31,19 +31,18 @@ import type { Result } from 'neverthrow';
 import type { Subscription } from 'rxjs';
 import { match } from 'ts-pattern';
 
-import { retryAfterSeconds } from './cooldown/cooldown';
+import { retryAfterSeconds } from '../application/cooldown/cooldown';
+import { gameSessionsConfig } from '../application/game-sessions.config';
+import { type GameSessionError, GameSessionsService } from '../application/game-sessions.service';
 import { CreateDiscussionTimeAdjustmentDto } from './dto/create-discussion-time-adjustment.dto';
 import { CreateMafiaChatDto } from './dto/create-mafia-chat.dto';
 import { CreateMafiaSessionDto } from './dto/create-mafia-session.dto';
 import { CreateNominationDto } from './dto/create-nomination.dto';
 import { CreatePublicSpeechDto } from './dto/create-public-speech.dto';
 import { CreateVerdictDto } from './dto/create-verdict.dto';
-import { MafiaGameSessionProjectionEntity } from './entities/mafia-game-session-projection.entity';
-import { type GameSessionError, GameSessionsService } from './game-sessions.service';
-import {
-  OptionalIdempotencyKey,
-  RequiredIdempotencyKey,
-} from './idempotency/idempotency-key.decorator';
+import { createGuestCookieSigner, guestCookieSecret } from './guest-cookie';
+import { OptionalIdempotencyKey, RequiredIdempotencyKey } from './idempotency-key.decorator';
+import { MafiaGameSessionProjectionEntity } from './mafia-game-session-projection.entity';
 
 @ApiTags('Game Sessions')
 @ApiServiceUnavailableResponse({
@@ -51,6 +50,11 @@ import {
 })
 @Controller('game-sessions')
 export class GameSessionsController {
+  private readonly guestCookies = createGuestCookieSigner(
+    gameSessionsConfig.guestCookieName,
+    guestCookieSecret(),
+  );
+
   constructor(private readonly gameSessionsService: GameSessionsService) {}
 
   @Post('mafia')
@@ -81,20 +85,16 @@ export class GameSessionsController {
     return this.resolveGameSessionResult(
       (
         await this.gameSessionsService.createMafiaSession(
-          request.headers.cookie,
+          this.holderId(request.headers.cookie),
           body.participantCount,
           idempotencyKey,
         )
       ).map(({ holderId, projection }) => {
-        response.cookie(
-          this.gameSessionsService.guestCookieName(),
-          this.gameSessionsService.signGuestId(holderId),
-          {
-            httpOnly: true,
-            sameSite: 'strict',
-            secure: process.env.NODE_ENV === 'production',
-          },
-        );
+        response.cookie(gameSessionsConfig.guestCookieName, this.guestCookies.sign(holderId), {
+          httpOnly: true,
+          sameSite: 'strict',
+          secure: process.env.NODE_ENV === 'production',
+        });
         return projection;
       }),
     );
@@ -108,7 +108,7 @@ export class GameSessionsController {
     description: 'The Game Session does not exist or is unavailable to this guest.',
   })
   async snapshot(@Param('sessionId') sessionId: string, @Req() request: Request) {
-    return this.projectionFor(sessionId, request.headers.cookie);
+    return this.projectionFor(sessionId, this.holderId(request.headers.cookie));
   }
 
   @Post(':sessionId/actions/public-speech')
@@ -145,7 +145,7 @@ export class GameSessionsController {
     return this.resolveGameSessionResult(
       this.gameSessionsService.submitPublicSpeech(
         sessionId,
-        request.headers.cookie,
+        this.holderId(request.headers.cookie),
         body.content,
         idempotencyKey,
       ),
@@ -169,7 +169,7 @@ export class GameSessionsController {
     return this.resolveGameSessionResult(
       this.gameSessionsService.submitMafiaChat(
         sessionId,
-        request.headers.cookie,
+        this.holderId(request.headers.cookie),
         body.content,
         idempotencyKey,
       ),
@@ -194,7 +194,7 @@ export class GameSessionsController {
     return this.resolveGameSessionResult(
       this.gameSessionsService.submitNomination(
         sessionId,
-        request.headers.cookie,
+        this.holderId(request.headers.cookie),
         body.targetParticipantId,
         idempotencyKey,
       ),
@@ -230,7 +230,7 @@ export class GameSessionsController {
     return this.resolveGameSessionResult(
       this.gameSessionsService.submitFinalDefence(
         sessionId,
-        request.headers.cookie,
+        this.holderId(request.headers.cookie),
         body.content,
         idempotencyKey,
       ),
@@ -255,7 +255,7 @@ export class GameSessionsController {
     return this.resolveGameSessionResult(
       this.gameSessionsService.submitVerdict(
         sessionId,
-        request.headers.cookie,
+        this.holderId(request.headers.cookie),
         body.vote,
         idempotencyKey,
       ),
@@ -277,7 +277,7 @@ export class GameSessionsController {
     return this.resolveGameSessionResult(
       this.gameSessionsService.submitMafiaTarget(
         sessionId,
-        request.headers.cookie,
+        this.holderId(request.headers.cookie),
         body.targetParticipantId,
         idempotencyKey,
       ),
@@ -299,7 +299,7 @@ export class GameSessionsController {
     return this.resolveGameSessionResult(
       this.gameSessionsService.submitDoctorProtection(
         sessionId,
-        request.headers.cookie,
+        this.holderId(request.headers.cookie),
         body.targetParticipantId,
         idempotencyKey,
       ),
@@ -321,7 +321,7 @@ export class GameSessionsController {
     return this.resolveGameSessionResult(
       this.gameSessionsService.submitDetectiveInvestigation(
         sessionId,
-        request.headers.cookie,
+        this.holderId(request.headers.cookie),
         body.targetParticipantId,
         idempotencyKey,
       ),
@@ -358,7 +358,7 @@ export class GameSessionsController {
     return this.resolveGameSessionResult(
       this.gameSessionsService.adjustDiscussionTime(
         sessionId,
-        request.headers.cookie,
+        this.holderId(request.headers.cookie),
         body.adjustmentSeconds,
         body.expectedDeadline,
         idempotencyKey,
@@ -394,7 +394,7 @@ export class GameSessionsController {
     const events = this.resolveGameSessionResult(
       await this.gameSessionsService.eventsFor(
         sessionId,
-        request.headers.cookie,
+        this.holderId(request.headers.cookie),
         this.lastEventId(request.headers['last-event-id']),
       ),
     );
@@ -608,5 +608,9 @@ export class GameSessionsController {
 
     const eventId = Number.parseInt(value, 10);
     return Number.isSafeInteger(eventId) && eventId >= 0 ? eventId : undefined;
+  }
+
+  private holderId(cookie: string | undefined) {
+    return this.guestCookies.read(cookie);
   }
 }

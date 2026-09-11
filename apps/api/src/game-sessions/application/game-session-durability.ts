@@ -1,4 +1,5 @@
 import { MafiaGameSession } from '@repo/mafia';
+import type { MafiaGameProjection } from '@repo/mafia';
 import dayjs from 'dayjs';
 import { err, ok, type Result } from 'neverthrow';
 import { ReplaySubject } from 'rxjs';
@@ -6,12 +7,11 @@ import { ReplaySubject } from 'rxjs';
 import {
   type DurableSessionSnapshot,
   RedisGameSessionAuthority,
-} from './durability/redis-game-session-authority';
-import type { MafiaGameSessionProjectionEntity } from './entities/mafia-game-session-projection.entity';
-import type { StoredGameSessionEntity } from './entities/stored-game-session.entity';
+} from '../durability/redis-game-session-authority';
 import type { GameSessionClock } from './game-session-clock';
 import type { GameSessionError } from './game-session-error';
 import { gameSessionsConfig } from './game-sessions.config';
+import type { StoredGameSessionEntity } from './stored-game-session.entity';
 
 type SessionDisposer = (session: StoredGameSessionEntity) => void;
 
@@ -25,7 +25,7 @@ export class GameSessionDurability {
 
   async save(
     session: StoredGameSessionEntity,
-    projection: MafiaGameSessionProjectionEntity,
+    projection: MafiaGameProjection,
   ): Promise<Result<boolean, GameSessionError>> {
     const authority = this.authorityFor();
     if (!authority) {
@@ -94,7 +94,7 @@ export class GameSessionDurability {
 
   snapshotFor(
     session: StoredGameSessionEntity,
-    projection: MafiaGameSessionProjectionEntity,
+    projection: MafiaGameProjection,
   ): DurableSessionSnapshot {
     return {
       sessionId: projection.sessionId,
@@ -130,9 +130,7 @@ export class GameSessionDurability {
       holderId: snapshot.holderId,
       humanParticipantId: snapshot.humanParticipantId,
       gameSession: MafiaGameSession.restore(snapshot.gameSession, () => this.clock.now()),
-      events: new ReplaySubject<MafiaGameSessionProjectionEntity>(
-        gameSessionsConfig.eventReplayBufferSize,
-      ),
+      events: new ReplaySubject<MafiaGameProjection>(gameSessionsConfig.eventReplayBufferSize),
       nextEventId: snapshot.nextEventId,
       nextPublicSpeechAt: snapshot.cooldowns?.publicSpeech
         ? dayjs(snapshot.cooldowns.publicSpeech)

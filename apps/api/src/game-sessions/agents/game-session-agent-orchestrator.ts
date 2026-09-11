@@ -1,30 +1,30 @@
 import { randomInt, randomUUID } from 'node:crypto';
 
 import type { MafiaAgentSpeechContext } from '@repo/mafia';
+import type { MafiaGameProjection } from '@repo/mafia';
 import dayjs from 'dayjs';
 import { ok, type Result } from 'neverthrow';
 import { filter, find, map, pipe, sortBy } from 'remeda';
 import { match } from 'ts-pattern';
 
-import type { AgentDecisionGateway } from './agent-decision.gateway';
-import type { MafiaGameSessionProjectionEntity } from './entities/mafia-game-session-projection.entity';
+import { nativeGameSessionClock, type GameSessionClock } from '../application/game-session-clock';
+import type { GameSessionError } from '../application/game-session-error';
 import type {
   StoredGameSessionEntity,
   ScheduledAgentFinalDefence,
   ScheduledAgentMafiaChatReply,
   ScheduledAgentPublicSpeech,
-} from './entities/stored-game-session.entity';
+} from '../application/stored-game-session.entity';
 import {
   scheduledAgentPublicSpeechKey,
   sameScheduledAgentFinalDefence,
-} from './entities/stored-game-session.entity';
-import { nativeGameSessionClock, type GameSessionClock } from './game-session-clock';
-import type { GameSessionError } from './game-session-error';
+} from '../application/stored-game-session.entity';
+import type { AgentDecisionGateway } from './agent-decision.gateway';
 
 type PublishProjection = (
   session: StoredGameSessionEntity,
   hydrationLocked?: boolean,
-) => Promise<Result<MafiaGameSessionProjectionEntity, GameSessionError>>;
+) => Promise<Result<MafiaGameProjection, GameSessionError>>;
 
 type CommitAgentMutation = (
   session: StoredGameSessionEntity,
@@ -197,7 +197,7 @@ export class GameSessionAgentOrchestrator {
     session.scheduledMafiaTargetFallbackAt = undefined;
   }
 
-  private livingParticipantIds(projection: MafiaGameSessionProjectionEntity) {
+  private livingParticipantIds(projection: MafiaGameProjection) {
     return pipe(
       projection.public.participants,
       filter(({ alive }) => alive),

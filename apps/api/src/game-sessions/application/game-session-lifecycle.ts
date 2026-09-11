@@ -1,18 +1,18 @@
+import type { MafiaGameProjection } from '@repo/mafia';
 import dayjs, { type Dayjs } from 'dayjs';
 import { err, ok, type Result } from 'neverthrow';
 import { filter, map, pipe } from 'remeda';
 
+import type { GameSessionAgentOrchestrator } from '../agents/game-session-agent-orchestrator';
 import {
   type DurableSessionSnapshot,
   RedisGameSessionAuthority,
-} from './durability/redis-game-session-authority';
-import type { MafiaGameSessionProjectionEntity } from './entities/mafia-game-session-projection.entity';
-import type { StoredGameSessionEntity } from './entities/stored-game-session.entity';
-import type { GameSessionAgentOrchestrator } from './game-session-agent-orchestrator';
+} from '../durability/redis-game-session-authority';
 import type { GameSessionClock } from './game-session-clock';
 import type { GameSessionError } from './game-session-error';
 import { gameSessionsConfig } from './game-sessions.config';
 import type { IdempotencyRecord } from './idempotency/idempotency-ledger';
+import type { StoredGameSessionEntity } from './stored-game-session.entity';
 
 type LifecycleState = {
   sessions: Map<string, StoredGameSessionEntity>;
@@ -25,23 +25,21 @@ type LifecyclePersistence = {
   authorityFor(): RedisGameSessionAuthority | undefined;
   save(
     session: StoredGameSessionEntity,
-    projection: MafiaGameSessionProjectionEntity,
+    projection: MafiaGameProjection,
   ): Promise<Result<boolean, GameSessionError>>;
   hydrate(sessionId: string, mutationLocked?: boolean): Promise<Result<void, GameSessionError>>;
   snapshotFor(
     session: StoredGameSessionEntity,
-    projection: MafiaGameSessionProjectionEntity,
+    projection: MafiaGameProjection,
   ): DurableSessionSnapshot;
   restore(snapshot: DurableSessionSnapshot): StoredGameSessionEntity;
 };
 
 type LifecyclePhaseOperations = {
-  projectionFor(
-    session: StoredGameSessionEntity,
-  ): Result<MafiaGameSessionProjectionEntity, GameSessionError>;
+  projectionFor(session: StoredGameSessionEntity): Result<MafiaGameProjection, GameSessionError>;
   publishProjection(
     session: StoredGameSessionEntity,
-  ): Result<MafiaGameSessionProjectionEntity, GameSessionError>;
+  ): Result<MafiaGameProjection, GameSessionError>;
   submitAgentActions(
     session: StoredGameSessionEntity,
     hydrationLocked?: boolean,

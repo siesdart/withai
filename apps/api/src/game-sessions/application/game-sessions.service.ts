@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Inject } from '@nestjs/common';
 import { MafiaGameModule, mafiaGameConfig } from '@repo/mafia';
+import type { MafiaGameProjection } from '@repo/mafia';
 import dayjs from 'dayjs';
 import { err, ok, type Result } from 'neverthrow';
 import {
@@ -21,15 +22,13 @@ import {
 } from 'rxjs';
 import { match, P } from 'ts-pattern';
 
-import { agentDecisionGateway, type AgentDecisionGateway } from './agent-decision.gateway';
-import { cooldownRetryAfterMs } from './cooldown/cooldown';
+import { agentDecisionGateway, type AgentDecisionGateway } from '../agents/agent-decision.gateway';
+import { GameSessionAgentOrchestrator } from '../agents/game-session-agent-orchestrator';
 import {
   type DurableSessionSnapshot,
   RedisGameSessionAuthority,
-} from './durability/redis-game-session-authority';
-import type { MafiaGameSessionProjectionEntity } from './entities/mafia-game-session-projection.entity';
-import type { StoredGameSessionEntity } from './entities/stored-game-session.entity';
-import { GameSessionAgentOrchestrator } from './game-session-agent-orchestrator';
+} from '../durability/redis-game-session-authority';
+import { cooldownRetryAfterMs } from './cooldown/cooldown';
 import {
   gameSessionClock,
   nativeGameSessionClock,
@@ -39,19 +38,19 @@ import { GameSessionDurability } from './game-session-durability';
 import type { GameSessionError } from './game-session-error';
 import { GameSessionLifecycle } from './game-session-lifecycle';
 import { gameSessionsConfig } from './game-sessions.config';
-import { createGuestCookieSigner, guestCookieSecret } from './guest-cookie';
 import {
   type IdempotencyRecord,
   lookupIdempotency,
   recordIdempotency,
 } from './idempotency/idempotency-ledger';
 import { KeyedRetryScheduler } from './keyed-retry-scheduler';
+import type { StoredGameSessionEntity } from './stored-game-session.entity';
 
 export type { GameSessionError } from './game-session-error';
 
 type CreatedMafiaSession = {
   holderId: string;
-  projection: MafiaGameSessionProjectionEntity;
+  projection: MafiaGameProjection;
 };
 
 type IdempotentProjectionAction = {
@@ -60,10 +59,8 @@ type IdempotentProjectionAction = {
   conflict: GameSessionError;
   records: (
     session: StoredGameSessionEntity,
-  ) => Map<string, IdempotencyRecord<MafiaGameSessionProjectionEntity>>;
-  submit: (
-    session: StoredGameSessionEntity,
-  ) => Result<MafiaGameSessionProjectionEntity, GameSessionError>;
+  ) => Map<string, IdempotencyRecord<MafiaGameProjection>>;
+  submit: (session: StoredGameSessionEntity) => Result<MafiaGameProjection, GameSessionError>;
   beforeSave?: (session: StoredGameSessionEntity) => void | Promise<void>;
   afterCommit?: (session: StoredGameSessionEntity) => void | Promise<void>;
 };
@@ -81,10 +78,6 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
   private readonly scheduledAgentRetries: KeyedRetryScheduler;
   private readonly mafiaChatReplyRetries: KeyedRetryScheduler;
   private readonly eventSubscriberCounts = new Map<string, number>();
-  private readonly guestCookies = createGuestCookieSigner(
-    gameSessionsConfig.guestCookieName,
-    guestCookieSecret(),
-  );
   private readonly agentActions: GameSessionAgentOrchestrator;
   private readonly durability: GameSessionDurability;
   private readonly lifecycle: GameSessionLifecycle;
@@ -168,7 +161,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
   }
 
   async createMafiaSession(
-    cookie: string | undefined,
+    holderId: string | undefined,
     participantCount: number = mafiaGameConfig.defaultParticipantCount,
     idempotencyKey: string | undefined,
   ): Promise<Result<CreatedMafiaSession, GameSessionError>> {
@@ -176,16 +169,19 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       return err({ type: 'durability-unavailable' });
     }
     void this.lifecycle.cleanupExpiredSessions();
-    const holderId = this.guestCookies.read(cookie) ?? randomUUID();
-    const activeSessionId = this.activeSessionIdsByHolder.get(holderId);
+    const resolvedHolderId = holderId ?? randomUUID();
+    const activeSessionId = this.activeSessionIdsByHolder.get(resolvedHolderId);
     if (!this.authority && activeSessionId) {
       const activeSession = this.sessions.get(activeSessionId);
       if (activeSession?.status === 'in-progress') {
-        return this.projectionFor(activeSession).map((projection) => ({ holderId, projection }));
+        return this.projectionFor(activeSession).map((projection) => ({
+          holderId: resolvedHolderId,
+          projection,
+        }));
       }
-      this.activeSessionIdsByHolder.delete(holderId);
+      this.activeSessionIdsByHolder.delete(resolvedHolderId);
     }
-    const scopedIdempotencyKey = idempotencyKey && `${holderId}:${idempotencyKey}`;
+    const scopedIdempotencyKey = idempotencyKey && `${resolvedHolderId}:${idempotencyKey}`;
     if (!this.authority && scopedIdempotencyKey) {
       const lookup = lookupIdempotency(
         this.idempotencyKeys,
@@ -205,7 +201,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
           this.touch(existingSession);
           return this.projectionFor(existingSession).map((projection) => ({
-            holderId,
+            holderId: resolvedHolderId,
             projection,
           }));
         })
@@ -214,7 +210,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       if (idempotencyResult) return idempotencyResult;
     }
 
-    const countKey = `${this.utcDay()}:${holderId}`;
+    const countKey = `${this.utcDay()}:${resolvedHolderId}`;
     if (!this.authority) {
       const count = this.guestSessionCounts.get(countKey) ?? 0;
       if (count >= gameSessionsConfig.guestAllowance) {
@@ -234,12 +230,10 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
     const gameSession = gameSessionResult.value;
     const session: StoredGameSessionEntity = {
-      holderId,
+      holderId: resolvedHolderId,
       humanParticipantId: 'participant-1',
       gameSession,
-      events: new ReplaySubject<MafiaGameSessionProjectionEntity>(
-        gameSessionsConfig.eventReplayBufferSize,
-      ),
+      events: new ReplaySubject<MafiaGameProjection>(gameSessionsConfig.eventReplayBufferSize),
       nextEventId: 0,
       nextPublicSpeechAt: undefined,
       nextFinalDefenceAt: undefined,
@@ -276,7 +270,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       const creation = await this.authority.create(
         this.durableSnapshot(session, projection.value),
         { eventId: projection.value.eventId, projection: projection.value },
-        holderId,
+        resolvedHolderId,
         this.utcDay(),
         gameSessionsConfig.guestAllowance,
         idempotencyKey ? { key: idempotencyKey, fingerprint: String(participantCount) } : undefined,
@@ -297,7 +291,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
           return err({ type: 'session-not-found', sessionId: creation.value.record.sessionId });
         }
         return this.projectionFor(existingSession).map((existingProjection) => ({
-          holderId,
+          holderId: resolvedHolderId,
           projection: existingProjection,
         }));
       }
@@ -309,49 +303,48 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
           return err({ type: 'session-not-found', sessionId: creation.value.sessionId });
         }
         return this.projectionFor(activeSession).map((existingProjection) => ({
-          holderId,
+          holderId: resolvedHolderId,
           projection: existingProjection,
         }));
       }
     }
     this.sessions.set(sessionId, session);
-    this.activeSessionIdsByHolder.set(holderId, sessionId);
+    this.activeSessionIdsByHolder.set(resolvedHolderId, sessionId);
     const actions = await this.submitAndCommitAgentActions(session);
     if (actions.isErr()) {
       this.retryAgentActions(sessionId);
-      return ok({ holderId, projection: projection.value });
+      return ok({ holderId: resolvedHolderId, projection: projection.value });
     }
     this.lifecycle.schedulePhaseTransition(session);
-    return ok({ holderId, projection: projection.value });
+    return ok({ holderId: resolvedHolderId, projection: projection.value });
   }
 
   getProjection(
     sessionId: string,
-    cookie: string | undefined,
+    holderId: string | undefined,
     mutationLocked = false,
   ):
-    | Result<MafiaGameSessionProjectionEntity, GameSessionError>
-    | Promise<Result<MafiaGameSessionProjectionEntity, GameSessionError>> {
+    | Result<MafiaGameProjection, GameSessionError>
+    | Promise<Result<MafiaGameProjection, GameSessionError>> {
     if (!this.authority) {
       return this.requiresDurableAuthority()
         ? err({ type: 'durability-unavailable' })
-        : this.getProjectionFromMemory(sessionId, cookie);
+        : this.getProjectionFromMemory(sessionId, holderId);
     }
     return this.hydrateAuthoritativeSession(sessionId, mutationLocked).then(
-      async (hydrated): Promise<Result<MafiaGameSessionProjectionEntity, GameSessionError>> => {
-        if (hydrated.isErr())
-          return err<MafiaGameSessionProjectionEntity, GameSessionError>(hydrated.error);
+      async (hydrated): Promise<Result<MafiaGameProjection, GameSessionError>> => {
+        if (hydrated.isErr()) return err<MafiaGameProjection, GameSessionError>(hydrated.error);
         const session = this.sessions.get(sessionId);
         if (!session)
-          return err<MafiaGameSessionProjectionEntity, GameSessionError>({
+          return err<MafiaGameProjection, GameSessionError>({
             type: 'session-not-found',
             sessionId,
           });
-        const readableSession = this.sessionForHolder(sessionId, cookie);
+        const readableSession = this.sessionForHolder(sessionId, holderId);
         if (readableSession.isErr()) return err(readableSession.error);
         if (readableSession.value.status === 'completed')
           return this.projectionFor(readableSession.value);
-        const activeSession = this.activeSessionForHolder(sessionId, cookie);
+        const activeSession = this.activeSessionForHolder(sessionId, holderId);
         if (activeSession.isErr()) return err(activeSession.error);
         const currentProjection = this.projectionFor(session);
         if (currentProjection.isErr()) return currentProjection;
@@ -373,7 +366,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         if (recovery.isErr()) return err(recovery.error);
         const recoveredSession = this.sessions.get(sessionId);
         if (!recoveredSession) return err({ type: 'session-not-found', sessionId });
-        const recoveredActiveSession = this.activeSessionForHolder(sessionId, cookie);
+        const recoveredActiveSession = this.activeSessionForHolder(sessionId, holderId);
         if (recoveredActiveSession.isErr()) return err(recoveredActiveSession.error);
         const touched = await this.touchAuthoritativeSession(recoveredActiveSession.value);
         if (touched.isErr()) return err(touched.error);
@@ -384,12 +377,12 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
   private getProjectionFromMemory(
     sessionId: string,
-    cookie: string | undefined,
-  ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
+    holderId: string | undefined,
+  ): Result<MafiaGameProjection, GameSessionError> {
     void this.lifecycle.cleanupExpiredSessions();
-    return this.sessionForHolder(sessionId, cookie).andThen((session) => {
+    return this.sessionForHolder(sessionId, holderId).andThen((session) => {
       if (session.status === 'completed') return this.projectionFor(session);
-      return this.activeSessionForHolder(sessionId, cookie).andThen((activeSession) =>
+      return this.activeSessionForHolder(sessionId, holderId).andThen((activeSession) =>
         this.projectionFor(activeSession),
       );
     });
@@ -397,33 +390,31 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
   eventsFor(
     sessionId: string,
-    cookie: string | undefined,
+    holderId: string | undefined,
     lastEventId: number | undefined,
   ):
-    | Result<Observable<MafiaGameSessionProjectionEntity>, GameSessionError>
-    | Promise<Result<Observable<MafiaGameSessionProjectionEntity>, GameSessionError>> {
+    | Result<Observable<MafiaGameProjection>, GameSessionError>
+    | Promise<Result<Observable<MafiaGameProjection>, GameSessionError>> {
     const authority = this.authority;
     if (!authority) {
       return this.requiresDurableAuthority()
         ? err({ type: 'durability-unavailable' })
-        : this.eventsForFromMemory(sessionId, cookie, lastEventId);
+        : this.eventsForFromMemory(sessionId, holderId, lastEventId);
     }
     return this.hydrateAuthoritativeSession(sessionId).then(async (hydrated) => {
       if (hydrated.isErr())
-        return err<Observable<MafiaGameSessionProjectionEntity>, GameSessionError>(hydrated.error);
-      const readableSession = this.sessionForHolder(sessionId, cookie);
+        return err<Observable<MafiaGameProjection>, GameSessionError>(hydrated.error);
+      const readableSession = this.sessionForHolder(sessionId, holderId);
       if (readableSession.isErr())
-        return err<Observable<MafiaGameSessionProjectionEntity>, GameSessionError>(
-          readableSession.error,
-        );
+        return err<Observable<MafiaGameProjection>, GameSessionError>(readableSession.error);
       if (readableSession.value.status === 'completed')
         return this.projectionFor(readableSession.value).map((snapshot) => of(snapshot));
-      const session = this.activeSessionForHolder(sessionId, cookie);
+      const session = this.activeSessionForHolder(sessionId, holderId);
       if (session.isErr())
-        return err<Observable<MafiaGameSessionProjectionEntity>, GameSessionError>(session.error);
+        return err<Observable<MafiaGameProjection>, GameSessionError>(session.error);
       const touched = await this.touchAuthoritativeSession(session.value);
       if (touched.isErr())
-        return err<Observable<MafiaGameSessionProjectionEntity>, GameSessionError>(touched.error);
+        return err<Observable<MafiaGameProjection>, GameSessionError>(touched.error);
       const connectionId = randomUUID();
       const lease = await authority.acquireReconnectLease(
         sessionId,
@@ -434,8 +425,8 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       if (!lease.value) return err({ type: 'unavailable-to-guest', sessionId });
       const snapshot = this.projectionFor(session.value);
       if (snapshot.isErr())
-        return err<Observable<MafiaGameSessionProjectionEntity>, GameSessionError>(snapshot.error);
-      return ok<Observable<MafiaGameSessionProjectionEntity>, GameSessionError>(
+        return err<Observable<MafiaGameProjection>, GameSessionError>(snapshot.error);
+      return ok<Observable<MafiaGameProjection>, GameSessionError>(
         defer(() => {
           this.addEventSubscriber(sessionId);
           // A current projection is a complete snapshot. Starting from its
@@ -481,15 +472,15 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
   private eventsForFromMemory(
     sessionId: string,
-    cookie: string | undefined,
+    holderId: string | undefined,
     lastEventId: number | undefined,
-  ): Result<Observable<MafiaGameSessionProjectionEntity>, GameSessionError> {
+  ): Result<Observable<MafiaGameProjection>, GameSessionError> {
     void this.lifecycle.cleanupExpiredSessions();
-    const readableSession = this.sessionForHolder(sessionId, cookie);
+    const readableSession = this.sessionForHolder(sessionId, holderId);
     if (readableSession.isErr()) return err(readableSession.error);
     if (readableSession.value.status === 'completed')
       return this.projectionFor(readableSession.value).map((snapshot) => of(snapshot));
-    return this.activeSessionForHolder(sessionId, cookie).map((session) =>
+    return this.activeSessionForHolder(sessionId, holderId).map((session) =>
       defer(() => {
         this.addEventSubscriber(sessionId);
         const connectionId = randomUUID();
@@ -514,9 +505,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
-  publishSessionProjection(
-    sessionId: string,
-  ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
+  publishSessionProjection(sessionId: string): Result<MafiaGameProjection, GameSessionError> {
     const session = this.sessions.get(sessionId);
     if (!session) {
       return err({ type: 'session-not-found', sessionId });
@@ -527,11 +516,11 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
   async submitPublicSpeech(
     sessionId: string,
-    cookie: string | undefined,
+    holderId: string | undefined,
     content: string,
     idempotencyKey: string,
-  ): Promise<Result<MafiaGameSessionProjectionEntity, GameSessionError>> {
-    return this.runIdempotentProjectionAction(sessionId, cookie, {
+  ): Promise<Result<MafiaGameProjection, GameSessionError>> {
+    return this.runIdempotentProjectionAction(sessionId, holderId, {
       idempotencyKey,
       fingerprint: content,
       conflict: { type: 'public-speech-idempotency-conflict' },
@@ -540,7 +529,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         const now = this.now();
         const retryAfterMs = cooldownRetryAfterMs(session.nextPublicSpeechAt, now);
         if (retryAfterMs) {
-          return err<MafiaGameSessionProjectionEntity, GameSessionError>({
+          return err<MafiaGameProjection, GameSessionError>({
             type: 'public-speech-rate-limited',
             retryAfterMs,
           });
@@ -579,7 +568,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
               type: 'invalid-public-speech' as const,
             }))
             .exhaustive();
-          return err<MafiaGameSessionProjectionEntity, GameSessionError>(error);
+          return err<MafiaGameProjection, GameSessionError>(error);
         }
 
         return this.publishProjection(session).andTee(() => {
@@ -595,11 +584,11 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
   async submitMafiaChat(
     sessionId: string,
-    cookie: string | undefined,
+    holderId: string | undefined,
     content: string,
     idempotencyKey: string,
-  ): Promise<Result<MafiaGameSessionProjectionEntity, GameSessionError>> {
-    return this.runIdempotentProjectionAction(sessionId, cookie, {
+  ): Promise<Result<MafiaGameProjection, GameSessionError>> {
+    return this.runIdempotentProjectionAction(sessionId, holderId, {
       idempotencyKey,
       fingerprint: content,
       conflict: { type: 'mafia-chat-idempotency-conflict' },
@@ -626,13 +615,13 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
   async submitNomination(
     sessionId: string,
-    cookie: string | undefined,
+    holderId: string | undefined,
     targetParticipantId: string,
     idempotencyKey: string,
-  ): Promise<Result<MafiaGameSessionProjectionEntity, GameSessionError>> {
+  ): Promise<Result<MafiaGameProjection, GameSessionError>> {
     return this.submitDayAction(
       sessionId,
-      cookie,
+      holderId,
       `nomination:${targetParticipantId}`,
       idempotencyKey,
       (session) =>
@@ -642,24 +631,24 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
   async submitVerdict(
     sessionId: string,
-    cookie: string | undefined,
+    holderId: string | undefined,
     vote: 'eliminate' | 'spare',
     idempotencyKey: string,
-  ): Promise<Result<MafiaGameSessionProjectionEntity, GameSessionError>> {
-    return this.submitDayAction(sessionId, cookie, `verdict:${vote}`, idempotencyKey, (session) =>
+  ): Promise<Result<MafiaGameProjection, GameSessionError>> {
+    return this.submitDayAction(sessionId, holderId, `verdict:${vote}`, idempotencyKey, (session) =>
       session.gameSession.submitVerdict(session.humanParticipantId, vote),
     );
   }
 
   async submitMafiaTarget(
     sessionId: string,
-    cookie: string | undefined,
+    holderId: string | undefined,
     targetParticipantId: string,
     idempotencyKey: string,
   ) {
     return this.submitDayAction(
       sessionId,
-      cookie,
+      holderId,
       `mafia-target:${targetParticipantId}`,
       idempotencyKey,
       (session) =>
@@ -669,13 +658,13 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
   async submitDoctorProtection(
     sessionId: string,
-    cookie: string | undefined,
+    holderId: string | undefined,
     targetParticipantId: string,
     idempotencyKey: string,
   ) {
     return this.submitDayAction(
       sessionId,
-      cookie,
+      holderId,
       `doctor-protection:${targetParticipantId}`,
       idempotencyKey,
       (session) =>
@@ -685,13 +674,13 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
   async submitDetectiveInvestigation(
     sessionId: string,
-    cookie: string | undefined,
+    holderId: string | undefined,
     targetParticipantId: string,
     idempotencyKey: string,
   ) {
     return this.submitDayAction(
       sessionId,
-      cookie,
+      holderId,
       `detective-investigation:${targetParticipantId}`,
       idempotencyKey,
       (session) =>
@@ -704,13 +693,13 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
   async adjustDiscussionTime(
     sessionId: string,
-    cookie: string | undefined,
+    holderId: string | undefined,
     adjustmentSeconds: 10 | -10,
     expectedDeadline: string,
     idempotencyKey: string,
-  ): Promise<Result<MafiaGameSessionProjectionEntity, GameSessionError>> {
+  ): Promise<Result<MafiaGameProjection, GameSessionError>> {
     const fingerprint = `${adjustmentSeconds}:${expectedDeadline}`;
-    return this.runIdempotentProjectionAction(sessionId, cookie, {
+    return this.runIdempotentProjectionAction(sessionId, holderId, {
       idempotencyKey,
       fingerprint,
       conflict: { type: 'discussion-time-adjustment-idempotency-conflict' },
@@ -721,18 +710,18 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
           session.nextEventId,
         );
         if (currentProjection.isErr()) {
-          return err<MafiaGameSessionProjectionEntity, GameSessionError>({
+          return err<MafiaGameProjection, GameSessionError>({
             type: 'invalid-mafia-projection',
             cause: currentProjection.error,
           });
         }
         if (currentProjection.value.public.phase !== 'discussion') {
-          return err<MafiaGameSessionProjectionEntity, GameSessionError>({
+          return err<MafiaGameProjection, GameSessionError>({
             type: 'invalid-discussion-time-adjustment',
           });
         }
         if (currentProjection.value.public.phaseDeadline !== expectedDeadline) {
-          return err<MafiaGameSessionProjectionEntity, GameSessionError>({
+          return err<MafiaGameProjection, GameSessionError>({
             type: 'stale-discussion-time-adjustment',
           });
         }
@@ -740,7 +729,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         const now = this.now();
         const retryAfterMs = cooldownRetryAfterMs(session.nextDiscussionTimeAdjustmentAt, now);
         if (retryAfterMs) {
-          return err<MafiaGameSessionProjectionEntity, GameSessionError>({
+          return err<MafiaGameProjection, GameSessionError>({
             type: 'discussion-time-adjustment-rate-limited',
             retryAfterMs,
           });
@@ -752,7 +741,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
           now.toDate(),
         );
         if (adjustment.isErr()) {
-          return err<MafiaGameSessionProjectionEntity, GameSessionError>(
+          return err<MafiaGameProjection, GameSessionError>(
             match(adjustment.error)
               .with({ type: 'dead-participant', participantId: P.select() }, (participantId) => ({
                 type: 'dead-participant' as const,
@@ -794,12 +783,12 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
   async submitFinalDefence(
     sessionId: string,
-    cookie: string | undefined,
+    holderId: string | undefined,
     content: string,
     idempotencyKey: string,
-  ): Promise<Result<MafiaGameSessionProjectionEntity, GameSessionError>> {
+  ): Promise<Result<MafiaGameProjection, GameSessionError>> {
     const fingerprint = `final-defence:${content}`;
-    return this.runIdempotentProjectionAction(sessionId, cookie, {
+    return this.runIdempotentProjectionAction(sessionId, holderId, {
       idempotencyKey,
       fingerprint,
       conflict: { type: 'day-action-idempotency-conflict' },
@@ -808,7 +797,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         const now = this.now();
         const retryAfterMs = cooldownRetryAfterMs(session.nextFinalDefenceAt, now);
         if (retryAfterMs) {
-          return err<MafiaGameSessionProjectionEntity, GameSessionError>({
+          return err<MafiaGameProjection, GameSessionError>({
             type: 'day-action-rate-limited',
             retryAfterMs,
           });
@@ -816,7 +805,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
         const action = session.gameSession.submitFinalDefence(session.humanParticipantId, content);
         if (action.isErr()) {
-          return err<MafiaGameSessionProjectionEntity, GameSessionError>({
+          return err<MafiaGameProjection, GameSessionError>({
             type: 'invalid-day-action',
           });
         }
@@ -833,14 +822,14 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
   private async submitDayAction(
     sessionId: string,
-    cookie: string | undefined,
+    holderId: string | undefined,
     fingerprint: string,
     idempotencyKey: string,
     submit: (
       session: StoredGameSessionEntity,
     ) => ReturnType<StoredGameSessionEntity['gameSession']['submitNomination']>,
-  ): Promise<Result<MafiaGameSessionProjectionEntity, GameSessionError>> {
-    return this.runIdempotentProjectionAction(sessionId, cookie, {
+  ): Promise<Result<MafiaGameProjection, GameSessionError>> {
+    return this.runIdempotentProjectionAction(sessionId, holderId, {
       idempotencyKey,
       fingerprint,
       conflict: { type: 'day-action-idempotency-conflict' },
@@ -848,7 +837,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       submit: (session) => {
         const action = submit(session);
         if (action.isErr()) {
-          return err<MafiaGameSessionProjectionEntity, GameSessionError>({
+          return err<MafiaGameProjection, GameSessionError>({
             type: 'invalid-day-action',
           });
         }
@@ -859,17 +848,17 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
   private async runIdempotentProjectionAction(
     sessionId: string,
-    cookie: string | undefined,
+    holderId: string | undefined,
     action: IdempotentProjectionAction,
-  ): Promise<Result<MafiaGameSessionProjectionEntity, GameSessionError>> {
+  ): Promise<Result<MafiaGameProjection, GameSessionError>> {
     return this.withSessionMutation(sessionId, () =>
-      this.runIdempotentProjectionActionUnlocked(sessionId, cookie, action),
+      this.runIdempotentProjectionActionUnlocked(sessionId, holderId, action),
     );
   }
 
   private async runIdempotentProjectionActionUnlocked(
     sessionId: string,
-    cookie: string | undefined,
+    holderId: string | undefined,
     {
       idempotencyKey,
       fingerprint,
@@ -880,22 +869,19 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       afterCommit,
     }: IdempotentProjectionAction,
     attempt = 0,
-  ): Promise<Result<MafiaGameSessionProjectionEntity, GameSessionError>> {
+  ): Promise<Result<MafiaGameProjection, GameSessionError>> {
     if (this.authority) {
-      const recovered = await this.getProjection(sessionId, cookie, true);
-      if (recovered.isErr())
-        return err<MafiaGameSessionProjectionEntity, GameSessionError>(recovered.error);
+      const recovered = await this.getProjection(sessionId, holderId, true);
+      if (recovered.isErr()) return err<MafiaGameProjection, GameSessionError>(recovered.error);
     }
     let committedAction = false;
-    const result = this.activeSessionForHolder(sessionId, cookie).andThen((session) => {
+    const result = this.activeSessionForHolder(sessionId, holderId).andThen((session) => {
       const ledger = records(session);
       const idempotencyResult = match(lookupIdempotency(ledger, idempotencyKey, fingerprint))
         .with({ type: 'replayed' }, ({ result: replayedProjection }) =>
-          ok<MafiaGameSessionProjectionEntity, GameSessionError>(replayedProjection),
+          ok<MafiaGameProjection, GameSessionError>(replayedProjection),
         )
-        .with({ type: 'conflict' }, () =>
-          err<MafiaGameSessionProjectionEntity, GameSessionError>(conflict),
-        )
+        .with({ type: 'conflict' }, () => err<MafiaGameProjection, GameSessionError>(conflict))
         .with({ type: 'new-request' }, () => undefined)
         .exhaustive();
       if (idempotencyResult) return idempotencyResult;
@@ -924,7 +910,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       await this.hydrateAuthoritativeSessionUnlocked(sessionId);
       return this.runIdempotentProjectionActionUnlocked(
         sessionId,
-        cookie,
+        holderId,
         { idempotencyKey, fingerprint, conflict, records, submit, beforeSave, afterCommit },
         attempt + 1,
       );
@@ -956,14 +942,6 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  guestCookieName() {
-    return gameSessionsConfig.guestCookieName;
-  }
-
-  signGuestId(holderId: string) {
-    return this.guestCookies.sign(holderId);
-  }
-
   private utcDay() {
     return this.clock.now().toISOString().slice(0, 10);
   }
@@ -985,7 +963,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
   private publishProjection(
     session: StoredGameSessionEntity,
-  ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
+  ): Result<MafiaGameProjection, GameSessionError> {
     session.nextEventId += 1;
     return session.gameSession
       .projectionFor(session.humanParticipantId, session.nextEventId)
@@ -1005,7 +983,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     const saved = await this.saveAuthoritativeProjection(session, projection.value);
     if (saved.isOk() && saved.value) return projection;
     await this.hydrateAfterAgentSaveFailure(projection.value.sessionId, hydrationLocked);
-    return err<MafiaGameSessionProjectionEntity, GameSessionError>({
+    return err<MafiaGameProjection, GameSessionError>({
       type: 'durability-unavailable',
     });
   }
@@ -1211,10 +1189,9 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
   private sessionForHolder(
     sessionId: string,
-    cookie: string | undefined,
+    holderId: string | undefined,
   ): Result<StoredGameSessionEntity, GameSessionError> {
     const session = this.sessions.get(sessionId);
-    const holderId = this.guestCookies.read(cookie);
     if (!session || !holderId || session.holderId !== holderId) {
       return err({ type: 'unavailable-to-guest', sessionId });
     }
@@ -1225,9 +1202,9 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
   private activeSessionForHolder(
     sessionId: string,
-    cookie: string | undefined,
+    holderId: string | undefined,
   ): Result<StoredGameSessionEntity, GameSessionError> {
-    return this.sessionForHolder(sessionId, cookie).andThen((session) => {
+    return this.sessionForHolder(sessionId, holderId).andThen((session) => {
       if (session.status !== 'in-progress')
         return err<StoredGameSessionEntity, GameSessionError>({
           type: 'unavailable-to-guest',
@@ -1241,7 +1218,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
   private projectionFor(
     session: StoredGameSessionEntity,
-  ): Result<MafiaGameSessionProjectionEntity, GameSessionError> {
+  ): Result<MafiaGameProjection, GameSessionError> {
     return session.gameSession
       .projectionFor(session.humanParticipantId, session.nextEventId)
       .mapErr((cause): GameSessionError => ({
@@ -1279,14 +1256,14 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
   private saveAuthoritativeProjection(
     session: StoredGameSessionEntity,
-    projection: MafiaGameSessionProjectionEntity,
+    projection: MafiaGameProjection,
   ) {
     return this.durability.save(session, projection);
   }
 
   private durableSnapshot(
     session: StoredGameSessionEntity,
-    projection: MafiaGameSessionProjectionEntity,
+    projection: MafiaGameProjection,
   ): DurableSessionSnapshot {
     return this.durability.snapshotFor(session, projection);
   }

@@ -1,10 +1,10 @@
 import type { MafiaGameSession } from '@repo/mafia';
+import type { MafiaGameProjection } from '@repo/mafia';
 import type { Dayjs } from 'dayjs';
 import { type ReplaySubject } from 'rxjs';
 
-import type { GameSessionStatus } from '../game-session-status';
-import type { IdempotencyRecord } from '../idempotency/idempotency-ledger';
-import type { MafiaGameSessionProjectionEntity } from './mafia-game-session-projection.entity';
+import type { GameSessionStatus } from './game-session-status';
+import type { IdempotencyRecord } from './idempotency/idempotency-ledger';
 
 export type ScheduledAgentPublicSpeech = {
   participantId: string;
@@ -43,20 +43,17 @@ export type StoredGameSessionEntity = {
   holderId: string;
   humanParticipantId: string;
   gameSession: MafiaGameSession;
-  events: ReplaySubject<MafiaGameSessionProjectionEntity>;
+  events: ReplaySubject<MafiaGameProjection>;
   nextEventId: number;
   nextPublicSpeechAt: Dayjs | undefined;
   nextFinalDefenceAt: Dayjs | undefined;
   nextDiscussionTimeAdjustmentAt: Dayjs | undefined;
   lastAccessedAt: Dayjs;
   status: GameSessionStatus;
-  publicSpeechIdempotencyKeys: Map<string, IdempotencyRecord<MafiaGameSessionProjectionEntity>>;
-  mafiaChatIdempotencyKeys: Map<string, IdempotencyRecord<MafiaGameSessionProjectionEntity>>;
-  dayActionIdempotencyKeys: Map<string, IdempotencyRecord<MafiaGameSessionProjectionEntity>>;
-  discussionTimeAdjustmentIdempotencyKeys: Map<
-    string,
-    IdempotencyRecord<MafiaGameSessionProjectionEntity>
-  >;
+  publicSpeechIdempotencyKeys: Map<string, IdempotencyRecord<MafiaGameProjection>>;
+  mafiaChatIdempotencyKeys: Map<string, IdempotencyRecord<MafiaGameProjection>>;
+  dayActionIdempotencyKeys: Map<string, IdempotencyRecord<MafiaGameProjection>>;
+  discussionTimeAdjustmentIdempotencyKeys: Map<string, IdempotencyRecord<MafiaGameProjection>>;
   phaseTimer: NodeJS.Timeout | undefined;
   agentFinalDefenceTimer: NodeJS.Timeout | undefined;
   publicSpeechAgentTimers: Map<string, NodeJS.Timeout>;

@@ -3,6 +3,7 @@ import {
   MafiaGameSessionSnapshotSchema,
   type MafiaGameSessionSnapshot,
 } from '@repo/mafia';
+import type { MafiaGameProjection } from '@repo/mafia';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import Redis from 'ioredis';
@@ -11,14 +12,13 @@ import { filter, map } from 'remeda';
 import { match } from 'ts-pattern';
 import * as v from 'valibot';
 
-import type { MafiaGameSessionProjectionEntity } from '../entities/mafia-game-session-projection.entity';
+import type { GameSessionStatus } from '../application/game-session-status';
+import { gameSessionsConfig } from '../application/game-sessions.config';
 import type {
   ScheduledAgentFinalDefence,
   ScheduledAgentMafiaChatReply,
   ScheduledAgentPublicSpeech,
-} from '../entities/stored-game-session.entity';
-import type { GameSessionStatus } from '../game-session-status';
-import { gameSessionsConfig } from '../game-sessions.config';
+} from '../application/stored-game-session.entity';
 import { runRedisLuaCommand } from './redis-lua-command-runner';
 
 dayjs.extend(utc);
@@ -39,10 +39,7 @@ export type DurableSessionSnapshot = {
     finalDefence: string | undefined;
     discussionTimeAdjustment: string | undefined;
   };
-  idempotency?: Record<
-    string,
-    [string, { fingerprint: string; result: MafiaGameSessionProjectionEntity }][]
-  >;
+  idempotency?: Record<string, [string, { fingerprint: string; result: MafiaGameProjection }][]>;
   scheduledAgentPublicSpeeches?: ScheduledAgentPublicSpeech[];
   scheduledAgentFinalDefence?: ScheduledAgentFinalDefence;
   scheduledAgentMafiaChatReplies?: ScheduledAgentMafiaChatReply[];
@@ -52,7 +49,7 @@ export type DurableSessionSnapshot = {
 
 export type DurablePublicEvent = {
   eventId: number;
-  projection: MafiaGameSessionProjectionEntity;
+  projection: MafiaGameProjection;
 };
 
 export type DurableCreationIdempotencyRecord = {

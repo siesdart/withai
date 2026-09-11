@@ -180,14 +180,24 @@ export class RedisGameSessionAuthority {
     return ResultAsync.fromPromise(
       this.redis.eval(
         `if not redis.call('GET', KEYS[1]) then return 0 end
-         local lifecycle = redis.call('GET', KEYS[4])
-         if lifecycle == 'abandoned' or lifecycle == 'idle-expired' then return 0 end
-         local deadline = tonumber(string.match(lifecycle or '', '^[^:]+:(%d+)|'))
-         if deadline and deadline <= tonumber(ARGV[7]) then return 0 end
-         local currentVersion = redis.call('GET', KEYS[8])
-         if not currentVersion or tonumber(currentVersion) ~= tonumber(ARGV[8]) then return 0 end
          local lifecycle = redis.call('GET', KEYS[9])
          if lifecycle == 'abandoned' or lifecycle == 'idle-expired' then return 0 end
+         local deadline = tonumber(string.match(lifecycle or '', '^[^:]+:(%d+)|'))
+         if deadline and deadline <= tonumber(ARGV[7]) then
+           redis.call('DEL', KEYS[10])
+           redis.call('SET', KEYS[9], 'abandoned', 'PX', ARGV[9])
+           redis.call('SET', KEYS[4], 'abandoned', 'PX', ARGV[9])
+           redis.call('PEXPIRE', KEYS[1], ARGV[9])
+           redis.call('PEXPIRE', KEYS[3], ARGV[9])
+           redis.call('PEXPIRE', KEYS[5], ARGV[9])
+           redis.call('PEXPIRE', KEYS[6], ARGV[9])
+           redis.call('PEXPIRE', KEYS[8], ARGV[9])
+           redis.call('ZREM', KEYS[2], ARGV[6])
+           if redis.call('GET', KEYS[7]) == ARGV[6] then redis.call('DEL', KEYS[7]) end
+           return 0
+         end
+         local currentVersion = redis.call('GET', KEYS[8])
+         if not currentVersion or tonumber(currentVersion) ~= tonumber(ARGV[8]) then return 0 end
          redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2])
          local previousActivity = redis.call('GET', KEYS[5])
          if not previousActivity or previousActivity < ARGV[3] then
@@ -202,7 +212,7 @@ export class RedisGameSessionAuthority {
            redis.call('ZREM', KEYS[2], ARGV[6])
          end
          return 1`,
-        9,
+        10,
         this.snapshotKey(snapshot.sessionId),
         this.activeSessionsKey(),
         this.eventsKey(snapshot.sessionId),
@@ -212,6 +222,7 @@ export class RedisGameSessionAuthority {
         this.holderActiveSessionKey(snapshot.holderId),
         this.snapshotVersionKey(snapshot.sessionId),
         this.lifecycleKey(snapshot.sessionId),
+        this.reconnectLeasesKey(snapshot.sessionId),
         JSON.stringify(snapshot),
         ttlMs,
         snapshot.lastActivityAt,
@@ -220,6 +231,7 @@ export class RedisGameSessionAuthority {
         snapshot.sessionId,
         this.now().valueOf(),
         snapshot.nextEventId,
+        abandonedSessionTtlMs,
       ),
       (cause): DurableSessionError => ({ type: 'authority-unavailable', cause }),
     ).map((saved) => saved === 1);

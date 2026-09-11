@@ -525,6 +525,36 @@ describe('RedisGameSessionAuthority', () => {
     });
   });
 
+  it('abandons an expired Reconnect Lease before saving a snapshot', async () => {
+    const redis = new RedisMock();
+    redisClients.push(redis);
+    let now = new Date('2026-09-05T00:00:00.000Z');
+    const authority = new RedisGameSessionAuthority(
+      redis,
+      'withai:expired-lease-snapshot',
+      () => now,
+    );
+    const snapshot = createSnapshot('expired-lease-snapshot-session');
+    const projection = createMafiaSession('expired-lease-snapshot-session').projectionFor(
+      'participant-1',
+      1,
+    );
+    if (projection.isErr()) throw new Error('Expected a Human Player projection.');
+
+    await authority.save(snapshot, { eventId: 1, projection: projection.value });
+    await authority.acquireReconnectLease(
+      'expired-lease-snapshot-session',
+      'connection-1',
+      'holder-1',
+    );
+    now = new Date(now.valueOf() + 60_001);
+
+    await expect(authority.saveSnapshot(snapshot)).resolves.toEqual({ value: false });
+    await expect(authority.load('expired-lease-snapshot-session')).resolves.toMatchObject({
+      value: { status: 'abandoned' },
+    });
+  });
+
   it('replays a Creation Idempotency Key after idle cleanup', async () => {
     const redis = new RedisMock();
     redisClients.push(redis);

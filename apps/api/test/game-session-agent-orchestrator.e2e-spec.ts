@@ -140,6 +140,26 @@ describe('GameSessionAgentOrchestrator', () => {
     jest.useRealTimers();
   });
 
+  it('publishes Mafia Chat replies with the held mutation lock state', async () => {
+    const session = createSession();
+    session.scheduledAgentMafiaChatReplies = [
+      { participantId: 'participant-2', content: 'I will commit my action.' },
+    ];
+    const publishProjection = jest.fn(
+      async (_session: StoredGameSessionEntity, _hydrationLocked?: boolean) =>
+        ok(new MafiaGameSessionProjectionEntity()),
+    );
+    const orchestrator = new GameSessionAgentOrchestrator(
+      new SequencedMafiaTargetGateway(),
+      publishProjection,
+      async () => ok(undefined),
+    );
+
+    await orchestrator.publishMafiaChatReplies(session, true);
+
+    expect(publishProjection).toHaveBeenCalledWith(session, true);
+  });
+
   it('keeps an Agent Mafia target fixed across Mafia Chat replies', async () => {
     const session = createSession();
     const orchestrator = new GameSessionAgentOrchestrator(
@@ -529,6 +549,7 @@ describe('GameSessionAgentOrchestrator', () => {
     expect(hydrated.isOk()).toBe(true);
     const refreshed = sessions.get('session-1');
     if (!refreshed) throw new Error('Expected a refreshed Game Session.');
+    expect(refreshed.agentFinalDefenceTimer).toBeUndefined();
     orchestrator.resumeScheduledTasks(refreshed);
     jest.advanceTimersByTime(1_000);
 

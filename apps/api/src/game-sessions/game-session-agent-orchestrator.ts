@@ -22,6 +22,7 @@ import type { GameSessionError } from './game-session-error';
 
 type PublishProjection = (
   session: StoredGameSessionEntity,
+  hydrationLocked?: boolean,
 ) => Promise<Result<MafiaGameSessionProjectionEntity, GameSessionError>>;
 
 type CommitAgentMutation = (
@@ -169,6 +170,7 @@ export class GameSessionAgentOrchestrator {
 
   publishMafiaChatReplies(
     session: StoredGameSessionEntity,
+    hydrationLocked = false,
   ): Promise<Result<MafiaGameSessionProjectionEntity, GameSessionError> | undefined> {
     if (session.scheduledAgentMafiaChatReplies.length === 0) return Promise.resolve(undefined);
     const replies = session.scheduledAgentMafiaChatReplies;
@@ -176,7 +178,7 @@ export class GameSessionAgentOrchestrator {
     for (const reply of replies) {
       session.gameSession.submitMafiaChat(reply.participantId, reply.content);
     }
-    return this.publishProjection(session);
+    return this.publishProjection(session, hydrationLocked);
   }
 
   clearTimers(session: StoredGameSessionEntity) {

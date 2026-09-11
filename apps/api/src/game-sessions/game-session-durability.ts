@@ -8,11 +8,7 @@ import {
   RedisGameSessionAuthority,
 } from './durability/redis-game-session-authority';
 import type { MafiaGameSessionProjectionEntity } from './entities/mafia-game-session-projection.entity';
-import {
-  scheduledAgentPublicSpeechKey,
-  sameScheduledAgentFinalDefence,
-  type StoredGameSessionEntity,
-} from './entities/stored-game-session.entity';
+import type { StoredGameSessionEntity } from './entities/stored-game-session.entity';
 import type { GameSessionClock } from './game-session-clock';
 import type { GameSessionError } from './game-session-error';
 import { gameSessionsConfig } from './game-sessions.config';
@@ -174,49 +170,7 @@ export class GameSessionDurability {
 
   private replace(sessionId: string, next: StoredGameSessionEntity) {
     const previous = this.sessions.get(sessionId);
-    if (previous) {
-      this.transferPendingAgentTimers(previous, next);
-      this.disposeSession(previous);
-    }
+    if (previous) this.disposeSession(previous);
     this.sessions.set(sessionId, next);
-  }
-
-  private transferPendingAgentTimers(
-    previous: StoredGameSessionEntity,
-    next: StoredGameSessionEntity,
-  ) {
-    if (
-      next.scheduledAgentFinalDefence &&
-      previous.scheduledAgentFinalDefence &&
-      previous.agentFinalDefenceTimer &&
-      sameScheduledAgentFinalDefence(
-        previous.scheduledAgentFinalDefence,
-        next.scheduledAgentFinalDefence,
-      )
-    ) {
-      next.agentFinalDefenceTimer = previous.agentFinalDefenceTimer;
-      previous.agentFinalDefenceTimer = undefined;
-    }
-    for (const speech of next.scheduledAgentPublicSpeeches) {
-      const key = scheduledAgentPublicSpeechKey(speech);
-      if (
-        !previous.scheduledAgentPublicSpeeches.some(
-          (candidate) => scheduledAgentPublicSpeechKey(candidate) === key,
-        )
-      )
-        continue;
-      const timer = previous.publicSpeechAgentTimers.get(key);
-      if (!timer) continue;
-      next.publicSpeechAgentTimers.set(key, timer);
-      previous.publicSpeechAgentTimers.delete(key);
-    }
-    if (
-      next.scheduledMafiaTargetFallbackAt &&
-      next.scheduledMafiaTargetFallbackAt === previous.scheduledMafiaTargetFallbackAt &&
-      previous.mafiaTargetFallbackTimer
-    ) {
-      next.mafiaTargetFallbackTimer = previous.mafiaTargetFallbackTimer;
-      previous.mafiaTargetFallbackTimer = undefined;
-    }
   }
 }

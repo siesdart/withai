@@ -398,7 +398,7 @@ describe('GameSessionsService', () => {
     expect(write).not.toHaveBeenCalled();
   });
 
-  it('retains a durable phase timer after a subscriber hydrates the session', async () => {
+  it('retains a durable phase timer after a request hydrates the session', async () => {
     let now = new Date('2026-08-27T17:11:51.000Z');
     type TestTimer = {
       callback: () => void;
@@ -449,8 +449,8 @@ describe('GameSessionsService', () => {
     if (created.isErr()) throw new Error('Expected a durable session.');
     const claimPhaseDeadline = jest.spyOn(authority, 'claimPhaseDeadline');
     const cookie = `withai_guest=${service.signGuestId(created.value.holderId)}`;
-    const events = await service.eventsFor(created.value.projection.sessionId, cookie, undefined);
-    expect(events.isOk()).toBe(true);
+    const projection = await service.getProjection(created.value.projection.sessionId, cookie);
+    expect(projection.isOk()).toBe(true);
 
     const runNextDueTimer = async () => {
       const timer = timers.find(
@@ -463,7 +463,8 @@ describe('GameSessionsService', () => {
         Array.from({ length: 5 }, () => new Promise<void>((resolve) => setImmediate(resolve))),
       );
     };
-    now = new Date(created.value.projection.public.phaseDeadline);
+    now = new Date(new Date(created.value.projection.public.phaseDeadline).valueOf() + 1);
+    await runNextDueTimer();
     await runNextDueTimer();
     await runNextDueTimer();
     expect(claimPhaseDeadline).toHaveBeenCalledTimes(1);

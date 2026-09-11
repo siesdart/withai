@@ -614,7 +614,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
           });
       },
       beforeSave: (session) => this.agentActions.prepareMafiaChatReplies(session),
-      afterCommit: (session) => this.deliverMafiaChatReplies(session),
+      afterCommit: (session) => this.deliverMafiaChatReplies(session, true),
     });
   }
 
@@ -1059,8 +1059,11 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     timer.unref?.();
   }
 
-  private async deliverMafiaChatReplies(session: StoredGameSessionEntity): Promise<void> {
-    const published = await this.agentActions.publishMafiaChatReplies(session);
+  private async deliverMafiaChatReplies(
+    session: StoredGameSessionEntity,
+    hydrationLocked = false,
+  ): Promise<void> {
+    const published = await this.agentActions.publishMafiaChatReplies(session, hydrationLocked);
     if (!published || published.isOk()) return;
     this.retryMafiaChatReplies(session.gameSession.snapshot().sessionId);
   }

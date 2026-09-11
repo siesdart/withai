@@ -14,6 +14,7 @@ import { map, reduce } from 'remeda';
 
 import type { MafiaGameProjection } from '../../api/client';
 import type { UseDeadlineCountdownResult } from '../../hooks/ui/use-deadline-countdown';
+import { useResumeAutoScrollAtEnd } from '../../hooks/ui/use-public-discussion-scroll';
 import type { PhasePanel } from '../control-room/phase-interaction';
 import { PhaseActionPanel } from '../phase-actions/phase-action-panel';
 import { GamePhaseTimer } from './game-phase-timer';
@@ -78,6 +79,22 @@ const groupTimelineByPeriod = (timeline: readonly TimelineItem[]): SegmentedTime
     [] as SegmentedTimeline[],
   );
 
+function PublicDiscussionViewport({
+  children,
+  timelineItemCount,
+}: React.PropsWithChildren<{ timelineItemCount: number }>) {
+  const resumeAutoScrollAtEnd = useResumeAutoScrollAtEnd(timelineItemCount);
+
+  return (
+    <MessageScrollerViewport
+      className="h-auto! flex-1! px-3 py-0 text-sm sm:px-5"
+      onScroll={resumeAutoScrollAtEnd}
+    >
+      {children}
+    </MessageScrollerViewport>
+  );
+}
+
 export function PublicDiscussionPanel({
   publicInformation,
   knownRoles,
@@ -128,7 +145,7 @@ export function PublicDiscussionPanel({
       </div>
       <MessageScrollerProvider autoScroll>
         <MessageScroller className="h-auto! flex-1!">
-          <MessageScrollerViewport className="h-auto! flex-1! px-3 py-0 text-sm sm:px-5">
+          <PublicDiscussionViewport timelineItemCount={timeline.length}>
             <MessageScrollerContent className="gap-0">
               {map(timelineSegments, (segment) => {
                 const isNight = segment.period === 'night';
@@ -174,9 +191,8 @@ export function PublicDiscussionPanel({
                                   </MessageHeader>
                                   <Bubble
                                     align={isCurrentParticipant ? 'end' : 'start'}
-                                    className={cn(
-                                      '**:data-[slot=bubble-content]:border-[#7884a4]! **:data-[slot=bubble-content]:bg-[#4d5874]! **:data-[slot=bubble-content]:text-[#f7f2e8]!',
-                                    )}
+                                    className="**:data-[slot=bubble-content]:border-[#7884a4]! **:data-[slot=bubble-content]:bg-[#4d5874]! **:data-[slot=bubble-content]:text-[#f7f2e8]!"
+
                                     variant={isCurrentParticipant ? 'tinted' : 'muted'}
                                   >
                                     <BubbleContent>{item.message.content}</BubbleContent>
@@ -202,15 +218,8 @@ export function PublicDiscussionPanel({
                                 </MessageHeader>
                                 <Bubble
                                   align={isCurrentParticipant ? 'end' : 'start'}
-                                  className={cn(
-                                    isNight
-                                      ? isCurrentParticipant
-                                        ? '**:data-[slot=bubble-content]:border-[#7884a4]! **:data-[slot=bubble-content]:bg-[#4d5874]! **:data-[slot=bubble-content]:text-[#f7f2e8]!'
-                                        : '**:data-[slot=bubble-content]:border-[#565968]! **:data-[slot=bubble-content]:bg-[#383b47]! **:data-[slot=bubble-content]:text-[#f7f2e8]!'
-                                      : isCurrentParticipant
-                                        ? '**:data-[slot=bubble-content]:border-[#62594e]! **:data-[slot=bubble-content]:bg-[#393833]! **:data-[slot=bubble-content]:text-[#f8f4eb]! **:data-[slot=bubble-content]:shadow-[0_2px_0_rgb(34_34_30/0.16)]'
-                                        : '**:data-[slot=bubble-content]:border-[#b8aa96]! **:data-[slot=bubble-content]:bg-[#fffaf2]! **:data-[slot=bubble-content]:text-[#38332c]! **:data-[slot=bubble-content]:shadow-[0_2px_0_rgb(34_34_30/0.08)]',
-                                  )}
+                                  className="**:data-[slot=bubble-content]:border-[#b8aa96]! **:data-[slot=bubble-content]:bg-[#fffaf2]! **:data-[slot=bubble-content]:text-[#38332c]! **:data-[slot=bubble-content]:shadow-[0_2px_0_rgb(34_34_30/0.08)]"
+
                                   variant={isCurrentParticipant ? 'tinted' : 'muted'}
                                 >
                                   <BubbleContent>{item.message.content}</BubbleContent>
@@ -225,7 +234,7 @@ export function PublicDiscussionPanel({
                 );
               })}
             </MessageScrollerContent>
-          </MessageScrollerViewport>
+          </PublicDiscussionViewport>
           <MessageScrollerButton
             className={cn(
               'shadow-sm',

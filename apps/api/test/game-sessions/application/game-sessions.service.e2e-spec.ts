@@ -8,11 +8,11 @@ import RedisMock from 'ioredis-mock';
 import { errAsync, ok, okAsync, type Result } from 'neverthrow';
 import { Observable } from 'rxjs';
 
-import { RedisGameSessionAuthority } from '../src/game-sessions/durability/redis-game-session-authority';
-import { MafiaGameSessionProjectionEntity } from '../src/game-sessions/entities/mafia-game-session-projection.entity';
-import type { GameSessionError } from '../src/game-sessions/game-session-error';
-import { GameSessionsController } from '../src/game-sessions/game-sessions.controller';
-import { GameSessionsService } from '../src/game-sessions/game-sessions.service';
+import { RedisGameSessionAuthority } from '../../../src/game-sessions/durability/redis-game-session-authority';
+import { MafiaGameSessionProjectionEntity } from '../../../src/game-sessions/entities/mafia-game-session-projection.entity';
+import type { GameSessionError } from '../../../src/game-sessions/game-session-error';
+import { GameSessionsController } from '../../../src/game-sessions/game-sessions.controller';
+import { GameSessionsService } from '../../../src/game-sessions/game-sessions.service';
 
 const createDeferred = <Value>() => {
   let resolve: (value: Value) => void;

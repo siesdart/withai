@@ -1,7 +1,7 @@
 import { describe, expect, it } from '@jest/globals';
 import type { MafiaAgentSpeechContext } from '@repo/mafia';
 
-import { DeterministicAgentDecisionGateway } from '../src/game-sessions/agent-decision.gateway';
+import { DeterministicAgentDecisionGateway } from '../../../src/game-sessions/agent-decision.gateway';
 
 describe('DeterministicAgentDecisionGateway', () => {
   it('always supplies an opening and follow-up for an Agent Final Defence', () => {

@@ -4,7 +4,7 @@ import dayjs from 'dayjs';
 import type { Redis } from 'ioredis';
 import RedisMock from 'ioredis-mock';
 
-import { RedisGameSessionAuthority } from '../src/game-sessions/durability/redis-game-session-authority';
+import { RedisGameSessionAuthority } from '../../../src/game-sessions/durability/redis-game-session-authority';
 
 const mafiaParticipants: MafiaParticipant[] = [
   { id: 'participant-1', name: 'You', alive: true, role: 'Mafia' },

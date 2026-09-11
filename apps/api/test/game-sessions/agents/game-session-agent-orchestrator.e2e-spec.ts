@@ -9,18 +9,18 @@ import type {
   AgentDecisionGateway,
   AgentFinalDefence,
   AgentPublicSpeechDecision,
-} from '../src/game-sessions/agent-decision.gateway';
-import { RedisGameSessionAuthority } from '../src/game-sessions/durability/redis-game-session-authority';
-import { MafiaGameSessionProjectionEntity } from '../src/game-sessions/entities/mafia-game-session-projection.entity';
+} from '../../../src/game-sessions/agent-decision.gateway';
+import { RedisGameSessionAuthority } from '../../../src/game-sessions/durability/redis-game-session-authority';
+import { MafiaGameSessionProjectionEntity } from '../../../src/game-sessions/entities/mafia-game-session-projection.entity';
 import {
   type StoredGameSessionEntity,
   scheduledAgentPublicSpeechKey,
-} from '../src/game-sessions/entities/stored-game-session.entity';
-import { GameSessionAgentOrchestrator } from '../src/game-sessions/game-session-agent-orchestrator';
-import { nativeGameSessionClock } from '../src/game-sessions/game-session-clock';
-import { GameSessionDurability } from '../src/game-sessions/game-session-durability';
-import { GameSessionLifecycle } from '../src/game-sessions/game-session-lifecycle';
-import { gameSessionsConfig } from '../src/game-sessions/game-sessions.config';
+} from '../../../src/game-sessions/entities/stored-game-session.entity';
+import { GameSessionAgentOrchestrator } from '../../../src/game-sessions/game-session-agent-orchestrator';
+import { nativeGameSessionClock } from '../../../src/game-sessions/game-session-clock';
+import { GameSessionDurability } from '../../../src/game-sessions/game-session-durability';
+import { GameSessionLifecycle } from '../../../src/game-sessions/game-session-lifecycle';
+import { gameSessionsConfig } from '../../../src/game-sessions/game-sessions.config';
 
 class SequencedMafiaTargetGateway implements AgentDecisionGateway {
   private readonly targets = ['participant-3', 'participant-4', 'participant-5'];

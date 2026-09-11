@@ -10,14 +10,17 @@ import type { Redis } from 'ioredis';
 import RedisMock from 'ioredis-mock';
 import request from 'supertest';
 
-import { AppModule } from '../src/app.module';
+import { AppModule } from '../../../src/app.module';
 import {
   agentDecisionGateway,
   type AgentDecisionGateway,
-} from '../src/game-sessions/agent-decision.gateway';
-import { RedisGameSessionAuthority } from '../src/game-sessions/durability/redis-game-session-authority';
-import { gameSessionClock, type GameSessionClock } from '../src/game-sessions/game-session-clock';
-import { GameSessionsService } from '../src/game-sessions/game-sessions.service';
+} from '../../../src/game-sessions/agent-decision.gateway';
+import { RedisGameSessionAuthority } from '../../../src/game-sessions/durability/redis-game-session-authority';
+import {
+  gameSessionClock,
+  type GameSessionClock,
+} from '../../../src/game-sessions/game-session-clock';
+import { GameSessionsService } from '../../../src/game-sessions/game-sessions.service';
 
 const flushMicrotasks = async (remaining = 10): Promise<void> => {
   if (remaining === 0) return;

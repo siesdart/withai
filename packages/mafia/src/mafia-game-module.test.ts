@@ -1,16 +1,17 @@
-import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { MafiaGameModule, MafiaGameSession } from '@repo/mafia';
 import { filter, map, pipe } from 'remeda';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { MafiaGameModule, MafiaGameSession } from './entry';
 
 const timeAt = (milliseconds: number) => new Date(`2026-08-26T00:00:00.${milliseconds}Z`);
 
 describe('MafiaGameModule', () => {
   beforeEach(() => {
-    jest.useFakeTimers({ now: new Date('2026-08-25T23:59:59.999Z') });
+    vi.useFakeTimers({ now: new Date('2026-08-25T23:59:59.999Z') });
   });
 
   afterEach(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   it('returns typed errors for invalid inputs and unknown participants', () => {
@@ -211,7 +212,7 @@ describe('MafiaGameModule', () => {
   });
 
   it('allows a Detective to investigate only one participant per Night', () => {
-    jest.setSystemTime(timeAt(0));
+    vi.setSystemTime(timeAt(0));
     const gameModule = new MafiaGameModule(() => 0, {
       discussionDurationMs: 1,
       nominationDurationMs: 1,
@@ -267,7 +268,7 @@ describe('MafiaGameModule', () => {
   });
 
   it('records a Discussion Time Adjustment before immediately resolving an expired phase', () => {
-    jest.setSystemTime(new Date('2026-08-25T23:59:00.000Z'));
+    vi.setSystemTime(new Date('2026-08-25T23:59:00.000Z'));
     const gameModule = new MafiaGameModule(() => 0, {
       discussionDurationMs: 60_000,
       nominationDurationMs: 60_000,

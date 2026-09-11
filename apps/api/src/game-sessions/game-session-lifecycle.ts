@@ -113,7 +113,7 @@ export class GameSessionLifecycle {
             this.runtime.phaseOperations.retryAgentActions(nextProjection.value.sessionId);
             return;
           }
-          this.schedulePhaseTransition(session);
+          this.schedulePhaseTransition(current);
           return;
         }
         const authority = this.runtime.persistence.authorityFor();

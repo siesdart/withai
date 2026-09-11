@@ -97,7 +97,8 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     this.agentActions = new GameSessionAgentOrchestrator(
       agentDecisions,
       this.publishAgentProjection.bind(this),
-      this.commitAgentMutation.bind(this),
+      (session, mutate, schedulePhaseTransition, hydrationLocked) =>
+        this.commitAgentMutation(session, mutate, 0, schedulePhaseTransition, hydrationLocked),
       this.clock,
     );
     this.durability = new GameSessionDurability(
@@ -1153,10 +1154,11 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     mutate: (session: StoredGameSessionEntity) => boolean,
     attempt = 0,
     schedulePhaseTransition = true,
+    hydrationLocked = false,
   ): Promise<Result<void, GameSessionError>> {
     const sessionId = staleSession.gameSession.snapshot().sessionId;
     if (this.authority) {
-      const hydrated = await this.hydrateAuthoritativeSession(sessionId);
+      const hydrated = await this.hydrateAuthoritativeSession(sessionId, hydrationLocked);
       if (hydrated.isErr()) {
         this.retryScheduledAgentTasks(sessionId);
         return err(hydrated.error);
@@ -1171,7 +1173,13 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         return ok(undefined);
       }
       if (attempt < 1)
-        return this.commitAgentMutation(staleSession, mutate, attempt + 1, schedulePhaseTransition);
+        return this.commitAgentMutation(
+          staleSession,
+          mutate,
+          attempt + 1,
+          schedulePhaseTransition,
+          hydrationLocked,
+        );
       this.retryScheduledAgentTasks(sessionId);
       return err({ type: 'durability-unavailable' });
     }
@@ -1184,7 +1192,13 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       this.retryScheduledAgentTasks(sessionId);
       return err(published.error);
     }
-    return this.commitAgentMutation(staleSession, mutate, attempt + 1, schedulePhaseTransition);
+    return this.commitAgentMutation(
+      staleSession,
+      mutate,
+      attempt + 1,
+      schedulePhaseTransition,
+      hydrationLocked,
+    );
   }
 
   private async releaseReconnectLeaseWithRetry(

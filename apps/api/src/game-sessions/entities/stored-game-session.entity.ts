@@ -33,8 +33,10 @@ export type ScheduledAgentFinalDefence = {
 };
 
 export type ScheduledAgentMafiaChatReply = {
+  id: string;
   participantId: string;
   content: string;
+  dueAt: string;
 };
 
 export type StoredGameSessionEntity = {

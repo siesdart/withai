@@ -1,4 +1,4 @@
-import { randomInt } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 
 import type { MafiaAgentSpeechContext } from '@repo/mafia';
 import dayjs from 'dayjs';
@@ -11,6 +11,7 @@ import type { MafiaGameSessionProjectionEntity } from './entities/mafia-game-ses
 import type {
   StoredGameSessionEntity,
   ScheduledAgentFinalDefence,
+  ScheduledAgentMafiaChatReply,
   ScheduledAgentPublicSpeech,
 } from './entities/stored-game-session.entity';
 import {
@@ -29,6 +30,7 @@ type CommitAgentMutation = (
   session: StoredGameSessionEntity,
   mutate: (session: StoredGameSessionEntity) => boolean,
   schedulePhaseTransition?: boolean,
+  hydrationLocked?: boolean,
 ) => Promise<Result<void, GameSessionError>>;
 
 type DueScheduledTask = {
@@ -156,14 +158,17 @@ export class GameSessionAgentOrchestrator {
   }
 
   prepareMafiaChatReplies(session: StoredGameSessionEntity) {
+    const dueAt = this.clock.now().toISOString();
     this.forEachMafiaAgent(session, (participantId, context) => {
       const targetParticipantId = this.mafiaTargetFor(session, context);
       const targetName =
         targetParticipantId && this.participantNameFor(context, targetParticipantId);
       if (!targetParticipantId || !targetName) return;
       session.scheduledAgentMafiaChatReplies.push({
+        id: randomUUID(),
         participantId,
         content: this.agentDecisions.decideMafiaChatReply(context, targetName),
+        dueAt,
       });
     });
   }
@@ -171,14 +176,12 @@ export class GameSessionAgentOrchestrator {
   publishMafiaChatReplies(
     session: StoredGameSessionEntity,
     hydrationLocked = false,
-  ): Promise<Result<MafiaGameSessionProjectionEntity, GameSessionError> | undefined> {
-    if (session.scheduledAgentMafiaChatReplies.length === 0) return Promise.resolve(undefined);
-    const replies = session.scheduledAgentMafiaChatReplies;
-    session.scheduledAgentMafiaChatReplies = [];
-    for (const reply of replies) {
-      session.gameSession.submitMafiaChat(reply.participantId, reply.content);
-    }
-    return this.publishProjection(session, hydrationLocked);
+  ): Promise<Result<void, GameSessionError>> {
+    return this.consumeMafiaChatReplies(
+      session,
+      session.scheduledAgentMafiaChatReplies,
+      hydrationLocked,
+    );
   }
 
   clearTimers(session: StoredGameSessionEntity) {
@@ -380,7 +383,15 @@ export class GameSessionAgentOrchestrator {
             },
           ]
         : [];
-    return [...publicSpeeches, ...finalDefenceTask, ...fallbackTask];
+    const mafiaChatReplies = pipe(
+      session.scheduledAgentMafiaChatReplies,
+      filter((reply) => dayjs(reply.dueAt).valueOf() <= now),
+      map((reply): DueScheduledTask => ({
+        dueAt: reply.dueAt,
+        commit: () => this.commitMafiaChatReply(session, reply, false),
+      })),
+    );
+    return [...publicSpeeches, ...finalDefenceTask, ...fallbackTask, ...mafiaChatReplies];
   }
 
   private isDraining(session: StoredGameSessionEntity) {
@@ -395,6 +406,18 @@ export class GameSessionAgentOrchestrator {
     const committed = await task.commit();
     if (committed.isErr()) return committed;
     return this.consumeDueScheduledTasks(remaining);
+  }
+
+  private async consumeMafiaChatReplies(
+    session: StoredGameSessionEntity,
+    replies: ScheduledAgentMafiaChatReply[],
+    hydrationLocked: boolean,
+  ): Promise<Result<void, GameSessionError>> {
+    const [reply, ...remaining] = replies;
+    if (!reply) return ok(undefined);
+    const committed = await this.commitMafiaChatReply(session, reply, hydrationLocked);
+    if (committed.isErr()) return committed;
+    return this.consumeMafiaChatReplies(session, remaining, hydrationLocked);
   }
 
   private commitPublicSpeech(
@@ -453,6 +476,36 @@ export class GameSessionAgentOrchestrator {
           .isOk();
       },
       schedulePhaseTransition,
+    );
+  }
+
+  private commitMafiaChatReply(
+    session: StoredGameSessionEntity,
+    scheduled: ScheduledAgentMafiaChatReply,
+    hydrationLocked = false,
+  ) {
+    return this.commitAgentMutation(
+      session,
+      (current) => {
+        const pending = find(
+          current.scheduledAgentMafiaChatReplies,
+          (candidate) => candidate.id === scheduled.id,
+        );
+        if (!pending) return false;
+        const submitted = current.gameSession.submitMafiaChat(
+          pending.participantId,
+          pending.content,
+          dayjs(pending.dueAt).toDate(),
+        );
+        if (submitted.isErr()) return false;
+        current.scheduledAgentMafiaChatReplies = filter(
+          current.scheduledAgentMafiaChatReplies,
+          (candidate) => candidate.id !== pending.id,
+        );
+        return true;
+      },
+      true,
+      hydrationLocked,
     );
   }
 

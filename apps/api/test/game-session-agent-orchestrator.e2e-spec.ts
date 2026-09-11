@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals
 import { MafiaGameSession, type MafiaAgentSpeechContext } from '@repo/mafia';
 import dayjs from 'dayjs';
 import RedisMock from 'ioredis-mock';
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { ReplaySubject } from 'rxjs';
 
 import type {
@@ -140,24 +140,35 @@ describe('GameSessionAgentOrchestrator', () => {
     jest.useRealTimers();
   });
 
-  it('publishes Mafia Chat replies with the held mutation lock state', async () => {
+  it('commits Mafia Chat replies with the held mutation lock state', async () => {
     const session = createSession();
     session.scheduledAgentMafiaChatReplies = [
-      { participantId: 'participant-2', content: 'I will commit my action.' },
+      {
+        id: 'reply-1',
+        participantId: 'participant-2',
+        content: 'I will commit my action.',
+        dueAt: '2026-08-28T00:00:00.000Z',
+      },
     ];
-    const publishProjection = jest.fn(
-      async (_session: StoredGameSessionEntity, _hydrationLocked?: boolean) =>
-        ok(new MafiaGameSessionProjectionEntity()),
+    const commitAgentMutation = jest.fn(
+      async (
+        _stale: StoredGameSessionEntity,
+        mutate: (current: StoredGameSessionEntity) => boolean,
+      ) => {
+        mutate(session);
+        return ok(undefined);
+      },
     );
     const orchestrator = new GameSessionAgentOrchestrator(
       new SequencedMafiaTargetGateway(),
-      publishProjection,
-      async () => ok(undefined),
+      async () => ok(new MafiaGameSessionProjectionEntity()),
+      commitAgentMutation,
     );
 
     await orchestrator.publishMafiaChatReplies(session, true);
 
-    expect(publishProjection).toHaveBeenCalledWith(session, true);
+    expect(commitAgentMutation).toHaveBeenCalledTimes(1);
+    expect(session.scheduledAgentMafiaChatReplies).toEqual([]);
   });
 
   it('keeps an Agent Mafia target fixed across Mafia Chat replies', async () => {
@@ -165,7 +176,10 @@ describe('GameSessionAgentOrchestrator', () => {
     const orchestrator = new GameSessionAgentOrchestrator(
       new SequencedMafiaTargetGateway(),
       async () => ok(new MafiaGameSessionProjectionEntity()),
-      async () => ok(undefined),
+      async (_stale, mutate) => {
+        mutate(session);
+        return ok(undefined);
+      },
     );
 
     orchestrator.submitDayActions(session);
@@ -341,6 +355,71 @@ describe('GameSessionAgentOrchestrator', () => {
         }),
       ]),
     );
+  });
+
+  it('applies an overdue Mafia Chat reply at its scheduled time', async () => {
+    const session = createSession();
+    const orchestrator = new GameSessionAgentOrchestrator(
+      new SequencedMafiaTargetGateway(),
+      async () => ok(new MafiaGameSessionProjectionEntity()),
+      async (_stale, mutate) => {
+        mutate(session);
+        return ok(undefined);
+      },
+    );
+    const scheduledAt = '2026-08-28T00:00:00.000Z';
+    session.scheduledAgentMafiaChatReplies = [
+      {
+        id: 'reply-1',
+        participantId: 'participant-2',
+        content: 'I was decided before the deadline.',
+        dueAt: scheduledAt,
+      },
+    ];
+    jest.setSystemTime(new Date('2026-08-28T00:00:02.000Z'));
+
+    await expect(orchestrator.drainDueScheduledTasks(session)).resolves.toEqual(ok(undefined));
+
+    const projection = session.gameSession.projectionFor('participant-1', 1);
+    if (projection.isErr()) throw new Error('Expected a Human Player projection.');
+    expect(projection.value.timeline).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'mafia-chat',
+          message: expect.objectContaining({ content: 'I was decided before the deadline.' }),
+        }),
+      ]),
+    );
+    expect(session.scheduledAgentMafiaChatReplies).toEqual([]);
+  });
+
+  it('retains every Mafia Chat reply when one durable commit fails', async () => {
+    const session = createSession();
+    session.scheduledAgentMafiaChatReplies = [
+      {
+        id: 'reply-1',
+        participantId: 'participant-2',
+        content: 'first reply',
+        dueAt: '2026-08-28T00:00:00.000Z',
+      },
+      {
+        id: 'reply-2',
+        participantId: 'participant-2',
+        content: 'second reply',
+        dueAt: '2026-08-28T00:00:00.000Z',
+      },
+    ];
+    const orchestrator = new GameSessionAgentOrchestrator(
+      new SequencedMafiaTargetGateway(),
+      async () => ok(new MafiaGameSessionProjectionEntity()),
+      async () => err({ type: 'durability-unavailable' }),
+    );
+
+    await expect(orchestrator.publishMafiaChatReplies(session)).resolves.toEqual(
+      err({ type: 'durability-unavailable' }),
+    );
+
+    expect(session.scheduledAgentMafiaChatReplies).toHaveLength(2);
   });
 
   it('does not resume or drain Scheduled Agent Actions for a terminal Game Session', async () => {

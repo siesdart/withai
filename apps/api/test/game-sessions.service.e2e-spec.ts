@@ -81,7 +81,7 @@ describe('GameSessionsService', () => {
     redis.disconnect();
   });
 
-  it('retries pending Agent Mafia Night Chat replies after request hydration', async () => {
+  it('retains an invalid pending Agent Mafia Night Chat reply after request hydration', async () => {
     jest.useFakeTimers();
     const redis = new RedisMock();
     const authority = new RedisGameSessionAuthority(redis);
@@ -101,7 +101,12 @@ describe('GameSessionsService', () => {
     await authority.saveSnapshot({
       ...stored.value,
       scheduledAgentMafiaChatReplies: [
-        { participantId: 'participant-1', content: 'I will commit my action.' },
+        {
+          id: 'pending-reply',
+          participantId: 'participant-1',
+          content: 'I will commit my action.',
+          dueAt: new Date().toISOString(),
+        },
       ],
     });
 
@@ -112,7 +117,9 @@ describe('GameSessionsService', () => {
     await jest.advanceTimersByTimeAsync(1000);
 
     await expect(authority.load(created.value.projection.sessionId)).resolves.toMatchObject({
-      value: { scheduledAgentMafiaChatReplies: [] },
+      value: {
+        scheduledAgentMafiaChatReplies: [expect.objectContaining({ id: 'pending-reply' })],
+      },
     });
     redis.disconnect();
   });

@@ -1,6 +1,6 @@
 lockfile_version: '1'
-generated_at: '2026-09-05T13:24:49.364975+00:00'
-apm_version: 0.29.0
+generated_at: '2026-09-11T16:51:31.901950+00:00'
+apm_version: 0.30.0
 dependencies:
 - repo_url: addyosmani/web-quality-skills
   name: web-quality-skills
@@ -13,8 +13,8 @@ dependencies:
 - repo_url: anthropics/skills
   name: skills
   host: github.com
-  resolved_commit: 41bbe19d1a1a7eaab5e7bb9050a417e5c6cffc8f
-  version: 41bbe19
+  resolved_commit: 34040c9c568585f6929bedeaad110ad08f079624
+  version: 34040c9
   package_type: marketplace_plugin
   deployed_files:
   - .agents/skills/frontend-design
@@ -23,7 +23,7 @@ dependencies:
   deployed_file_hashes:
     .agents/skills/frontend-design/LICENSE.txt: sha256:0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594
     .agents/skills/frontend-design/SKILL.md: sha256:d91970639e9f5c37682ac7ab60094d35f1c7c1f38d731bd56396563aee10c1d3
-  content_hash: sha256:8df43c6b5e4c19597bdda0a525dd9035574ef214a1bc871566878dc2b8d4fc78
+  content_hash: sha256:dccb50b355777d020cb4605ebd4fe9b08b207f57eca1a10ab12251d6ceb900b8
   skill_subset:
   - frontend-design
 - repo_url: leonxlnx/taste-skill
@@ -82,7 +82,7 @@ dependencies:
   name: agent-skills
   host: github.com
   resolved_commit: 21d123742218d3cd748056fad78aa88d7da3dc96
-  version: 21d1237
+  version: 0.0.0
   package_type: marketplace_plugin
   deployed_files:
   - .agents/skills/valibot
@@ -97,7 +97,7 @@ dependencies:
 - repo_url: shadcn/ui
   name: shadcn
   host: github.com
-  resolved_commit: 7c9eaba1c0a6404c990c144a654792e3313c650d
+  resolved_commit: 3ba91b1cc83e1bbe4ab35a422ff2a694849c5048
   version: 1.0.0
   package_type: marketplace_plugin
   deployed_files:
@@ -154,7 +154,7 @@ dependencies:
     .agents/skills/shadcn/rules/forms.md: sha256:29593e14381e34626f8e0e9c15c59f3394b92a0623af6a6ec94585400123853c
     .agents/skills/shadcn/rules/icons.md: sha256:d4a58266648872d9ee07d0c2368843a1cb88b8253b7f528dd7bda9d68b6c2535
     .agents/skills/shadcn/rules/styling.md: sha256:f88fbd72dff862805b786dc7d7e4c74c83030fc278c5b97c993e4e665001798c
-  content_hash: sha256:0d613486389f05fc600de05632ff62bc13ea14912694bfe5c6a8c73a1a0a435b
+  content_hash: sha256:b8bb076c9c290e191122e34382964736d608d69dbbf6237c1aa7099a87f47a83
   declared_license: MIT
 - repo_url: siesdart/skills
   name: skills
@@ -188,8 +188,8 @@ dependencies:
   materialization_repo_url: TanStack/ai
   name: ai
   host: github.com
-  resolved_commit: 9b0db21752785e333916aec83c5467d53c3c33f6
-  version: unknown
+  resolved_commit: 44a73e0e8790f478d853bf3d843c44f1f501762e
+  version: 0.0.0
   virtual_path: packages/ai
   is_virtual: true
   package_type: skill_bundle
@@ -217,32 +217,32 @@ dependencies:
   - .agents/skills/ai-core/tool-calling/SKILL.md
   deployed_file_hashes:
     .agents/skills/ai-core/SKILL.md: sha256:d69011d75ea88d76471257b7165796d9502e1fc4dd2e85a101f9314e991d0681
-    .agents/skills/ai-core/adapter-configuration/SKILL.md: sha256:9efd457a1cf328eb5536d6ff5240623e560f36291ae4571b607cac5b9e2f69c9
-    .agents/skills/ai-core/adapter-configuration/references/anthropic-adapter.md: sha256:1092445e6ab9bf70f86b98f84b8cfe3fd3df4d1f396eecbac460d6d396634f17
-    .agents/skills/ai-core/adapter-configuration/references/byteplus-adapter.md: sha256:9a7ec23dea5f52618959ad73ae2089daecc1ac43f157edf261ef7e85a43c80ab
-    .agents/skills/ai-core/adapter-configuration/references/gemini-adapter.md: sha256:975834ab8e8cb520f2e5aef0dedc2768936542c6c85ae266fe07f30d5a086ac7
-    .agents/skills/ai-core/adapter-configuration/references/grok-adapter.md: sha256:6f9b5c1d54c4581b535ea9a1191fefef947df31d49cf492960171b9c823b4e2e
-    .agents/skills/ai-core/adapter-configuration/references/groq-adapter.md: sha256:d5824e64b63e655fe452699c13f2159da943f2c8850d455857c5c77964699ace
-    .agents/skills/ai-core/adapter-configuration/references/ollama-adapter.md: sha256:0b24adedae58b73526fd70856be0e7297b35bbc8a372c0a692f62906a1b7dd76
-    .agents/skills/ai-core/adapter-configuration/references/openai-adapter.md: sha256:16be7d285c5e51aab89829c227723e254e09c9a68380f57950fc193db40719cf
-    .agents/skills/ai-core/adapter-configuration/references/openrouter-adapter.md: sha256:172e33af15f5c48f36079dadb9319996c259af7b284401ecf9a4b7a9f8f1a6d6
-    .agents/skills/ai-core/ag-ui-protocol/SKILL.md: sha256:58d774027186e2c464c1e4a3e2a12f3e4d322769fe4810d59b90ec1ac2f665c8
-    .agents/skills/ai-core/chat-experience/SKILL.md: sha256:48625b5612ce78b23d734830fa1b1e2b985ec656a4fa775914175c18c54caec2
-    .agents/skills/ai-core/client-persistence/SKILL.md: sha256:7c2875bca921c8945ee1719d30cc85aa95ec29cccdbfe564e4a8f02145b87eb0
-    .agents/skills/ai-core/custom-backend-integration/SKILL.md: sha256:1ea0476278bc82f6f13c500c9a0049272e55ff8cccc1a207ea3195261265395a
-    .agents/skills/ai-core/debug-logging/SKILL.md: sha256:fe2fdf233e27f75e745cc0736527b1d5c050670a85e4b295b1a188c6d8573028
-    .agents/skills/ai-core/locks/SKILL.md: sha256:a825b51e182ccb44b68b029458bd3772304b84c2ea20dc450363bdff868ae9fe
-    .agents/skills/ai-core/media-generation/SKILL.md: sha256:e7892ab96b15226b6840a70f0ca37d28ce6e379b94d52c43332ff7b435eb691a
-    .agents/skills/ai-core/middleware/SKILL.md: sha256:13d23d966f6a0d8e9db5fb5df9efcab0c02e3f14c1639a6b011832e34d85d107
-    .agents/skills/ai-core/structured-outputs/SKILL.md: sha256:5fd17ada274545ac50e193e4612edb98c7b889165adf9030ed680cbab156e506
-    .agents/skills/ai-core/tool-calling/SKILL.md: sha256:8397ae59ffcb66983f7b125f90af5105475cb2087859d6632eb1954c53e1b863
-  content_hash: sha256:7bd66a4b8b688e571644aa78ad05d265c46ff56304e5c8850f1df7221ecf3334
+    .agents/skills/ai-core/adapter-configuration/SKILL.md: sha256:ae210b93456cdb6118b596ce71ce574980f052abc728958668ef96c0b69193f8
+    .agents/skills/ai-core/adapter-configuration/references/anthropic-adapter.md: sha256:5b2bcd354d8d7a402e3e9a8ab056c33d81cb71600fd538a541455ab9d55ee538
+    .agents/skills/ai-core/adapter-configuration/references/byteplus-adapter.md: sha256:00442948c8a41aeb84dac43e4a9973758c38b1440187002dc342aaba31b0727f
+    .agents/skills/ai-core/adapter-configuration/references/gemini-adapter.md: sha256:d2cda3ba3d53fda9ad4992fa42114d124b390bff9337fd36599037947d96549a
+    .agents/skills/ai-core/adapter-configuration/references/grok-adapter.md: sha256:78ce93468a26911cccb0a8936d72cc2e3264652d9dbb3906fd24a6f48353a7bd
+    .agents/skills/ai-core/adapter-configuration/references/groq-adapter.md: sha256:1996935bf066e11f80c8067695e875745fc5fc304a0abab5a722786083c11c1d
+    .agents/skills/ai-core/adapter-configuration/references/ollama-adapter.md: sha256:f1cccf72e0553ff597f3a049a33d9e544a1a80fee5b5c5e97f66f4ab79313ad4
+    .agents/skills/ai-core/adapter-configuration/references/openai-adapter.md: sha256:e6a9871f2f291e1aa9d6e8a43979d60eb61b6c25e060c8789364b7f871a5deb6
+    .agents/skills/ai-core/adapter-configuration/references/openrouter-adapter.md: sha256:3e6355729d7106e55b37240ce693cca18fa0eef81f4ffef7688c27b9455caa86
+    .agents/skills/ai-core/ag-ui-protocol/SKILL.md: sha256:c6cbca5b842fc27048cf30a5242bba97a0886bf5085bf987f2f26b33e7535f48
+    .agents/skills/ai-core/chat-experience/SKILL.md: sha256:9d73067a34a42243b90cd314512aed8a409095a212a08475a8043b8387726c99
+    .agents/skills/ai-core/client-persistence/SKILL.md: sha256:d815f1374824cda545bca9760b814459a9f366f56363519776922a8d6d0666f4
+    .agents/skills/ai-core/custom-backend-integration/SKILL.md: sha256:5c8844047dbad164a6b561de41822e5903fe60f739fda231664110cb049cbeb6
+    .agents/skills/ai-core/debug-logging/SKILL.md: sha256:d39ed80fa2c62d6673e822702c5121b7e26851f6127960e7412ad178468d7979
+    .agents/skills/ai-core/locks/SKILL.md: sha256:36284387bd20595f3aebf7a90a0f68775b8d7f10848e6920f09e06a268162dcd
+    .agents/skills/ai-core/media-generation/SKILL.md: sha256:b7d65a7c2ed9796a5ed968779cfdd77406237e454ba3884571b592a80c387cef
+    .agents/skills/ai-core/middleware/SKILL.md: sha256:aa2dffb4c00bacfa773ae8e4b58fd5c7571599f9cc8f988b1790489178a521db
+    .agents/skills/ai-core/structured-outputs/SKILL.md: sha256:b5ed1c7812e814a46902451f7817ba70f957b8618f2be87d8c509d7f44f138b2
+    .agents/skills/ai-core/tool-calling/SKILL.md: sha256:409886b2e0a0d993d1f26033ef5fec6e5ef0d3bf1cac254d716be1002170b34a
+  content_hash: sha256:c0f596213f02cd2e00d1804e1fc1db8bab296b4192697d4cc07936d964793b8f
 - repo_url: tanstack/router
   materialization_repo_url: TanStack/router
-  name: router
+  name: router-core
   host: github.com
-  resolved_commit: 28a5e4504e4ea5cb1480667a4bea2588a53e110f
-  version: unknown
+  resolved_commit: f021f6d1c6dce6c9b54d70766f1d636d8fd9e184
+  version: 0.0.0
   virtual_path: packages/router-core
   is_virtual: true
   package_type: skill_bundle
@@ -271,7 +271,7 @@ dependencies:
     .agents/skills/router-core/search-params/references/validation-patterns.md: sha256:ebf128309feaf027fbb229feffdd9bc6486bf09dedc224e903ed816abc38a1b2
     .agents/skills/router-core/ssr/SKILL.md: sha256:b0ab5cc8f4315647c2b74bf5b048b6f436760de9b1dcec5dbe10a34639bd8004
     .agents/skills/router-core/type-safety/SKILL.md: sha256:ed632376a36d71f4797e855ed9e42e83591a684c4ad0fc33b152f6c10fe3b5ef
-  content_hash: sha256:bb769f2cfd5abaae5e77d2363f958a50361372478250bebfdef0cb309172f420
+  content_hash: sha256:14eab24cd8b851a764242c55af7642a3ab0420b092c36931a3e542865a197dad
 - repo_url: vercel-labs/agent-skills
   name: agent-skills
   host: github.com
@@ -530,7 +530,7 @@ deployments:
   owners:
   - tanstack/ai/packages/ai
   active_owner: tanstack/ai/packages/ai
-  content_hash: sha256:9efd457a1cf328eb5536d6ff5240623e560f36291ae4571b607cac5b9e2f69c9
+  content_hash: sha256:ae210b93456cdb6118b596ce71ce574980f052abc728958668ef96c0b69193f8
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/ai-core/adapter-configuration/references/anthropic-adapter.md
@@ -539,7 +539,7 @@ deployments:
   owners:
   - tanstack/ai/packages/ai
   active_owner: tanstack/ai/packages/ai
-  content_hash: sha256:1092445e6ab9bf70f86b98f84b8cfe3fd3df4d1f396eecbac460d6d396634f17
+  content_hash: sha256:5b2bcd354d8d7a402e3e9a8ab056c33d81cb71600fd538a541455ab9d55ee538
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/ai-core/adapter-configuration/references/byteplus-adapter.md
@@ -548,7 +548,7 @@ deployments:
   owners:
   - tanstack/ai/packages/ai
   active_owner: tanstack/ai/packages/ai
-  content_hash: sha256:9a7ec23dea5f52618959ad73ae2089daecc1ac43f157edf261ef7e85a43c80ab
+  content_hash: sha256:00442948c8a41aeb84dac43e4a9973758c38b1440187002dc342aaba31b0727f
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/ai-core/adapter-configuration/references/gemini-adapter.md
@@ -557,7 +557,7 @@ deployments:
   owners:
   - tanstack/ai/packages/ai
   active_owner: tanstack/ai/packages/ai
-  content_hash: sha256:975834ab8e8cb520f2e5aef0dedc2768936542c6c85ae266fe07f30d5a086ac7
+  content_hash: sha256:d2cda3ba3d53fda9ad4992fa42114d124b390bff9337fd36599037947d96549a
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/ai-core/adapter-configuration/references/grok-adapter.md
@@ -566,7 +566,7 @@ deployments:
   owners:
   - tanstack/ai/packages/ai
   active_owner: tanstack/ai/packages/ai
-  content_hash: sha256:6f9b5c1d54c4581b535ea9a1191fefef947df31d49cf492960171b9c823b4e2e
+  content_hash: sha256:78ce93468a26911cccb0a8936d72cc2e3264652d9dbb3906fd24a6f48353a7bd
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/ai-core/adapter-configuration/references/groq-adapter.md
@@ -575,7 +575,7 @@ deployments:
   owners:
   - tanstack/ai/packages/ai
   active_owner: tanstack/ai/packages/ai
-  content_hash: sha256:d5824e64b63e655fe452699c13f2159da943f2c8850d455857c5c77964699ace
+  content_hash: sha256:1996935bf066e11f80c8067695e875745fc5fc304a0abab5a722786083c11c1d
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/ai-core/adapter-configuration/references/ollama-adapter.md
@@ -584,7 +584,7 @@ deployments:
   owners:
   - tanstack/ai/packages/ai
   active_owner: tanstack/ai/packages/ai
-  content_hash: sha256:0b24adedae58b73526fd70856be0e7297b35bbc8a372c0a692f62906a1b7dd76
+  content_hash: sha256:f1cccf72e0553ff597f3a049a33d9e544a1a80fee5b5c5e97f66f4ab79313ad4
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/ai-core/adapter-configuration/references/openai-adapter.md
@@ -593,7 +593,7 @@ deployments:
   owners:
   - tanstack/ai/packages/ai
   active_owner: tanstack/ai/packages/ai
-  content_hash: sha256:16be7d285c5e51aab89829c227723e254e09c9a68380f57950fc193db40719cf
+  content_hash: sha256:e6a9871f2f291e1aa9d6e8a43979d60eb61b6c25e060c8789364b7f871a5deb6
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/ai-core/adapter-configuration/references/openrouter-adapter.md
@@ -602,7 +602,7 @@ deployments:
   owners:
   - tanstack/ai/packages/ai
   active_owner: tanstack/ai/packages/ai
-  content_hash: sha256:172e33af15f5c48f36079dadb9319996c259af7b284401ecf9a4b7a9f8f1a6d6
+  content_hash: sha256:3e6355729d7106e55b37240ce693cca18fa0eef81f4ffef7688c27b9455caa86
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/ai-core/ag-ui-protocol/SKILL.md
@@ -611,7 +611,7 @@ deployments:
   owners:
   - tanstack/ai/packages/ai
   active_owner: tanstack/ai/packages/ai
-  content_hash: sha256:58d774027186e2c464c1e4a3e2a12f3e4d322769fe4810d59b90ec1ac2f665c8
+  content_hash: sha256:c6cbca5b842fc27048cf30a5242bba97a0886bf5085bf987f2f26b33e7535f48
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/ai-core/chat-experience/SKILL.md
@@ -620,7 +620,7 @@ deployments:
   owners:
   - tanstack/ai/packages/ai
   active_owner: tanstack/ai/packages/ai
-  content_hash: sha256:48625b5612ce78b23d734830fa1b1e2b985ec656a4fa775914175c18c54caec2
+  content_hash: sha256:9d73067a34a42243b90cd314512aed8a409095a212a08475a8043b8387726c99
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/ai-core/client-persistence/SKILL.md
@@ -629,7 +629,7 @@ deployments:
   owners:
   - tanstack/ai/packages/ai
   active_owner: tanstack/ai/packages/ai
-  content_hash: sha256:7c2875bca921c8945ee1719d30cc85aa95ec29cccdbfe564e4a8f02145b87eb0
+  content_hash: sha256:d815f1374824cda545bca9760b814459a9f366f56363519776922a8d6d0666f4
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/ai-core/custom-backend-integration/SKILL.md
@@ -638,7 +638,7 @@ deployments:
   owners:
   - tanstack/ai/packages/ai
   active_owner: tanstack/ai/packages/ai
-  content_hash: sha256:1ea0476278bc82f6f13c500c9a0049272e55ff8cccc1a207ea3195261265395a
+  content_hash: sha256:5c8844047dbad164a6b561de41822e5903fe60f739fda231664110cb049cbeb6
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/ai-core/debug-logging/SKILL.md
@@ -647,7 +647,7 @@ deployments:
   owners:
   - tanstack/ai/packages/ai
   active_owner: tanstack/ai/packages/ai
-  content_hash: sha256:fe2fdf233e27f75e745cc0736527b1d5c050670a85e4b295b1a188c6d8573028
+  content_hash: sha256:d39ed80fa2c62d6673e822702c5121b7e26851f6127960e7412ad178468d7979
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/ai-core/locks/SKILL.md
@@ -656,7 +656,7 @@ deployments:
   owners:
   - tanstack/ai/packages/ai
   active_owner: tanstack/ai/packages/ai
-  content_hash: sha256:a825b51e182ccb44b68b029458bd3772304b84c2ea20dc450363bdff868ae9fe
+  content_hash: sha256:36284387bd20595f3aebf7a90a0f68775b8d7f10848e6920f09e06a268162dcd
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/ai-core/media-generation/SKILL.md
@@ -665,7 +665,7 @@ deployments:
   owners:
   - tanstack/ai/packages/ai
   active_owner: tanstack/ai/packages/ai
-  content_hash: sha256:e7892ab96b15226b6840a70f0ca37d28ce6e379b94d52c43332ff7b435eb691a
+  content_hash: sha256:b7d65a7c2ed9796a5ed968779cfdd77406237e454ba3884571b592a80c387cef
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/ai-core/middleware/SKILL.md
@@ -674,7 +674,7 @@ deployments:
   owners:
   - tanstack/ai/packages/ai
   active_owner: tanstack/ai/packages/ai
-  content_hash: sha256:13d23d966f6a0d8e9db5fb5df9efcab0c02e3f14c1639a6b011832e34d85d107
+  content_hash: sha256:aa2dffb4c00bacfa773ae8e4b58fd5c7571599f9cc8f988b1790489178a521db
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/ai-core/structured-outputs/SKILL.md
@@ -683,7 +683,7 @@ deployments:
   owners:
   - tanstack/ai/packages/ai
   active_owner: tanstack/ai/packages/ai
-  content_hash: sha256:5fd17ada274545ac50e193e4612edb98c7b889165adf9030ed680cbab156e506
+  content_hash: sha256:b5ed1c7812e814a46902451f7817ba70f957b8618f2be87d8c509d7f44f138b2
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/ai-core/tool-calling/SKILL.md
@@ -692,7 +692,7 @@ deployments:
   owners:
   - tanstack/ai/packages/ai
   active_owner: tanstack/ai/packages/ai
-  content_hash: sha256:8397ae59ffcb66983f7b125f90af5105475cb2087859d6632eb1954c53e1b863
+  content_hash: sha256:409886b2e0a0d993d1f26033ef5fec6e5ef0d3bf1cac254d716be1002170b34a
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/brandkit

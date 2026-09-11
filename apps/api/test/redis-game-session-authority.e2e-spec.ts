@@ -44,6 +44,21 @@ describe('RedisGameSessionAuthority', () => {
     for (const client of redisClients.splice(0)) client.disconnect();
   });
 
+  it('rejects a snapshot that does not match the durable schema', async () => {
+    const redis = new RedisMock();
+    redisClients.push(redis);
+    const prefix = 'withai:invalid-snapshot-test';
+    const authority = new RedisGameSessionAuthority(redis, prefix);
+    await redis.set(`${prefix}:snapshots:invalid-session`, JSON.stringify({ sessionId: 42 }));
+
+    await expect(authority.load('invalid-session')).resolves.toEqual({
+      error: {
+        type: 'invalid-authority-data',
+        key: `${prefix}:snapshots:invalid-session`,
+      },
+    });
+  });
+
   it('keeps an authoritative snapshot and ordered public catch-up events', async () => {
     const redis = new RedisMock();
     redisClients.push(redis);

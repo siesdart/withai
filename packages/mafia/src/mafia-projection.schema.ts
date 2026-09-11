@@ -1,7 +1,7 @@
 import { map } from 'remeda';
 import * as v from 'valibot';
 
-import type { MafiaGameProjection } from './mafia-game-session';
+import type { MafiaGameProjection, MafiaGameSessionSnapshot } from './mafia-game-session';
 
 const MafiaPhaseSchema = v.picklist([
   'discussion',
@@ -101,6 +101,55 @@ const CompletedNightActionRecordSchema = v.object({
   detectiveActions: v.array(CompletedNightActionSchema),
 });
 
+const SnapshotParticipantSchema = v.object({
+  id: v.string(),
+  name: v.string(),
+  alive: v.boolean(),
+  role: MafiaRoleSchema,
+});
+
+export const MafiaGameSessionSnapshotSchema: v.GenericSchema<unknown, MafiaGameSessionSnapshot> =
+  v.pipe(
+    v.object({
+      sessionId: v.string(),
+      participants: v.array(SnapshotParticipantSchema),
+      dayDurations: v.object({
+        discussionDurationMs: v.number(),
+        nominationDurationMs: v.number(),
+        finalDefenceDurationMs: v.number(),
+        verdictDurationMs: v.number(),
+        nightDurationMs: v.number(),
+      }),
+      timeline: v.array(PersonalTimelineItemSchema),
+      timelineItemCounts: v.array(
+        v.tuple([v.picklist(['chat', 'record', 'mafia-chat'] as const), v.number()]),
+      ),
+      nominations: v.array(v.tuple([v.string(), v.string()])),
+      verdicts: v.array(v.tuple([v.string(), v.picklist(['eliminate', 'spare'] as const)])),
+      mafiaTargetParticipantId: v.optional(v.string()),
+      doctorProtections: v.array(v.tuple([v.string(), v.string()])),
+      detectiveInvestigations: v.array(v.tuple([v.string(), v.string()])),
+      detectiveInvestigationHistory: v.array(
+        v.tuple([v.string(), v.array(v.tuple([v.string(), MafiaAllegianceSchema]))]),
+      ),
+      completedVoteRecords: v.array(CompletedVoteRecordSchema),
+      completedNightActionRecords: v.array(CompletedNightActionRecordSchema),
+      phase: MafiaPhaseSchema,
+      phaseDeadline: v.string(),
+      nominatedParticipantId: v.optional(v.string()),
+      dayNumber: v.number(),
+    }),
+    v.transform((snapshot): MafiaGameSessionSnapshot => ({
+      ...snapshot,
+      timeline: normalizeSnapshotTimeline(snapshot.timeline),
+      completedNightActionRecords: normalizeCompletedNightActionRecords(
+        snapshot.completedNightActionRecords,
+      ),
+      mafiaTargetParticipantId: snapshot.mafiaTargetParticipantId,
+      nominatedParticipantId: snapshot.nominatedParticipantId,
+    })),
+  );
+
 const MafiaGameProjectionPayloadSchema = v.object({
   eventId: v.number(),
   sessionId: v.string(),
@@ -155,6 +204,31 @@ function normalizePublicOutcome(
   return outcome.type === 'nomination-resolved'
     ? { ...outcome, nominatedParticipantId: outcome.nominatedParticipantId }
     : outcome;
+}
+
+function normalizeSnapshotTimeline(
+  timeline: v.InferOutput<typeof PersonalTimelineItemSchema>[],
+): MafiaGameSessionSnapshot['timeline'] {
+  return map(timeline, (item) =>
+    item.type === 'record' ? { ...item, outcome: normalizePublicOutcome(item.outcome) } : item,
+  );
+}
+
+function normalizeCompletedNightActionRecords(
+  records: v.InferOutput<typeof CompletedNightActionRecordSchema>[],
+): MafiaGameSessionSnapshot['completedNightActionRecords'] {
+  return map(records, (record) => ({
+    ...record,
+    mafiaTargetParticipantId: record.mafiaTargetParticipantId,
+    doctorActions: map(record.doctorActions, (action) => ({
+      ...action,
+      targetParticipantId: action.targetParticipantId,
+    })),
+    detectiveActions: map(record.detectiveActions, (action) => ({
+      ...action,
+      targetParticipantId: action.targetParticipantId,
+    })),
+  }));
 }
 
 function normalizeMafiaGameProjection(projection: ParsedMafiaGameProjection): MafiaGameProjection {

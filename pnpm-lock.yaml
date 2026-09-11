@@ -77,6 +77,9 @@ importers:
       ts-pattern:
         specifier: ^5.9.0
         version: 5.9.0
+      valibot:
+        specifier: ^1.4.2
+        version: 1.4.2(typescript@6.0.3)
     devDependencies:
       '@jest/globals':
         specifier: ^30.4.1

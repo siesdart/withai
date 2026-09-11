@@ -1,10 +1,15 @@
-import type { MafiaGameSessionSnapshot } from '@repo/mafia';
+import {
+  MafiaGameProjectionSchema,
+  MafiaGameSessionSnapshotSchema,
+  type MafiaGameSessionSnapshot,
+} from '@repo/mafia';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import Redis from 'ioredis';
 import { ResultAsync, err, ok, type Result } from 'neverthrow';
 import { filter, map } from 'remeda';
 import { match } from 'ts-pattern';
+import * as v from 'valibot';
 
 import type { MafiaGameSessionProjectionEntity } from '../entities/mafia-game-session-projection.entity';
 import type {
@@ -14,6 +19,7 @@ import type {
 } from '../entities/stored-game-session.entity';
 import type { GameSessionStatus } from '../game-session-status';
 import { gameSessionsConfig } from '../game-sessions.config';
+import { runRedisLuaCommand } from './redis-lua-command-runner';
 
 dayjs.extend(utc);
 
@@ -66,9 +72,72 @@ export type DurableSessionError =
   | { type: 'authority-unavailable'; cause: unknown }
   | { type: 'invalid-authority-data'; key: string };
 
+const GameSessionStatusSchema = v.picklist(['in-progress', 'completed', 'abandoned'] as const);
+const IdempotencyRecordSchema = v.object({
+  fingerprint: v.string(),
+  result: MafiaGameProjectionSchema,
+});
+const ScheduledAgentPublicSpeechSchema = v.object({
+  participantId: v.string(),
+  content: v.string(),
+  dueAt: v.string(),
+});
+const ScheduledAgentMafiaChatReplySchema = v.object({
+  id: v.string(),
+  participantId: v.string(),
+  content: v.string(),
+  dueAt: v.string(),
+});
+const DurableSessionSnapshotSchema: v.GenericSchema<unknown, DurableSessionSnapshot> = v.pipe(
+  v.object({
+    sessionId: v.string(),
+    holderId: v.string(),
+    humanParticipantId: v.string(),
+    gameSession: MafiaGameSessionSnapshotSchema,
+    nextEventId: v.number(),
+    phaseDeadline: v.string(),
+    lastActivityAt: v.string(),
+    status: GameSessionStatusSchema,
+    reconnectGraceDeadline: v.optional(v.string()),
+    reconnectLeaseDeadline: v.optional(v.string()),
+    cooldowns: v.optional(
+      v.object({
+        publicSpeech: v.optional(v.string()),
+        finalDefence: v.optional(v.string()),
+        discussionTimeAdjustment: v.optional(v.string()),
+      }),
+    ),
+    idempotency: v.optional(
+      v.record(v.string(), v.array(v.tuple([v.string(), IdempotencyRecordSchema]))),
+    ),
+    scheduledAgentPublicSpeeches: v.optional(v.array(ScheduledAgentPublicSpeechSchema)),
+    scheduledAgentFinalDefence: v.optional(ScheduledAgentPublicSpeechSchema),
+    scheduledAgentMafiaChatReplies: v.optional(v.array(ScheduledAgentMafiaChatReplySchema)),
+    scheduledMafiaTargetFallbackAt: v.optional(v.string()),
+    agentActionsPending: v.optional(v.boolean()),
+  }),
+  v.transform((snapshot): DurableSessionSnapshot => ({
+    ...snapshot,
+    reconnectGraceDeadline: snapshot.reconnectGraceDeadline,
+    cooldowns: snapshot.cooldowns && {
+      publicSpeech: snapshot.cooldowns.publicSpeech,
+      finalDefence: snapshot.cooldowns.finalDefence,
+      discussionTimeAdjustment: snapshot.cooldowns.discussionTimeAdjustment,
+    },
+  })),
+);
+const DurablePublicEventSchema: v.GenericSchema<unknown, DurablePublicEvent> = v.object({
+  eventId: v.number(),
+  projection: MafiaGameProjectionSchema,
+});
+const DurableCreationIdempotencyRecordSchema: v.GenericSchema<
+  unknown,
+  DurableCreationIdempotencyRecord
+> = v.object({ fingerprint: v.string(), sessionId: v.string() });
+
 type RedisCommands = Pick<
   Redis,
-  'eval' | 'get' | 'set' | 'zadd' | 'zrange' | 'zrangebyscore' | 'zrem' | 'del' | 'quit'
+  'defineCommand' | 'get' | 'set' | 'zadd' | 'zrange' | 'zrangebyscore' | 'zrem' | 'del' | 'quit'
 >;
 
 const millisecondsPerMinute = 60 * 1000;
@@ -102,7 +171,8 @@ export class RedisGameSessionAuthority {
     const snapshotKey = this.snapshotKey(snapshot.sessionId);
     const eventsKey = this.eventsKey(snapshot.sessionId);
     return ResultAsync.fromPromise(
-      this.redis.eval(
+      runRedisLuaCommand<number>(
+        this.redis,
         `local previousVersion = redis.call('GET', KEYS[4])
          local expectedVersion = tonumber(ARGV[8])
          if expectedVersion == 0 then
@@ -179,7 +249,8 @@ export class RedisGameSessionAuthority {
   saveSnapshot(snapshot: DurableSessionSnapshot): ResultAsync<boolean, DurableSessionError> {
     const ttlMs = snapshot.status === 'abandoned' ? abandonedSessionTtlMs : sessionTtlMs;
     return ResultAsync.fromPromise(
-      this.redis.eval(
+      runRedisLuaCommand<number>(
+        this.redis,
         `if not redis.call('GET', KEYS[1]) then return 0 end
          local lifecycle = redis.call('GET', KEYS[9])
          if lifecycle == 'abandoned' then return 0 end
@@ -244,7 +315,7 @@ export class RedisGameSessionAuthority {
       type: 'authority-unavailable',
       cause,
     }))
-      .andThen((value) => this.parse<DurableSessionSnapshot>(value, key))
+      .andThen((value) => this.parse(value, key, DurableSessionSnapshotSchema))
       .andThen((snapshot) => {
         if (!snapshot) return ok(undefined);
         return ResultAsync.combine([
@@ -324,7 +395,8 @@ export class RedisGameSessionAuthority {
       ? this.creationIdempotencyKey(holderId, idempotency.key)
       : this.creationReservationKey(snapshot.sessionId);
     return ResultAsync.fromPromise(
-      this.redis.eval(
+      runRedisLuaCommand<number | string>(
+        this.redis,
         `local function hasExpiredLifecycle(sessionId)
            local lifecycle = redis.call('GET', ARGV[15] .. ':lifecycles:' .. sessionId)
            local deadline = tonumber(string.match(lifecycle or '', '^[^:]+:(%d+)|'))
@@ -526,12 +598,13 @@ export class RedisGameSessionAuthority {
     return ResultAsync.fromPromise(
       this.redis.zrangebyscore(key, `(${eventId}`, '+inf'),
       (cause): DurableSessionError => ({ type: 'authority-unavailable', cause }),
-    ).andThen((values) => this.parseMany<DurablePublicEvent>(values, key));
+    ).andThen((values) => this.parseMany(values, key, DurablePublicEventSchema));
   }
 
   touch(sessionId: string, lastActivityAt: string): ResultAsync<boolean, DurableSessionError> {
     return ResultAsync.fromPromise(
-      this.redis.eval(
+      runRedisLuaCommand<number>(
+        this.redis,
         `if not redis.call('GET', KEYS[1]) then return 0 end
          if redis.call('GET', KEYS[3]) ~= 'in-progress' then return 0 end
          local lifecycle = redis.call('GET', KEYS[4])
@@ -566,7 +639,8 @@ export class RedisGameSessionAuthority {
     holderId: string,
   ): ResultAsync<boolean, DurableSessionError> {
     return ResultAsync.fromPromise(
-      this.redis.eval(
+      runRedisLuaCommand<number>(
+        this.redis,
         `if not redis.call('GET', KEYS[1]) then return 0 end
          local lifecycle = redis.call('GET', KEYS[5])
          if lifecycle == 'abandoned' then return 0 end
@@ -638,7 +712,8 @@ export class RedisGameSessionAuthority {
 
   clearReconnectGrace(sessionId: string): ResultAsync<boolean, DurableSessionError> {
     return ResultAsync.fromPromise(
-      this.redis.eval(
+      runRedisLuaCommand<number>(
+        this.redis,
         `if redis.call('GET', KEYS[1]) == 'abandoned' then return 0 end
          return redis.call('DEL', KEYS[1])`,
         1,
@@ -670,7 +745,8 @@ export class RedisGameSessionAuthority {
     reconnectGraceDeadline: string,
   ): ResultAsync<boolean, DurableSessionError> {
     return ResultAsync.fromPromise(
-      this.redis.eval(
+      runRedisLuaCommand<number>(
+        this.redis,
         `local leaseDeadline = redis.call('ZSCORE', KEYS[3], ARGV[1])
          if not leaseDeadline then return 0 end
          if tonumber(leaseDeadline) <= tonumber(ARGV[2]) then
@@ -730,7 +806,8 @@ export class RedisGameSessionAuthority {
     connectionId: string,
   ): ResultAsync<boolean, DurableSessionError> {
     return ResultAsync.fromPromise(
-      this.redis.eval(
+      runRedisLuaCommand<number>(
+        this.redis,
         `return redis.call('ZREM', KEYS[1], ARGV[1])`,
         1,
         this.reconnectLeasesKey(sessionId),
@@ -746,7 +823,8 @@ export class RedisGameSessionAuthority {
     holderId: string,
   ): ResultAsync<boolean, DurableSessionError> {
     return ResultAsync.fromPromise(
-      this.redis.eval(
+      runRedisLuaCommand<number>(
+        this.redis,
         `if not redis.call('GET', KEYS[1]) then return 0 end
          redis.call('ZREMRANGEBYSCORE', KEYS[3], '-inf', ARGV[2])
          if redis.call('ZCARD', KEYS[3]) > 0 then return 0 end
@@ -791,7 +869,8 @@ export class RedisGameSessionAuthority {
     holderId: string,
   ): ResultAsync<boolean, DurableSessionError> {
     return ResultAsync.fromPromise(
-      this.redis.eval(
+      runRedisLuaCommand<number>(
+        this.redis,
         `if not redis.call('GET', KEYS[1]) then return 0 end
          redis.call('ZREMRANGEBYSCORE', KEYS[3], '-inf', ARGV[2])
          if redis.call('ZCARD', KEYS[3]) > 0 then return 0 end
@@ -833,7 +912,8 @@ export class RedisGameSessionAuthority {
       ResultAsync.combine(
         map(snapshots, (snapshot) =>
           ResultAsync.fromPromise(
-            this.redis.eval(
+            runRedisLuaCommand<number>(
+              this.redis,
               `if not redis.call('GET', KEYS[1]) then return 0 end
                if redis.call('GET', KEYS[6]) ~= 'in-progress' then return 0 end
                if redis.call('GET', KEYS[7]) ~= ARGV[1] then return 0 end
@@ -880,7 +960,8 @@ export class RedisGameSessionAuthority {
     phaseDeadline: string,
   ): ResultAsync<boolean, DurableSessionError> {
     return ResultAsync.fromPromise(
-      this.redis.eval(
+      runRedisLuaCommand<number>(
+        this.redis,
         `if not redis.call('GET', KEYS[1]) then return 0 end
          if redis.call('GET', KEYS[3]) ~= 'in-progress' then return 0 end
          if redis.call('GET', KEYS[4]) ~= ARGV[1] then return 0 end
@@ -904,7 +985,8 @@ export class RedisGameSessionAuthority {
   ): ResultAsync<boolean, DurableSessionError> {
     const ttlMs = snapshot.status === 'abandoned' ? abandonedSessionTtlMs : sessionTtlMs;
     return ResultAsync.fromPromise(
-      this.redis.eval(
+      runRedisLuaCommand<number>(
+        this.redis,
         `if not redis.call('GET', KEYS[1]) then return 0 end
          if redis.call('GET', KEYS[6]) ~= 'in-progress' then return 0 end
          if redis.call('GET', KEYS[7]) ~= ARGV[1] then return 0 end
@@ -975,7 +1057,8 @@ export class RedisGameSessionAuthority {
     allowance: number,
   ): ResultAsync<boolean, DurableSessionError> {
     return ResultAsync.fromPromise(
-      this.redis.eval(
+      runRedisLuaCommand<number>(
+        this.redis,
         `local count = tonumber(redis.call('GET', KEYS[1]) or '0')
          if count >= tonumber(ARGV[2]) then return 0 end
          count = redis.call('INCR', KEYS[1])
@@ -997,12 +1080,12 @@ export class RedisGameSessionAuthority {
   private parse<Value>(
     value: string | null,
     key: string,
+    schema: v.GenericSchema<unknown, Value>,
   ): Result<Value | undefined, DurableSessionError> {
     if (value === null) return ok(undefined);
     try {
-      // Redis is the configured authority; the caller owns validation of its bounded record type.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return ok(JSON.parse(value) as Value);
+      const parsed: unknown = JSON.parse(value);
+      return this.validate(parsed, key, schema);
     } catch {
       return err({ type: 'invalid-authority-data', key });
     }
@@ -1034,10 +1117,14 @@ export class RedisGameSessionAuthority {
     ).map(() => undefined);
   }
 
-  private parseMany<Value>(values: string[], key: string): Result<Value[], DurableSessionError> {
+  private parseMany<Value>(
+    values: string[],
+    key: string,
+    schema: v.GenericSchema<unknown, Value>,
+  ): Result<Value[], DurableSessionError> {
     const parsed: Value[] = [];
     for (const value of values) {
-      const result = this.parse<Value>(value, key);
+      const result = this.parse(value, key, schema);
       if (result.isErr()) return err(result.error);
       if (result.value) parsed.push(result.value);
     }
@@ -1052,7 +1139,20 @@ export class RedisGameSessionAuthority {
     const separator = value.indexOf('\n');
     if (separator <= 0 || separator === value.length - 1)
       return err({ type: 'invalid-authority-data', key });
-    return ok({ fingerprint: value.slice(0, separator), sessionId: value.slice(separator + 1) });
+    return this.validate(
+      { fingerprint: value.slice(0, separator), sessionId: value.slice(separator + 1) },
+      key,
+      DurableCreationIdempotencyRecordSchema,
+    );
+  }
+
+  private validate<Value>(
+    value: unknown,
+    key: string,
+    schema: v.GenericSchema<unknown, Value>,
+  ): Result<Value, DurableSessionError> {
+    const parsed = v.safeParse(schema, value);
+    return parsed.success ? ok(parsed.output) : err({ type: 'invalid-authority-data', key });
   }
 
   private serializeCreationIdempotency(record: DurableCreationIdempotencyRecord) {

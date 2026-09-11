@@ -5,6 +5,8 @@ import type Redis from 'ioredis';
 type RedisLuaClient = Pick<Redis, 'defineCommand'>;
 
 const commandNamesByScript = new WeakMap<object, Map<string, string>>();
+const commandPrefixes = new WeakMap<object, string>();
+let nextClientId = 0;
 
 /**
  * Registers a Lua source once per Redis connection, then invokes its named
@@ -20,7 +22,9 @@ export function runRedisLuaCommand<Result>(
   const commandNames = commandNamesByScript.get(redis) ?? new Map<string, string>();
   commandNamesByScript.set(redis, commandNames);
 
-  const commandName = commandNames.get(scriptHash) ?? `withaiGameSession${scriptHash}`;
+  const commandPrefix = commandPrefixes.get(redis) ?? `withaiGameSession${nextClientId++}`;
+  commandPrefixes.set(redis, commandPrefix);
+  const commandName = commandNames.get(scriptHash) ?? `${commandPrefix}${scriptHash}`;
   if (!commandNames.has(scriptHash)) {
     redis.defineCommand(commandName, { lua, numberOfKeys });
     commandNames.set(scriptHash, commandName);

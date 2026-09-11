@@ -98,7 +98,11 @@ describe('GameSessionsService', () => {
     if (created.isErr()) throw new Error('Expected a durable session.');
     const stored = await authority.load(created.value.projection.sessionId);
     if (stored.isErr() || !stored.value) throw new Error('Expected an authoritative snapshot.');
-    await authority.saveSnapshot({ ...stored.value, agentActionsPending: true });
+    await authority.saveSnapshot({
+      ...stored.value,
+      gameSession: { ...stored.value.gameSession, phase: 'nomination' },
+      agentActionsPending: true,
+    });
 
     const restartedService = new GameSessionsService(agentDecisions);
     Object.assign(restartedService, { authority });

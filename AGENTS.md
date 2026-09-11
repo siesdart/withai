@@ -51,6 +51,11 @@
 - After making code changes, run `npx oxlint --fix`, then run `npx oxfmt`.
 - Before finishing, run `npx oxlint --deny-warnings --format=agent`.
 
+## Tests
+
+- Run API Jest suites directly with `node node_modules/jest/bin/jest.js --config jest.config.cjs --runInBand --forceExit`; in this workspace, `pnpm exec jest` can stall before producing output.
+- API HTTP E2E tests create a local Nest listener. Run them with escalated sandbox permission when the default sandbox reports `listen EPERM`.
+
 ## Agent skills
 
 ### Issue tracker

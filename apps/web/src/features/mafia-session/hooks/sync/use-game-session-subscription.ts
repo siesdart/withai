@@ -18,7 +18,9 @@ export function useGameSessionSubscription(sessionId: string | undefined) {
     const client = new MafiaGameSessionClient(sessionId);
     const abortController = new AbortController();
     let lastEventId: string | undefined;
+    let highestProjectionEventId = -1;
     let retryCount = 0;
+    let receivedCompletedProjection = false;
 
     const subscribe = async () => {
       while (!abortController.signal.aborted) {
@@ -31,14 +33,17 @@ export function useGameSessionSubscription(sessionId: string | undefined) {
             void queryClient.invalidateQueries(gameSessionSnapshotOptions(sessionId));
           },
           onProjection: (projection, eventId) => {
-            lastEventId = eventId;
+            if (projection.eventId <= highestProjectionEventId) return;
+            highestProjectionEventId = projection.eventId;
+            lastEventId = eventId || String(projection.eventId);
+            receivedCompletedProjection ||= projection.public.phase === 'completed';
             updateGameSessionSnapshot(queryClient, sessionId, projection);
           },
           signal: abortController.signal,
         });
 
         const shouldReconnect = result.match(
-          () => true,
+          () => !receivedCompletedProjection,
           (error) =>
             match(error)
               .with({ type: 'aborted' }, () => false)

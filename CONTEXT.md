@@ -38,6 +38,18 @@ _Avoid_: Role reveal
 One complete playthrough of a selected game with a fixed set of Participants and rules.
 _Avoid_: Room, match
 
+**Completed Game Session**:
+A Game Session whose Phase is completed. Its Human Player may read its outcome and completed records for 24 hours after completion, but may not take further actions; the retention period does not extend when it is read.
+_Avoid_: Archived game, finished room
+
+**Abandoned Game Session**:
+An in-progress Game Session whose Reconnect Lease has expired. It cannot be reconnected to or receive further actions, and it does not prevent its Human Player from creating a new Game Session.
+_Avoid_: Timed-out session, disconnected session
+
+**Reconnect Lease**:
+The Human Player's right to restore an interrupted live subscription, valid only until the latest expiry among successful live-subscription heartbeats plus the reconnect grace duration. An expired Reconnect Lease abandons the in-progress Game Session and cannot be renewed. When a Human Player has concurrent subscriptions, an older heartbeat must not shorten the lease established by a newer heartbeat.
+_Avoid_: Connection timeout, session lock
+
 **Game Module**:
 The ruleset-owned definition of one selectable game, including its state, permitted actions, information disclosures, resolution, and presentation.
 _Avoid_: Mode, game type
@@ -90,6 +102,10 @@ _Avoid_: Last words
 The required opening public statement made by an Agent who is the Nominee during a Final Defence.
 _Avoid_: Auto-reply
 
+**Scheduled Agent Action**:
+An Agent action whose payload has been decided or is required, is durably pending, and is consumed at most once before its Phase changes. Its scheduled time determines whether it belongs to that Phase even when durable recovery occurs later. It includes delayed and reactive Public Chat or Mafia Night Chat statements, Final Defence statements, Mafia Night Target fallback, and required Phase-entry actions. It resumes only for an in-progress Game Session after durable recovery; an authorized read may trigger recovery but never consumes it itself.
+_Avoid_: Timer, callback, background job
+
 **Nomination**:
 The Day vote in which each living Participant chooses one living Participant for Final Defence. A unique highest total produces a Nominee; a tie or no submission produces no Nominee.
 _Avoid_: Accusation, primary vote
@@ -129,6 +145,10 @@ _Avoid_: Dead player, observer
 **Guest Play Allowance**:
 The daily number of Game Sessions a non-authenticated Human Player may create.
 _Avoid_: Rate limit, quota
+
+**Creation Idempotency Key**:
+A guest-scoped client key that identifies one request to create or reuse a Game Session. For 24 hours from its first use, the same key and request resolves to the same live or completed Game Session, including when that session was already active at the key's first use. If that Game Session is no longer retained, the key returns `session-not-found`, irrespective of request payload.
+_Avoid_: Request ID, creation token
 
 ## Mafia ruleset
 

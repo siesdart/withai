@@ -1,6 +1,7 @@
 import type { MafiaProjectionError, MafiaSessionInputError } from '@repo/mafia';
 
 export type GameSessionError =
+  | { type: 'durability-unavailable' }
   | { type: 'idempotency-conflict' }
   | { type: 'guest-allowance-exhausted' }
   | { type: 'unavailable-to-guest'; sessionId: string }

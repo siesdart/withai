@@ -1,0 +1,7 @@
+# Durable Agent Actions use snapshot CAS
+
+Scheduled Agent Actions are recorded in the authoritative Game Session snapshot before execution and are consumed only by a successful compare-and-set snapshot write. Event-producing actions remove their pending record in the same atomic write that appends their public event; snapshot-only actions preserve the current event version while still comparing it.
+
+This chooses a little more durable state over process-local timer ownership or separate Redis claim keys. Multiple API replicas may recover and schedule the same work, and Redis availability may change during execution. A stale replica that loses the CAS hydrates the authoritative snapshot and finds the work already consumed; work whose persistence fails remains pending and is retried with backoff or recovered after restart. Failed persistence must unwind before retry hydration: a hydration invoked to reconcile a failed save restores state only and must not synchronously submit pending actions again. The retry timer restores passively, then makes exactly one explicit submission attempt; another failure schedules the next bounded-backoff attempt.
+
+The Redis lifecycle marker, rather than a serialized residual deadline, is authoritative for reconnect grace. It represents the latest expiry among all active reconnect leases, derived from their Redis sorted set; an out-of-order heartbeat must never move that marker backward.

@@ -79,6 +79,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
   private readonly phaseTransitionRetryTimers = new Map<string, NodeJS.Timeout>();
   private readonly scheduledAgentRetryTimers = new Map<string, NodeJS.Timeout>();
   private readonly mafiaChatReplyRetryTimers = new Map<string, NodeJS.Timeout>();
+  private readonly eventSubscriberCounts = new Map<string, number>();
   private readonly guestCookies = createGuestCookieSigner(
     gameSessionsConfig.guestCookieName,
     guestCookieSecret(),
@@ -116,6 +117,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         sessions: this.sessions,
         guestSessionCounts: this.guestSessionCounts,
         idempotencyKeys: this.idempotencyKeys,
+        eventSubscriberCounts: this.eventSubscriberCounts,
       },
       persistence: {
         authorityFor: () => this.authority,
@@ -245,7 +247,6 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       nextFinalDefenceAt: undefined,
       nextDiscussionTimeAdjustmentAt: undefined,
       lastAccessedAt: this.now(),
-      activeEventSubscribers: 0,
       status: 'in-progress',
       publicSpeechIdempotencyKeys: new Map(),
       mafiaChatIdempotencyKeys: new Map(),
@@ -283,6 +284,9 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         idempotencyKey ? { key: idempotencyKey, fingerprint: String(participantCount) } : undefined,
       );
       if (creation.isErr()) return err({ type: 'durability-unavailable' });
+      if (creation.value.type === 'unavailable-session') {
+        return err({ type: 'session-not-found', sessionId: creation.value.sessionId });
+      }
       if (creation.value.type === 'allowance-exhausted') {
         return err({ type: 'guest-allowance-exhausted' });
       }
@@ -291,7 +295,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         const hydrated = await this.hydrateAuthoritativeSession(creation.value.record.sessionId);
         if (hydrated.isErr()) return err(hydrated.error);
         const existingSession = this.sessions.get(creation.value.record.sessionId);
-        if (!existingSession) {
+        if (!existingSession || existingSession.status === 'abandoned') {
           return err({ type: 'session-not-found', sessionId: creation.value.record.sessionId });
         }
         return this.projectionFor(existingSession).map((existingProjection) => ({
@@ -303,7 +307,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         const hydrated = await this.hydrateAuthoritativeSession(creation.value.sessionId);
         if (hydrated.isErr()) return err(hydrated.error);
         const activeSession = this.sessions.get(creation.value.sessionId);
-        if (!activeSession) {
+        if (!activeSession || activeSession.status !== 'in-progress') {
           return err({ type: 'session-not-found', sessionId: creation.value.sessionId });
         }
         return this.projectionFor(activeSession).map((existingProjection) => ({
@@ -435,7 +439,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         return err<Observable<MafiaGameSessionProjectionEntity>, GameSessionError>(snapshot.error);
       return ok<Observable<MafiaGameSessionProjectionEntity>, GameSessionError>(
         defer(() => {
-          session.value.activeEventSubscribers += 1;
+          this.addEventSubscriber(sessionId);
           // A current projection is a complete snapshot. Starting from its
           // event version ensures the stream never follows it with older
           // projections from a reconnect cursor.
@@ -462,7 +466,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
           ).pipe(
             takeWhile((projection) => projection.public.phase !== 'completed', true),
             finalize(() => {
-              session.value.activeEventSubscribers -= 1;
+              this.removeEventSubscriber(sessionId);
               void this.releaseReconnectLeaseWithRetry(
                 authority,
                 sessionId,
@@ -489,7 +493,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       return this.projectionFor(readableSession.value).map((snapshot) => of(snapshot));
     return this.activeSessionForHolder(sessionId, cookie).map((session) =>
       defer(() => {
-        session.activeEventSubscribers += 1;
+        this.addEventSubscriber(sessionId);
         const connectionId = randomUUID();
         void this.authority?.acquireReconnectLease(sessionId, connectionId, session.holderId);
         if (session.reconnectGraceTimer) {
@@ -501,10 +505,10 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         return session.events.asObservable().pipe(
           filter((projection) => lastEventId === undefined || projection.eventId > lastEventId),
           finalize(() => {
-            session.activeEventSubscribers -= 1;
+            this.removeEventSubscriber(sessionId);
             void this.authority?.releaseReconnectLease(sessionId, connectionId);
             this.touch(session);
-            if (session.activeEventSubscribers === 0)
+            if (!this.hasEventSubscribers(sessionId))
               this.lifecycle.scheduleReconnectGrace(session);
           }),
         );
@@ -1273,6 +1277,23 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
   private touch(session: StoredGameSessionEntity) {
     session.lastAccessedAt = this.now();
+  }
+
+  private addEventSubscriber(sessionId: string) {
+    this.eventSubscriberCounts.set(sessionId, (this.eventSubscriberCounts.get(sessionId) ?? 0) + 1);
+  }
+
+  private removeEventSubscriber(sessionId: string) {
+    const nextCount = (this.eventSubscriberCounts.get(sessionId) ?? 0) - 1;
+    if (nextCount > 0) {
+      this.eventSubscriberCounts.set(sessionId, nextCount);
+      return;
+    }
+    this.eventSubscriberCounts.delete(sessionId);
+  }
+
+  private hasEventSubscribers(sessionId: string) {
+    return (this.eventSubscriberCounts.get(sessionId) ?? 0) > 0;
   }
 
   private async touchAuthoritativeSession(

@@ -144,7 +144,6 @@ export class GameSessionDurability {
         ? dayjs(snapshot.cooldowns.discussionTimeAdjustment)
         : undefined,
       lastAccessedAt: dayjs(snapshot.lastActivityAt),
-      activeEventSubscribers: 0,
       status: snapshot.status,
       publicSpeechIdempotencyKeys: new Map(snapshot.idempotency?.publicSpeech),
       mafiaChatIdempotencyKeys: new Map(snapshot.idempotency?.mafiaChat),

@@ -58,6 +58,7 @@ export type DurableCreationResult =
   | { type: 'created' }
   | { type: 'replayed'; record: DurableCreationIdempotencyRecord }
   | { type: 'active-session'; sessionId: string }
+  | { type: 'unavailable-session'; sessionId: string }
   | { type: 'conflict' }
   | { type: 'allowance-exhausted' };
 
@@ -110,7 +111,7 @@ export class RedisGameSessionAuthority {
            return 0
          end
          local lifecycle = redis.call('GET', KEYS[5])
-         if lifecycle == 'abandoned' or lifecycle == 'idle-expired' then return 0 end
+         if lifecycle == 'abandoned' then return 0 end
          local deadline = tonumber(string.match(lifecycle or '', '^[^:]+:(%d+)|'))
          if deadline and deadline <= tonumber(ARGV[12]) then
            redis.call('DEL', KEYS[10])
@@ -181,7 +182,7 @@ export class RedisGameSessionAuthority {
       this.redis.eval(
         `if not redis.call('GET', KEYS[1]) then return 0 end
          local lifecycle = redis.call('GET', KEYS[9])
-         if lifecycle == 'abandoned' or lifecycle == 'idle-expired' then return 0 end
+         if lifecycle == 'abandoned' then return 0 end
          local deadline = tonumber(string.match(lifecycle or '', '^[^:]+:(%d+)|'))
          if deadline and deadline <= tonumber(ARGV[7]) then
            redis.call('DEL', KEYS[10])
@@ -261,10 +262,6 @@ export class RedisGameSessionAuthority {
             snapshot.status = 'abandoned';
             return snapshot;
           }
-          if (lifecycle === 'idle-expired') {
-            snapshot.status = 'expired';
-            return snapshot;
-          }
           if (lifecycle?.startsWith('lease:')) {
             const deadline = lifecycle.split('|')[1] ?? lifecycle.slice('lease:'.length);
             snapshot.reconnectLeaseDeadline = new Date(Number(deadline)).toISOString();
@@ -328,19 +325,68 @@ export class RedisGameSessionAuthority {
       : this.creationReservationKey(snapshot.sessionId);
     return ResultAsync.fromPromise(
       this.redis.eval(
-        `if ARGV[8] == '1' then
+        `local function hasExpiredLifecycle(sessionId)
+           local lifecycle = redis.call('GET', ARGV[15] .. ':lifecycles:' .. sessionId)
+           local deadline = tonumber(string.match(lifecycle or '', '^[^:]+:(%d+)|'))
+           return deadline and deadline <= tonumber(ARGV[10])
+         end
+         local function abandonExpiredSession(sessionId)
+           if not hasExpiredLifecycle(sessionId) then return end
+           local snapshotKey = ARGV[15] .. ':snapshots:' .. sessionId
+           local eventsKey = ARGV[15] .. ':events:' .. sessionId
+           local versionKey = ARGV[15] .. ':snapshot-versions:' .. sessionId
+           local lastActivityKey = ARGV[15] .. ':last-activity:' .. sessionId
+           local phaseDeadlineKey = ARGV[15] .. ':phase-deadlines:' .. sessionId
+           local statusKey = ARGV[15] .. ':statuses:' .. sessionId
+           local lifecycleKey = ARGV[15] .. ':lifecycles:' .. sessionId
+           local reconnectLeasesKey = ARGV[15] .. ':reconnect-leases:' .. sessionId
+           redis.call('SET', lifecycleKey, 'abandoned', 'PX', ARGV[16])
+           redis.call('SET', statusKey, 'abandoned', 'PX', ARGV[16])
+           redis.call('PEXPIRE', snapshotKey, ARGV[16])
+           redis.call('PEXPIRE', eventsKey, ARGV[16])
+           redis.call('PEXPIRE', versionKey, ARGV[16])
+           redis.call('PEXPIRE', lastActivityKey, ARGV[16])
+           redis.call('PEXPIRE', phaseDeadlineKey, ARGV[16])
+           redis.call('PEXPIRE', reconnectLeasesKey, ARGV[16])
+         end
+         local function isUnavailable(sessionId)
+           local snapshotKey = ARGV[15] .. ':snapshots:' .. sessionId
+           if not redis.call('GET', snapshotKey) then return true end
+           local status = redis.call('GET', ARGV[15] .. ':statuses:' .. sessionId)
+           if status == 'abandoned' then return true end
+           local lifecycle = redis.call('GET', ARGV[15] .. ':lifecycles:' .. sessionId)
+           if lifecycle == 'abandoned' then return true end
+           return hasExpiredLifecycle(sessionId)
+         end
+         if ARGV[8] == '1' then
            local existing = redis.call('GET', KEYS[5])
            if existing then
+             local separator = string.find(existing, string.char(10))
+             local existingSessionId = separator and string.sub(existing, separator + 1)
+             if not existingSessionId or isUnavailable(existingSessionId) then
+               if existingSessionId then
+                 abandonExpiredSession(existingSessionId)
+                 redis.call('ZREM', KEYS[6], existingSessionId)
+                 if redis.call('GET', KEYS[10]) == existingSessionId then redis.call('DEL', KEYS[10]) end
+               end
+               return 'unavailable:' .. (existingSessionId or '')
+             end
              if string.sub(existing, 1, string.len(ARGV[9]) + 1) == ARGV[9] .. string.char(10) then return 2 end
              return 3
            end
          end
          local activeSessionId = redis.call('GET', KEYS[10])
          if activeSessionId then
-           if ARGV[8] == '1' then
-             redis.call('SET', KEYS[5], ARGV[9] .. string.char(10) .. activeSessionId, 'PX', ARGV[2])
+           if isUnavailable(activeSessionId) then
+             abandonExpiredSession(activeSessionId)
+             redis.call('ZREM', KEYS[6], activeSessionId)
+             if redis.call('GET', KEYS[10]) == activeSessionId then redis.call('DEL', KEYS[10]) end
+           else
+             if ARGV[8] == '1' then
+               redis.call('SET', KEYS[5], ARGV[9] .. string.char(10) .. activeSessionId, 'PX', ARGV[2])
+             end
+             return 'active:' .. activeSessionId
            end
-           return 'active:' .. activeSessionId
          end
          local count = tonumber(redis.call('GET', KEYS[4]) or '0')
          if count >= tonumber(ARGV[7]) then return 4 end
@@ -387,6 +433,8 @@ export class RedisGameSessionAuthority {
         }),
         snapshot.lastActivityAt,
         snapshot.phaseDeadline,
+        this.keyPrefix,
+        abandonedSessionTtlMs,
       ),
       (cause): DurableSessionError => ({ type: 'authority-unavailable', cause }),
     ).andThen((value) => {
@@ -394,6 +442,12 @@ export class RedisGameSessionAuthority {
         return ok<DurableCreationResult, DurableSessionError>({
           type: 'active-session',
           sessionId: value.slice('active:'.length),
+        });
+      }
+      if (typeof value === 'string' && value.startsWith('unavailable:')) {
+        return ok<DurableCreationResult, DurableSessionError>({
+          type: 'unavailable-session',
+          sessionId: value.slice('unavailable:'.length),
         });
       }
       const outcome = Number(value);
@@ -450,7 +504,7 @@ export class RedisGameSessionAuthority {
         `if not redis.call('GET', KEYS[1]) then return 0 end
          if redis.call('GET', KEYS[3]) ~= 'in-progress' then return 0 end
          local lifecycle = redis.call('GET', KEYS[4])
-         if lifecycle == 'abandoned' or lifecycle == 'idle-expired' then return 0 end
+         if lifecycle == 'abandoned' then return 0 end
          local deadline = tonumber(string.match(lifecycle or '', '^[^:]+:(%d+)|'))
          if deadline and deadline <= tonumber(ARGV[5]) then return 0 end
          local previousActivity = redis.call('GET', KEYS[2])
@@ -482,8 +536,9 @@ export class RedisGameSessionAuthority {
   ): ResultAsync<boolean, DurableSessionError> {
     return ResultAsync.fromPromise(
       this.redis.eval(
-        `local lifecycle = redis.call('GET', KEYS[5])
-         if lifecycle == 'abandoned' or lifecycle == 'idle-expired' then return 0 end
+        `if not redis.call('GET', KEYS[1]) then return 0 end
+         local lifecycle = redis.call('GET', KEYS[5])
+         if lifecycle == 'abandoned' then return 0 end
          if string.sub(lifecycle or '', 1, 6) == 'grace:' then
            local deadline = tonumber(string.match(lifecycle, '^grace:(%d+)|'))
            if not deadline or deadline <= tonumber(ARGV[4]) then
@@ -747,8 +802,14 @@ export class RedisGameSessionAuthority {
                if tonumber(ARGV[2]) - tonumber(ARGV[3]) < tonumber(ARGV[4]) then return 0 end
                redis.call('ZREMRANGEBYSCORE', KEYS[4], '-inf', ARGV[2])
                if redis.call('ZCARD', KEYS[4]) > 0 then return 0 end
+               redis.call('DEL', KEYS[1])
+               redis.call('DEL', KEYS[2])
+               redis.call('DEL', KEYS[3])
                redis.call('DEL', KEYS[4])
-               redis.call('SET', KEYS[10], 'idle-expired', 'PX', ARGV[6])
+               redis.call('DEL', KEYS[6])
+               redis.call('DEL', KEYS[7])
+               redis.call('DEL', KEYS[8])
+               redis.call('DEL', KEYS[10])
                redis.call('ZREM', KEYS[5], ARGV[5])
                if redis.call('GET', KEYS[9]) == ARGV[5] then redis.call('DEL', KEYS[9]) end
                return 1`,
@@ -768,7 +829,6 @@ export class RedisGameSessionAuthority {
               dayjs(snapshot.lastActivityAt).valueOf(),
               inProgressIdleTtlMs,
               snapshot.sessionId,
-              sessionTtlMs,
             ),
             (cause): DurableSessionError => ({ type: 'authority-unavailable', cause }),
           ),
@@ -811,7 +871,7 @@ export class RedisGameSessionAuthority {
          if redis.call('GET', KEYS[6]) ~= 'in-progress' then return 0 end
          if redis.call('GET', KEYS[7]) ~= ARGV[1] then return 0 end
          local lifecycle = redis.call('GET', KEYS[9])
-         if lifecycle == 'abandoned' or lifecycle == 'idle-expired' then return 0 end
+         if lifecycle == 'abandoned' then return 0 end
          local deadline = tonumber(string.match(lifecycle or '', '^[^:]+:(%d+)|'))
          if deadline and deadline <= tonumber(ARGV[9]) then return 0 end
          local currentVersion = redis.call('GET', KEYS[4])

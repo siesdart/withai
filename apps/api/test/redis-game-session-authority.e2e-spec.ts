@@ -336,6 +336,10 @@ describe('RedisGameSessionAuthority', () => {
     const redis = new RedisMock();
     redisClients.push(redis);
     const authority = new RedisGameSessionAuthority(redis, 'withai:lease-owner-test');
+    const snapshot = createSnapshot('session-1');
+    const projection = createMafiaSession('session-1').projectionFor('participant-1', 1);
+    if (projection.isErr()) throw new Error('Expected a Human Player projection.');
+    await authority.save(snapshot, { eventId: 1, projection: projection.value });
 
     await authority.acquireReconnectLease('session-1', 'connection-a', 'holder-1');
     await expect(authority.releaseReconnectLease('session-1', 'connection-b')).resolves.toEqual({
@@ -346,7 +350,7 @@ describe('RedisGameSessionAuthority', () => {
     });
   });
 
-  it('does not expire an active reconnect lease, then retains an inactive session for creation replay', async () => {
+  it('does not expire an active reconnect lease, then removes an inactive session', async () => {
     const redis = new RedisMock();
     redisClients.push(redis);
     const authority = new RedisGameSessionAuthority(redis, 'withai:idle-replay-retention-test');
@@ -363,9 +367,7 @@ describe('RedisGameSessionAuthority', () => {
 
     await authority.releaseReconnectLease('leased-session', 'connection-1');
     await authority.expireInactiveSessions();
-    await expect(authority.load('leased-session')).resolves.toMatchObject({
-      value: { sessionId: 'leased-session', status: 'expired' },
-    });
+    await expect(authority.load('leased-session')).resolves.toEqual({ value: undefined });
     await expect(authority.activeSnapshots()).resolves.toEqual({ value: [] });
   });
 
@@ -452,12 +454,12 @@ describe('RedisGameSessionAuthority', () => {
     });
   });
 
-  it('does not revive an idle-expired Game Session through activity or a reconnect lease', async () => {
+  it('does not revive a Game Session after idle expiry through activity or a reconnect lease', async () => {
     const redis = new RedisMock();
     redisClients.push(redis);
     const authority = new RedisGameSessionAuthority(redis);
-    const snapshot = createSnapshot('idle-expired-session', '2020-01-01T00:00:00.000Z');
-    const projection = createMafiaSession('idle-expired-session').projectionFor('participant-1', 1);
+    const snapshot = createSnapshot('idle-expiry-session', '2020-01-01T00:00:00.000Z');
+    const projection = createMafiaSession('idle-expiry-session').projectionFor('participant-1', 1);
     if (projection.isErr()) throw new Error('Expected a Human Player projection.');
 
     await authority.save(snapshot, { eventId: 1, projection: projection.value });
@@ -475,9 +477,7 @@ describe('RedisGameSessionAuthority', () => {
         expect.objectContaining({ sessionId: snapshot.sessionId }),
       ]),
     });
-    await expect(authority.load(snapshot.sessionId)).resolves.toMatchObject({
-      value: { status: 'expired' },
-    });
+    await expect(authority.load(snapshot.sessionId)).resolves.toEqual({ value: undefined });
   });
 
   it('abandons an expired grace period and rejects later writes', async () => {
@@ -623,7 +623,7 @@ describe('RedisGameSessionAuthority', () => {
     });
   });
 
-  it('replays a Creation Idempotency Key after idle cleanup', async () => {
+  it('reports an unavailable Game Session for a Creation Idempotency Key after idle cleanup', async () => {
     const redis = new RedisMock();
     redisClients.push(redis);
     const authority = new RedisGameSessionAuthority(redis, 'withai:idle-idempotency-replay-test');
@@ -657,13 +657,7 @@ describe('RedisGameSessionAuthority', () => {
         { key: 'idle-retry-key', fingerprint: '5' },
       ),
     ).resolves.toEqual({
-      value: {
-        type: 'replayed',
-        record: { fingerprint: '5', sessionId: 'idle-idempotency-session' },
-      },
-    });
-    await expect(authority.load('idle-idempotency-session')).resolves.toMatchObject({
-      value: { sessionId: 'idle-idempotency-session' },
+      value: { type: 'unavailable-session', sessionId: 'idle-idempotency-session' },
     });
   });
 
@@ -706,6 +700,46 @@ describe('RedisGameSessionAuthority', () => {
         undefined,
       ),
     ).resolves.toEqual({ value: { type: 'created' } });
+  });
+
+  it('replaces an expired active session during creation before the periodic sweep runs', async () => {
+    const redis = new RedisMock();
+    redisClients.push(redis);
+    let now = new Date('2026-09-05T00:00:00.000Z');
+    const authority = new RedisGameSessionAuthority(
+      redis,
+      'withai:expired-active-create-test',
+      () => now,
+    );
+    const stale = createSnapshot('stale-active-session');
+    const staleProjection = createMafiaSession('stale-active-session').projectionFor(
+      'participant-1',
+      1,
+    );
+    if (staleProjection.isErr()) throw new Error('Expected a Human Player projection.');
+    await authority.save(stale, { eventId: 1, projection: staleProjection.value });
+    await authority.acquireReconnectLease('stale-active-session', 'connection-1', 'holder-1');
+    now = new Date(now.valueOf() + 60_001);
+
+    const replacement = createSnapshot('replacement-after-expiry');
+    const replacementProjection = createMafiaSession('replacement-after-expiry').projectionFor(
+      'participant-1',
+      1,
+    );
+    if (replacementProjection.isErr()) throw new Error('Expected a Human Player projection.');
+    await expect(
+      authority.create(
+        replacement,
+        { eventId: 1, projection: replacementProjection.value },
+        'holder-1',
+        '2026-09-05',
+        3,
+        { key: 'replacement-after-expiry-key', fingerprint: '5' },
+      ),
+    ).resolves.toEqual({ value: { type: 'created' } });
+    await expect(authority.load('stale-active-session')).resolves.toMatchObject({
+      value: { status: 'abandoned' },
+    });
   });
 
   it('rejects a phase-deadline claim once authoritative state has changed', async () => {
@@ -752,7 +786,7 @@ describe('RedisGameSessionAuthority', () => {
     });
   });
 
-  it('does not resolve a phase after lifecycle expiry wins the race', async () => {
+  it('does not resolve a phase after the session snapshot is deleted', async () => {
     const redis = new RedisMock();
     redisClients.push(redis);
     const prefix = 'withai:expired-phase-recovery-test';
@@ -764,7 +798,7 @@ describe('RedisGameSessionAuthority', () => {
     );
     if (projection.isErr()) throw new Error('Expected a Human Player projection.');
     await authority.save(initial, { eventId: 1, projection: projection.value });
-    await redis.set(`${prefix}:lifecycles:expired-recovery-session`, 'idle-expired');
+    await redis.del(`${prefix}:snapshots:expired-recovery-session`);
 
     await expect(
       authority.resolveExpiredPhase(
@@ -773,9 +807,7 @@ describe('RedisGameSessionAuthority', () => {
         { eventId: 2, projection: projection.value },
       ),
     ).resolves.toEqual({ value: false });
-    await expect(authority.load('expired-recovery-session')).resolves.toMatchObject({
-      value: { nextEventId: 1, status: 'expired' },
-    });
+    await expect(authority.load('expired-recovery-session')).resolves.toEqual({ value: undefined });
   });
 
   it('binds a Creation Idempotency Key when returning an active session', async () => {

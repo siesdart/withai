@@ -46,10 +46,6 @@ _Avoid_: Archived game, finished room
 An in-progress Game Session whose Reconnect Lease has expired. It cannot be reconnected to or receive further actions, and it does not prevent its Human Player from creating a new Game Session.
 _Avoid_: Timed-out session, disconnected session
 
-**Expired Game Session**:
-An in-progress Game Session with no active Reconnect Lease or authorized read for the idle retention period. It cannot be read, reconnected to, or receive further actions, but its durable record remains only for its Creation Idempotency Key's remaining lifetime.
-_Avoid_: Abandoned Game Session, deleted session
-
 **Reconnect Lease**:
 The Human Player's right to restore an interrupted live subscription, valid only until the most recent successful subscription heartbeat plus the reconnect grace duration. An expired Reconnect Lease abandons the in-progress Game Session and cannot be renewed.
 _Avoid_: Connection timeout, session lock
@@ -151,7 +147,7 @@ The daily number of Game Sessions a non-authenticated Human Player may create.
 _Avoid_: Rate limit, quota
 
 **Creation Idempotency Key**:
-A guest-scoped client key that identifies one request to create or reuse a Game Session. For 24 hours from its first use, the same key and request must resolve to the same Game Session, including when that session was already active at the key's first use.
+A guest-scoped client key that identifies one request to create or reuse a Game Session. For 24 hours from its first use, the same key and request resolves to the same live or completed Game Session, including when that session was already active at the key's first use. If that Game Session is no longer retained, the key returns `session-not-found`, irrespective of request payload.
 _Avoid_: Request ID, creation token
 
 ## Mafia ruleset

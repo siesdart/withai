@@ -18,6 +18,7 @@ type LifecycleState = {
   sessions: Map<string, StoredGameSessionEntity>;
   guestSessionCounts: Map<string, number>;
   idempotencyKeys: Map<string, IdempotencyRecord<string>>;
+  eventSubscriberCounts: Map<string, number>;
 };
 
 type LifecyclePersistence = {
@@ -226,7 +227,7 @@ export class GameSessionLifecycle {
     if (session.reconnectGraceTimer) clock.clearTimeout(session.reconnectGraceTimer);
     session.reconnectGraceDeadline = this.runtime.now().add(remainingGraceMs, 'millisecond');
     session.reconnectGraceTimer = clock.setTimeout(() => {
-      if (session.activeEventSubscribers > 0) return;
+      if (this.hasEventSubscribers(session)) return;
       const abandon = () => {
         session.status = 'abandoned';
         if (session.phaseTimer) clock.clearTimeout(session.phaseTimer);
@@ -271,7 +272,7 @@ export class GameSessionLifecycle {
             ? gameSessionsConfig.abandonedSessionTtlMinutes
             : gameSessionsConfig.sessionIdleTtlHours * 60;
       if (
-        session.activeEventSubscribers > 0 ||
+        this.hasEventSubscribers(session) ||
         now.diff(session.lastAccessedAt, 'minute', true) < limit
       )
         continue;
@@ -280,12 +281,20 @@ export class GameSessionLifecycle {
       if (session.reconnectGraceTimer) this.runtime.clock.clearTimeout(session.reconnectGraceTimer);
       this.runtime.agentActions.clearTimers(session);
       this.runtime.state.sessions.delete(sessionId);
+      this.runtime.state.eventSubscriberCounts.delete(sessionId);
       for (const [key, record] of this.runtime.state.idempotencyKeys)
         if (record.result === sessionId) this.runtime.state.idempotencyKeys.delete(key);
     }
     const prefix = `${this.runtime.utcDay()}:`;
     for (const key of this.runtime.state.guestSessionCounts.keys())
       if (!key.startsWith(prefix)) this.runtime.state.guestSessionCounts.delete(key);
+  }
+
+  private hasEventSubscribers(session: StoredGameSessionEntity) {
+    return (
+      (this.runtime.state.eventSubscriberCounts.get(session.gameSession.snapshot().sessionId) ??
+        0) > 0
+    );
   }
 
   async recoverDurableSessions() {

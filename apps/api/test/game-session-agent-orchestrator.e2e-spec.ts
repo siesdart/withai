@@ -88,7 +88,6 @@ const createSession = (): StoredGameSessionEntity => ({
   nextFinalDefenceAt: undefined,
   nextDiscussionTimeAdjustmentAt: undefined,
   lastAccessedAt: dayjs(),
-  activeEventSubscribers: 0,
   status: 'in-progress',
   publicSpeechIdempotencyKeys: new Map(),
   mafiaChatIdempotencyKeys: new Map(),
@@ -538,6 +537,7 @@ describe('GameSessionAgentOrchestrator', () => {
         sessions,
         guestSessionCounts: new Map(),
         idempotencyKeys: new Map(),
+        eventSubscriberCounts: new Map(),
       },
       persistence: {
         authorityFor: () => undefined,

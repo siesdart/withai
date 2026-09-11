@@ -49,7 +49,6 @@ export type StoredGameSessionEntity = {
   nextFinalDefenceAt: Dayjs | undefined;
   nextDiscussionTimeAdjustmentAt: Dayjs | undefined;
   lastAccessedAt: Dayjs;
-  activeEventSubscribers: number;
   status: GameSessionStatus;
   publicSpeechIdempotencyKeys: Map<string, IdempotencyRecord<MafiaGameSessionProjectionEntity>>;
   mafiaChatIdempotencyKeys: Map<string, IdempotencyRecord<MafiaGameSessionProjectionEntity>>;

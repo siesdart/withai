@@ -253,6 +253,40 @@ describe('GameSessionsService', () => {
     redis.disconnect();
   });
 
+  it('returns session-not-found when a Creation Idempotency Key refers to an expired session', async () => {
+    let now = new Date();
+    const redis = new RedisMock();
+    const authority = new RedisGameSessionAuthority(
+      redis,
+      'withai:expired-creation-key-test',
+      () => now,
+    );
+    const service = new GameSessionsService({
+      decidePublicSpeech: () => ({ type: 'remain-silent' }),
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
+    });
+    Object.assign(service, { authority });
+    const created = await service.createMafiaSession(undefined, 5, 'expired-creation-key');
+    if (created.isErr()) throw new Error('Expected a durable session.');
+
+    now = new Date(now.valueOf() + 16 * 60 * 1000);
+    await expect(authority.expireInactiveSessions()).resolves.toEqual({ value: undefined });
+
+    await expect(
+      service.createMafiaSession(
+        `withai_guest=${service.signGuestId(created.value.holderId)}`,
+        6,
+        'expired-creation-key',
+      ),
+    ).resolves.toEqual({
+      error: { type: 'session-not-found', sessionId: created.value.projection.sessionId },
+    });
+    redis.disconnect();
+  });
+
   it('recovers an expired phase when its timer was missed before a snapshot is read', async () => {
     jest.useFakeTimers({ now: new Date('2026-08-27T17:11:51.000Z') });
     const service = new GameSessionsService({
@@ -422,20 +456,26 @@ describe('GameSessionsService', () => {
     const events = await service.eventsFor(created.value.projection.sessionId, cookie, undefined);
     if (events.isErr()) throw new Error('Expected a durable SSE stream.');
     const subscription = events.value.subscribe();
+    await expect(
+      service.getProjection(created.value.projection.sessionId, cookie),
+    ).resolves.toMatchObject({
+      value: { sessionId: created.value.projection.sessionId },
+    });
     const state = service as unknown as {
       lifecycle: { cleanupExpiredSessions(): Promise<void> };
-      sessions: Map<string, { activeEventSubscribers: number }>;
+      eventSubscriberCounts: Map<string, number>;
+      sessions: Map<string, unknown>;
     };
 
     jest.setSystemTime(new Date('2026-09-11T00:15:01.000Z'));
     await state.lifecycle.cleanupExpiredSessions();
 
-    expect(state.sessions.get(created.value.projection.sessionId)?.activeEventSubscribers).toBe(1);
+    expect(state.eventSubscriberCounts.get(created.value.projection.sessionId)).toBe(1);
     expect(state.sessions.has(created.value.projection.sessionId)).toBe(true);
 
     subscription.unsubscribe();
 
-    expect(state.sessions.get(created.value.projection.sessionId)?.activeEventSubscribers).toBe(0);
+    expect(state.eventSubscriberCounts.has(created.value.projection.sessionId)).toBe(false);
     redis.disconnect();
   });
 

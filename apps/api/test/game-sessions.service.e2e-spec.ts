@@ -404,6 +404,41 @@ describe('GameSessionsService', () => {
     expect(write).not.toHaveBeenCalled();
   });
 
+  it('keeps a durable SSE session alive during local idle cleanup', async () => {
+    jest.useFakeTimers({ now: new Date('2026-09-11T00:00:00.000Z') });
+    const redis = new RedisMock();
+    const authority = new RedisGameSessionAuthority(redis);
+    const service = new GameSessionsService({
+      decidePublicSpeech: () => ({ type: 'remain-silent' }),
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
+    });
+    Object.assign(service, { authority });
+    const created = await service.createMafiaSession(undefined, 5, undefined);
+    if (created.isErr()) throw new Error('Expected a durable session.');
+    const cookie = `withai_guest=${service.signGuestId(created.value.holderId)}`;
+    const events = await service.eventsFor(created.value.projection.sessionId, cookie, undefined);
+    if (events.isErr()) throw new Error('Expected a durable SSE stream.');
+    const subscription = events.value.subscribe();
+    const state = service as unknown as {
+      lifecycle: { cleanupExpiredSessions(): Promise<void> };
+      sessions: Map<string, { activeEventSubscribers: number }>;
+    };
+
+    jest.setSystemTime(new Date('2026-09-11T00:15:01.000Z'));
+    await state.lifecycle.cleanupExpiredSessions();
+
+    expect(state.sessions.get(created.value.projection.sessionId)?.activeEventSubscribers).toBe(1);
+    expect(state.sessions.has(created.value.projection.sessionId)).toBe(true);
+
+    subscription.unsubscribe();
+
+    expect(state.sessions.get(created.value.projection.sessionId)?.activeEventSubscribers).toBe(0);
+    redis.disconnect();
+  });
+
   it('retains a durable phase timer after a request hydrates the session', async () => {
     let now = new Date('2026-08-27T17:11:51.000Z');
     type TestTimer = {

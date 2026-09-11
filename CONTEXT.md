@@ -43,7 +43,7 @@ A Game Session whose Phase is completed. Its Human Player may read its outcome a
 _Avoid_: Archived game, finished room
 
 **Abandoned Game Session**:
-An in-progress Game Session whose Reconnect Lease has expired. It cannot be reconnected to or receive further actions.
+An in-progress Game Session whose Reconnect Lease has expired. It cannot be reconnected to or receive further actions, and it does not prevent its Human Player from creating a new Game Session.
 _Avoid_: Timed-out session, disconnected session
 
 **Expired Game Session**:

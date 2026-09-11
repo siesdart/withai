@@ -594,7 +594,7 @@ export class RedisGameSessionAuthority {
            redis.call('PEXPIRE', KEYS[8], ARGV[6])
            redis.call('PEXPIRE', KEYS[9], ARGV[6])
            redis.call('ZREM', KEYS[5], ARGV[7])
-           if redis.call('GET', KEYS[10]) == ARGV[8] then redis.call('DEL', KEYS[10]) end
+           if redis.call('GET', KEYS[10]) == ARGV[7] then redis.call('DEL', KEYS[10]) end
            return 1
          end
          local removed = redis.call('ZREM', KEYS[3], ARGV[1])

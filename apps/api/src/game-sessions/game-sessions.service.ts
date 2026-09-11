@@ -435,6 +435,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         return err<Observable<MafiaGameSessionProjectionEntity>, GameSessionError>(snapshot.error);
       return ok<Observable<MafiaGameSessionProjectionEntity>, GameSessionError>(
         defer(() => {
+          session.value.activeEventSubscribers += 1;
           // A current projection is a complete snapshot. Starting from its
           // event version ensures the stream never follows it with older
           // projections from a reconnect cursor.
@@ -461,6 +462,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
           ).pipe(
             takeWhile((projection) => projection.public.phase !== 'completed', true),
             finalize(() => {
+              session.value.activeEventSubscribers -= 1;
               void this.releaseReconnectLeaseWithRetry(
                 authority,
                 sessionId,

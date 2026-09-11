@@ -180,7 +180,16 @@ describe('RedisGameSessionAuthority', () => {
     );
     if (projection.isErr()) throw new Error('Expected a Human Player projection.');
 
-    await authority.save(snapshot, { eventId: 1, projection: projection.value });
+    await expect(
+      authority.create(
+        snapshot,
+        { eventId: 1, projection: projection.value },
+        snapshot.holderId,
+        '2026-09-11',
+        3,
+        undefined,
+      ),
+    ).resolves.toEqual({ value: { type: 'created' } });
     await authority.acquireReconnectLease(snapshot.sessionId, 'connection-1', snapshot.holderId);
     const leased = await authority.load(snapshot.sessionId);
     if (leased.isErr() || !leased.value?.reconnectLeaseDeadline)
@@ -198,6 +207,22 @@ describe('RedisGameSessionAuthority', () => {
     await expect(authority.load(snapshot.sessionId)).resolves.toMatchObject({
       value: { status: 'abandoned' },
     });
+    const replacement = createSnapshot('late-finalizer-replacement');
+    const replacementProjection = createMafiaSession(replacement.sessionId).projectionFor(
+      replacement.humanParticipantId,
+      1,
+    );
+    if (replacementProjection.isErr()) throw new Error('Expected a Human Player projection.');
+    await expect(
+      authority.create(
+        replacement,
+        { eventId: 1, projection: replacementProjection.value },
+        replacement.holderId,
+        '2026-09-11',
+        3,
+        undefined,
+      ),
+    ).resolves.toEqual({ value: { type: 'created' } });
     await expect(
       authority.acquireReconnectLease(snapshot.sessionId, 'connection-2', snapshot.holderId),
     ).resolves.toEqual({ value: false });

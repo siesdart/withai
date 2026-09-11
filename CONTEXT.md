@@ -47,7 +47,7 @@ An in-progress Game Session whose Reconnect Lease has expired. It cannot be reco
 _Avoid_: Timed-out session, disconnected session
 
 **Reconnect Lease**:
-The Human Player's right to restore an interrupted live subscription, valid only until the most recent successful subscription heartbeat plus the reconnect grace duration. An expired Reconnect Lease abandons the in-progress Game Session and cannot be renewed.
+The Human Player's right to restore an interrupted live subscription, valid only until the latest expiry among successful live-subscription heartbeats plus the reconnect grace duration. An expired Reconnect Lease abandons the in-progress Game Session and cannot be renewed. When a Human Player has concurrent subscriptions, an older heartbeat must not shorten the lease established by a newer heartbeat.
 _Avoid_: Connection timeout, session lock
 
 **Game Module**:

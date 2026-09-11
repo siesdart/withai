@@ -587,6 +587,12 @@ export class RedisGameSessionAuthority {
            end
            redis.call('DEL', KEYS[5])
          elseif string.sub(lifecycle or '', 1, 6) == 'lease:' then
+           redis.call('ZREMRANGEBYSCORE', KEYS[4], '-inf', ARGV[4])
+           local newestLease = redis.call('ZREVRANGE', KEYS[4], 0, 0, 'WITHSCORES')
+           if newestLease[2] then
+             lifecycle = 'lease:' .. newestLease[2] .. '|' .. newestLease[2]
+             redis.call('SET', KEYS[5], lifecycle, 'PX', ARGV[7])
+           end
            local leaseDeadline = tonumber(string.match(lifecycle, '^lease:(%d+)|'))
            if not leaseDeadline or leaseDeadline <= tonumber(ARGV[4]) then
              redis.call('DEL', KEYS[4])
@@ -604,7 +610,8 @@ export class RedisGameSessionAuthority {
          end
          redis.call('ZADD', KEYS[4], ARGV[1], ARGV[2])
          redis.call('PEXPIRE', KEYS[4], ARGV[3])
-         redis.call('SET', KEYS[5], 'lease:' .. ARGV[1] .. '|' .. ARGV[1], 'PX', ARGV[7])
+         local newestLease = redis.call('ZREVRANGE', KEYS[4], 0, 0, 'WITHSCORES')
+         redis.call('SET', KEYS[5], 'lease:' .. newestLease[2] .. '|' .. newestLease[2], 'PX', ARGV[7])
          return 1`,
         10,
         this.snapshotKey(sessionId),

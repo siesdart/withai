@@ -81,6 +81,49 @@ describe('GameSessionsService', () => {
     redis.disconnect();
   });
 
+  it('unwinds a failed pending-action save before retrying it', async () => {
+    jest.useFakeTimers({ now: new Date('2026-09-11T00:00:00.000Z') });
+    const redis = new RedisMock();
+    const authority = new RedisGameSessionAuthority(redis);
+    const agentDecisions = {
+      decidePublicSpeech: () => ({ type: 'remain-silent' as const }),
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
+    };
+    const firstService = new GameSessionsService(agentDecisions);
+    Object.assign(firstService, { authority });
+    const created = await firstService.createMafiaSession(undefined, 5, 'pending-save-failure-key');
+    if (created.isErr()) throw new Error('Expected a durable session.');
+    const stored = await authority.load(created.value.projection.sessionId);
+    if (stored.isErr() || !stored.value) throw new Error('Expected an authoritative snapshot.');
+    await authority.saveSnapshot({ ...stored.value, agentActionsPending: true });
+
+    const restartedService = new GameSessionsService(agentDecisions);
+    Object.assign(restartedService, { authority });
+    const save = jest
+      .spyOn(authority, 'save')
+      .mockImplementationOnce(() =>
+        errAsync({ type: 'authority-unavailable', cause: 'write failed' }),
+      );
+    const cookie = `withai_guest=${restartedService.signGuestId(created.value.holderId)}`;
+
+    await expect(
+      restartedService.getProjection(created.value.projection.sessionId, cookie),
+    ).resolves.toMatchObject({ error: { type: 'durability-unavailable' } });
+    expect(save).toHaveBeenCalledTimes(1);
+
+    await jest.advanceTimersByTimeAsync(1001);
+    await expect(authority.load(created.value.projection.sessionId)).resolves.toMatchObject({
+      value: { agentActionsPending: false },
+    });
+
+    firstService.onModuleDestroy();
+    restartedService.onModuleDestroy();
+    redis.disconnect();
+  });
+
   it('retains a pending Agent Mafia Night Chat reply after request hydration', async () => {
     jest.useFakeTimers();
     const redis = new RedisMock();

@@ -164,6 +164,38 @@ describe('RedisGameSessionAuthority', () => {
     });
   });
 
+  it('keeps the latest Reconnect Lease when an older heartbeat arrives late', async () => {
+    const redis = new RedisMock();
+    redisClients.push(redis);
+    const prefix = 'withai:out-of-order-reconnect-leases';
+    const newerNow = new Date('2026-09-11T00:00:10.000Z');
+    const olderNow = new Date('2026-09-11T00:00:00.000Z');
+    const newerReplica = new RedisGameSessionAuthority(redis, prefix, () => newerNow);
+    const olderReplica = new RedisGameSessionAuthority(redis, prefix, () => olderNow);
+    const snapshot = createSnapshot('out-of-order-lease-session', olderNow.toISOString());
+    const projection = createMafiaSession(snapshot.sessionId).projectionFor(
+      snapshot.humanParticipantId,
+      1,
+    );
+    if (projection.isErr()) throw new Error('Expected a Human Player projection.');
+
+    await newerReplica.save(snapshot, { eventId: 1, projection: projection.value });
+    await newerReplica.acquireReconnectLease(
+      snapshot.sessionId,
+      'newer-connection',
+      snapshot.holderId,
+    );
+    await olderReplica.acquireReconnectLease(
+      snapshot.sessionId,
+      'older-connection',
+      snapshot.holderId,
+    );
+
+    await expect(olderReplica.load(snapshot.sessionId)).resolves.toMatchObject({
+      value: { reconnectLeaseDeadline: new Date(newerNow.valueOf() + 60_000).toISOString() },
+    });
+  });
+
   it('abandons instead of beginning grace when a late finalizer releases an expired Reconnect Lease', async () => {
     let now = new Date('2026-09-11T00:00:00.000Z');
     const redis = new RedisMock();

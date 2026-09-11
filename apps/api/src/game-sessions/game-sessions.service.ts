@@ -1048,7 +1048,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     const timer = this.clock.setTimeout(() => {
       this.agentActionRetryTimers.delete(sessionId);
       void (async () => {
-        const hydrated = await this.hydrateAuthoritativeSession(sessionId);
+        const hydrated = await this.hydrateAuthoritativeSession(sessionId, false, false);
         if (hydrated.isErr()) {
           this.retryAgentActions(sessionId, attempt + 1);
           return;
@@ -1056,8 +1056,11 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         const session = this.sessions.get(sessionId);
         if (!session) return;
         if (session.agentActionsPending) {
-          this.retryAgentActions(sessionId, attempt + 1);
-          return;
+          const actions = await this.submitAndCommitAgentActions(session);
+          if (actions.isErr()) {
+            this.retryAgentActions(sessionId, attempt + 1);
+            return;
+          }
         }
         this.agentActions.resumeScheduledTasks(session);
         this.lifecycle.schedulePhaseTransition(session);
@@ -1319,23 +1322,33 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
   private async hydrateAuthoritativeSession(
     sessionId: string,
     mutationLocked = false,
+    processPendingAgentActions = true,
   ): Promise<Result<void, GameSessionError>> {
-    if (mutationLocked) return this.hydrateAuthoritativeSessionUnlocked(sessionId);
+    if (mutationLocked)
+      return this.hydrateAuthoritativeSessionUnlocked(sessionId, processPendingAgentActions);
     return this.withSessionMutation(sessionId, () =>
-      this.hydrateAuthoritativeSessionUnlocked(sessionId),
+      this.hydrateAuthoritativeSessionUnlocked(sessionId, processPendingAgentActions),
     );
   }
 
   private async hydrateAuthoritativeSessionUnlocked(
     sessionId: string,
+    processPendingAgentActions = true,
   ): Promise<Result<void, GameSessionError>> {
     const hydrated = await this.durability.hydrate(sessionId);
     if (hydrated.isErr()) return hydrated;
     const session = this.sessions.get(sessionId);
     if (session) {
-      if (session.status === 'in-progress' && session.agentActionsPending) {
+      if (
+        processPendingAgentActions &&
+        session.status === 'in-progress' &&
+        session.agentActionsPending
+      ) {
         const actions = await this.submitAndCommitAgentActions(session, true);
-        if (actions.isErr()) this.retryAgentActions(sessionId);
+        if (actions.isErr()) {
+          this.retryAgentActions(sessionId);
+          return err({ type: 'durability-unavailable' });
+        }
       }
       if (session.status === 'in-progress') {
         if (session.scheduledAgentMafiaChatReplies.length > 0)
@@ -1349,7 +1362,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
   private hydrateAfterAgentSaveFailure(sessionId: string, hydrationLocked: boolean) {
     return hydrationLocked
-      ? this.hydrateAuthoritativeSessionUnlocked(sessionId)
-      : this.hydrateAuthoritativeSession(sessionId);
+      ? this.hydrateAuthoritativeSessionUnlocked(sessionId, false)
+      : this.hydrateAuthoritativeSession(sessionId, false, false);
   }
 }

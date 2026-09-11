@@ -330,6 +330,34 @@ export class RedisGameSessionAuthority {
            local deadline = tonumber(string.match(lifecycle or '', '^[^:]+:(%d+)|'))
            return deadline and deadline <= tonumber(ARGV[10])
          end
+         local function hasExpiredIdleActivity(sessionId)
+           local lastActivityAt = redis.call('GET', ARGV[15] .. ':last-activity:' .. sessionId)
+           return lastActivityAt and lastActivityAt <= ARGV[17]
+         end
+         local function expireIdleSession(sessionId)
+           if not hasExpiredIdleActivity(sessionId) then return false end
+           local reconnectLeasesKey = ARGV[15] .. ':reconnect-leases:' .. sessionId
+           redis.call('ZREMRANGEBYSCORE', reconnectLeasesKey, '-inf', ARGV[10])
+           if redis.call('ZCARD', reconnectLeasesKey) > 0 then return false end
+           local snapshotKey = ARGV[15] .. ':snapshots:' .. sessionId
+           local eventsKey = ARGV[15] .. ':events:' .. sessionId
+           local versionKey = ARGV[15] .. ':snapshot-versions:' .. sessionId
+           local lastActivityKey = ARGV[15] .. ':last-activity:' .. sessionId
+           local phaseDeadlineKey = ARGV[15] .. ':phase-deadlines:' .. sessionId
+           local statusKey = ARGV[15] .. ':statuses:' .. sessionId
+           local lifecycleKey = ARGV[15] .. ':lifecycles:' .. sessionId
+           redis.call('DEL', snapshotKey)
+           redis.call('DEL', eventsKey)
+           redis.call('DEL', versionKey)
+           redis.call('DEL', reconnectLeasesKey)
+           redis.call('DEL', statusKey)
+           redis.call('DEL', lastActivityKey)
+           redis.call('DEL', phaseDeadlineKey)
+           redis.call('DEL', lifecycleKey)
+           redis.call('ZREM', KEYS[6], sessionId)
+           if redis.call('GET', KEYS[10]) == sessionId then redis.call('DEL', KEYS[10]) end
+           return true
+         end
          local function abandonExpiredSession(sessionId)
            if not hasExpiredLifecycle(sessionId) then return end
            local snapshotKey = ARGV[15] .. ':snapshots:' .. sessionId
@@ -363,7 +391,9 @@ export class RedisGameSessionAuthority {
            if existing then
              local separator = string.find(existing, string.char(10))
              local existingSessionId = separator and string.sub(existing, separator + 1)
-             if not existingSessionId or isUnavailable(existingSessionId) then
+             if not existingSessionId
+               or isUnavailable(existingSessionId)
+               or expireIdleSession(existingSessionId) then
                if existingSessionId then
                  abandonExpiredSession(existingSessionId)
                  redis.call('ZREM', KEYS[6], existingSessionId)
@@ -377,7 +407,7 @@ export class RedisGameSessionAuthority {
          end
          local activeSessionId = redis.call('GET', KEYS[10])
          if activeSessionId then
-           if isUnavailable(activeSessionId) then
+           if isUnavailable(activeSessionId) or expireIdleSession(activeSessionId) then
              abandonExpiredSession(activeSessionId)
              redis.call('ZREM', KEYS[6], activeSessionId)
              if redis.call('GET', KEYS[10]) == activeSessionId then redis.call('DEL', KEYS[10]) end
@@ -435,6 +465,7 @@ export class RedisGameSessionAuthority {
         snapshot.phaseDeadline,
         this.keyPrefix,
         abandonedSessionTtlMs,
+        new Date(this.now().valueOf() - inProgressIdleTtlMs).toISOString(),
       ),
       (cause): DurableSessionError => ({ type: 'authority-unavailable', cause }),
     ).andThen((value) => {

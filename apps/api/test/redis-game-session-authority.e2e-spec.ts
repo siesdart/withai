@@ -742,6 +742,83 @@ describe('RedisGameSessionAuthority', () => {
     });
   });
 
+  it('replaces an idle active session during creation before the periodic sweep runs', async () => {
+    const redis = new RedisMock();
+    redisClients.push(redis);
+    let now = new Date('2026-09-05T00:00:00.000Z');
+    const authority = new RedisGameSessionAuthority(
+      redis,
+      'withai:idle-active-create-test',
+      () => now,
+    );
+    const stale = createSnapshot('idle-active-session', now.toISOString());
+    const staleProjection = createMafiaSession('idle-active-session').projectionFor(
+      'participant-1',
+      1,
+    );
+    if (staleProjection.isErr()) throw new Error('Expected a Human Player projection.');
+    await authority.save(stale, { eventId: 1, projection: staleProjection.value });
+    now = new Date(now.valueOf() + 15 * 60 * 1000 + 1);
+
+    const replacement = createSnapshot('idle-active-replacement', now.toISOString());
+    const replacementProjection = createMafiaSession('idle-active-replacement').projectionFor(
+      'participant-1',
+      1,
+    );
+    if (replacementProjection.isErr()) throw new Error('Expected a Human Player projection.');
+    await expect(
+      authority.create(
+        replacement,
+        { eventId: 1, projection: replacementProjection.value },
+        'holder-1',
+        '2026-09-05',
+        3,
+        { key: 'idle-active-replacement-key', fingerprint: '5' },
+      ),
+    ).resolves.toEqual({ value: { type: 'created' } });
+    await expect(authority.load('idle-active-session')).resolves.toEqual({ value: undefined });
+  });
+
+  it('keeps an idle active session during creation when its reconnect lease is valid', async () => {
+    const redis = new RedisMock();
+    redisClients.push(redis);
+    let now = new Date('2026-09-05T00:00:00.000Z');
+    const authority = new RedisGameSessionAuthority(
+      redis,
+      'withai:idle-leased-active-create-test',
+      () => now,
+    );
+    const active = createSnapshot('idle-leased-active-session', now.toISOString());
+    const activeProjection = createMafiaSession('idle-leased-active-session').projectionFor(
+      'participant-1',
+      1,
+    );
+    if (activeProjection.isErr()) throw new Error('Expected a Human Player projection.');
+    await authority.save(active, { eventId: 1, projection: activeProjection.value });
+    now = new Date(now.valueOf() + 15 * 60 * 1000 - 30_000);
+    await authority.acquireReconnectLease('idle-leased-active-session', 'connection-1', 'holder-1');
+    now = new Date(now.valueOf() + 30_001);
+
+    const replacement = createSnapshot('idle-leased-active-replacement', now.toISOString());
+    const replacementProjection = createMafiaSession(
+      'idle-leased-active-replacement',
+    ).projectionFor('participant-1', 1);
+    if (replacementProjection.isErr()) throw new Error('Expected a Human Player projection.');
+    await expect(
+      authority.create(
+        replacement,
+        { eventId: 1, projection: replacementProjection.value },
+        'holder-1',
+        '2026-09-05',
+        3,
+        { key: 'idle-leased-active-replacement-key', fingerprint: '5' },
+      ),
+    ).resolves.toEqual({ value: { type: 'active-session', sessionId: active.sessionId } });
+    await expect(authority.load(active.sessionId)).resolves.toMatchObject({
+      value: { sessionId: active.sessionId },
+    });
+  });
+
   it('rejects a phase-deadline claim once authoritative state has changed', async () => {
     const redis = new RedisMock();
     redisClients.push(redis);

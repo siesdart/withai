@@ -26,7 +26,7 @@ type LifecyclePersistence = {
     session: StoredGameSessionEntity,
     projection: MafiaGameSessionProjectionEntity,
   ): Promise<Result<boolean, GameSessionError>>;
-  hydrate(sessionId: string): Promise<Result<void, GameSessionError>>;
+  hydrate(sessionId: string, mutationLocked?: boolean): Promise<Result<void, GameSessionError>>;
   snapshotFor(
     session: StoredGameSessionEntity,
     projection: MafiaGameSessionProjectionEntity,
@@ -41,7 +41,10 @@ type LifecyclePhaseOperations = {
   publishProjection(
     session: StoredGameSessionEntity,
   ): Result<MafiaGameSessionProjectionEntity, GameSessionError>;
-  submitAgentActions(session: StoredGameSessionEntity): Promise<Result<void, GameSessionError>>;
+  submitAgentActions(
+    session: StoredGameSessionEntity,
+    hydrationLocked?: boolean,
+  ): Promise<Result<void, GameSessionError>>;
   retryAgentActions(sessionId: string): void;
   retryMafiaChatReplies(sessionId: string): void;
   retryPhaseTransition(sessionId: string): void;
@@ -167,10 +170,14 @@ export class GameSessionLifecycle {
 
   async recoverExpiredPhaseDurably(
     session: StoredGameSessionEntity,
+    hydrationLocked = false,
   ): Promise<Result<void, GameSessionError>> {
     if (session.status !== 'in-progress') return ok(undefined);
     if (this.runtime.agentActions.hasDueScheduledTasks(session)) {
-      const drained = await this.runtime.agentActions.drainDueScheduledTasks(session);
+      const drained = await this.runtime.agentActions.drainDueScheduledTasks(
+        session,
+        hydrationLocked,
+      );
       if (drained.isErr()) return drained;
     }
     const current = this.runtime.state.sessions.get(session.gameSession.snapshot().sessionId);
@@ -197,10 +204,11 @@ export class GameSessionLifecycle {
     if (!saved.value) {
       const hydrated = await this.runtime.persistence.hydrate(
         current.gameSession.snapshot().sessionId,
+        hydrationLocked,
       );
       return hydrated.isErr() ? err(hydrated.error) : ok(undefined);
     }
-    const actions = await this.runtime.phaseOperations.submitAgentActions(current);
+    const actions = await this.runtime.phaseOperations.submitAgentActions(current, hydrationLocked);
     if (actions.isErr()) {
       this.runtime.phaseOperations.retryAgentActions(projection.value.sessionId);
       return actions;

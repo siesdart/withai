@@ -301,25 +301,38 @@ describe('GameSessionAgentOrchestrator', () => {
   it('drains overdue public speeches by due time and snapshot order', async () => {
     const session = createSession();
     const committedContents: string[] = [];
-    const orchestrator = new GameSessionAgentOrchestrator(
-      new SequencedMafiaTargetGateway(),
-      async () => ok(new MafiaGameSessionProjectionEntity()),
-      async (_stale, mutate) => {
+    const heldMutationLocks: boolean[] = [];
+    const commitAgentMutation = jest.fn(
+      async (
+        _stale: StoredGameSessionEntity,
+        mutate: (current: StoredGameSessionEntity) => boolean,
+        _schedulePhaseTransition?: boolean,
+        hydrationLocked?: boolean,
+      ) => {
         const next = session.scheduledAgentPublicSpeeches[0];
         if (next) committedContents.push(next.content);
+        heldMutationLocks.push(hydrationLocked ?? false);
         mutate(session);
         return ok(undefined);
       },
+    );
+    const orchestrator = new GameSessionAgentOrchestrator(
+      new SequencedMafiaTargetGateway(),
+      async () => ok(new MafiaGameSessionProjectionEntity()),
+      commitAgentMutation,
     );
     session.scheduledAgentPublicSpeeches = [
       { participantId: 'participant-2', content: 'first tie', dueAt: '2026-08-28T00:00:00.000Z' },
       { participantId: 'participant-3', content: 'second tie', dueAt: '2026-08-28T00:00:00.000Z' },
     ];
 
-    await expect(orchestrator.drainDueScheduledTasks(session)).resolves.toEqual(ok(undefined));
+    await expect(orchestrator.drainDueScheduledTasks(session, true)).resolves.toEqual(
+      ok(undefined),
+    );
 
     expect(committedContents).toEqual(['first tie', 'second tie']);
     expect(session.scheduledAgentPublicSpeeches).toEqual([]);
+    expect(heldMutationLocks).toEqual([true, true]);
   });
 
   it('applies an overdue public speech at its scheduled time', async () => {

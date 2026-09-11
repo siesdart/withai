@@ -92,6 +92,7 @@ describe('RedisGameSessionAuthority', () => {
       authority.releaseReconnectLeaseAndBeginGrace(
         'session-1',
         'connection-1',
+        'holder-1',
         reconnectGraceDeadline,
       ),
     ).resolves.toEqual({ value: true });
@@ -161,6 +162,45 @@ describe('RedisGameSessionAuthority', () => {
     await expect(authority.load('lease-session')).resolves.toMatchObject({
       value: { status: 'abandoned' },
     });
+  });
+
+  it('abandons instead of beginning grace when a late finalizer releases an expired Reconnect Lease', async () => {
+    let now = new Date('2026-09-11T00:00:00.000Z');
+    const redis = new RedisMock();
+    redisClients.push(redis);
+    const authority = new RedisGameSessionAuthority(
+      redis,
+      'withai:late-reconnect-finalizer',
+      () => now,
+    );
+    const snapshot = createSnapshot('late-finalizer-session', now.toISOString());
+    const projection = createMafiaSession('late-finalizer-session').projectionFor(
+      'participant-1',
+      1,
+    );
+    if (projection.isErr()) throw new Error('Expected a Human Player projection.');
+
+    await authority.save(snapshot, { eventId: 1, projection: projection.value });
+    await authority.acquireReconnectLease(snapshot.sessionId, 'connection-1', snapshot.holderId);
+    const leased = await authority.load(snapshot.sessionId);
+    if (leased.isErr() || !leased.value?.reconnectLeaseDeadline)
+      throw new Error('Expected an active Reconnect Lease.');
+
+    now = new Date(Date.parse(leased.value.reconnectLeaseDeadline) + 1);
+    await expect(
+      authority.releaseReconnectLeaseAndBeginGrace(
+        snapshot.sessionId,
+        'connection-1',
+        snapshot.holderId,
+        now.toISOString(),
+      ),
+    ).resolves.toEqual({ value: true });
+    await expect(authority.load(snapshot.sessionId)).resolves.toMatchObject({
+      value: { status: 'abandoned' },
+    });
+    await expect(
+      authority.acquireReconnectLease(snapshot.sessionId, 'connection-2', snapshot.holderId),
+    ).resolves.toEqual({ value: false });
   });
 
   it('enforces a Guest Play Allowance atomically for a UTC day', async () => {
@@ -429,6 +469,7 @@ describe('RedisGameSessionAuthority', () => {
     await authority.releaseReconnectLeaseAndBeginGrace(
       'abandoned-session',
       'connection-1',
+      'holder-1',
       expiredDeadline,
     );
     await expect(
@@ -458,6 +499,7 @@ describe('RedisGameSessionAuthority', () => {
     await authority.releaseReconnectLeaseAndBeginGrace(
       'expired-reconnect-session',
       'connection-1',
+      'holder-1',
       '2020-01-01T00:00:00.000Z',
     );
 
@@ -486,6 +528,7 @@ describe('RedisGameSessionAuthority', () => {
     await authority.releaseReconnectLeaseAndBeginGrace(
       'expired-grace-write-session',
       'connection-1',
+      'holder-1',
       '2020-01-01T00:00:00.000Z',
     );
 

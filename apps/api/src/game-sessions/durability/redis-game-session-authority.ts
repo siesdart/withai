@@ -573,31 +573,60 @@ export class RedisGameSessionAuthority {
   releaseReconnectLeaseAndBeginGrace(
     sessionId: string,
     connectionId: string,
+    holderId: string,
     reconnectGraceDeadline: string,
   ): ResultAsync<boolean, DurableSessionError> {
     return ResultAsync.fromPromise(
       this.redis.eval(
-        `local removed = redis.call('ZREM', KEYS[2], ARGV[1])
-         if removed == 0 then return 0 end
-         redis.call('ZREMRANGEBYSCORE', KEYS[2], '-inf', ARGV[2])
-         if redis.call('ZCARD', KEYS[2]) > 0 then return 0 end
-         if not redis.call('GET', KEYS[1]) then return 0 end
-         if redis.call('GET', KEYS[4]) ~= 'in-progress' then
-           redis.call('DEL', KEYS[3])
+        `local leaseDeadline = redis.call('ZSCORE', KEYS[3], ARGV[1])
+         if not leaseDeadline then return 0 end
+         if tonumber(leaseDeadline) <= tonumber(ARGV[2]) then
+           redis.call('ZREM', KEYS[3], ARGV[1])
+           redis.call('ZREMRANGEBYSCORE', KEYS[3], '-inf', ARGV[2])
+           if redis.call('ZCARD', KEYS[3]) > 0 then return 0 end
+           if not redis.call('GET', KEYS[1]) then return 0 end
+           if redis.call('GET', KEYS[7]) ~= 'in-progress' then return 0 end
+           redis.call('SET', KEYS[6], 'abandoned', 'PX', ARGV[6])
+           redis.call('SET', KEYS[7], 'abandoned', 'PX', ARGV[6])
+           redis.call('PEXPIRE', KEYS[1], ARGV[6])
+           redis.call('PEXPIRE', KEYS[2], ARGV[6])
+           redis.call('PEXPIRE', KEYS[4], ARGV[6])
+           redis.call('PEXPIRE', KEYS[8], ARGV[6])
+           redis.call('PEXPIRE', KEYS[9], ARGV[6])
+           redis.call('ZREM', KEYS[5], ARGV[7])
+           if redis.call('GET', KEYS[10]) == ARGV[8] then redis.call('DEL', KEYS[10]) end
            return 1
          end
-         redis.call('SET', KEYS[3], 'grace:' .. ARGV[5] .. '|' .. ARGV[3], 'PX', ARGV[4])
+         local removed = redis.call('ZREM', KEYS[3], ARGV[1])
+         if removed == 0 then return 0 end
+         redis.call('ZREMRANGEBYSCORE', KEYS[3], '-inf', ARGV[2])
+         if redis.call('ZCARD', KEYS[3]) > 0 then return 0 end
+         if not redis.call('GET', KEYS[1]) then return 0 end
+         if redis.call('GET', KEYS[7]) ~= 'in-progress' then
+           redis.call('DEL', KEYS[6])
+           return 1
+         end
+         redis.call('SET', KEYS[6], 'grace:' .. ARGV[5] .. '|' .. ARGV[3], 'PX', ARGV[4])
          return 1`,
-        4,
+        10,
         this.snapshotKey(sessionId),
+        this.snapshotVersionKey(sessionId),
         this.reconnectLeasesKey(sessionId),
+        this.eventsKey(sessionId),
+        this.activeSessionsKey(),
         this.lifecycleKey(sessionId),
         this.statusKey(sessionId),
+        this.lastActivityKey(sessionId),
+        this.phaseDeadlineKey(sessionId),
+        this.holderActiveSessionKey(holderId),
         connectionId,
         this.now().valueOf(),
         reconnectGraceDeadline,
         sessionTtlMs,
         Date.parse(reconnectGraceDeadline),
+        abandonedSessionTtlMs,
+        sessionId,
+        holderId,
       ),
       (cause): DurableSessionError => ({ type: 'authority-unavailable', cause }),
     ).map((started) => started === 1);

@@ -35,7 +35,7 @@ type CommitAgentMutation = (
 
 type DueScheduledTask = {
   dueAt: string;
-  commit(): Promise<Result<void, GameSessionError>>;
+  commit(hydrationLocked: boolean): Promise<Result<void, GameSessionError>>;
 };
 
 export class GameSessionAgentOrchestrator {
@@ -72,6 +72,7 @@ export class GameSessionAgentOrchestrator {
 
   async drainDueScheduledTasks(
     session: StoredGameSessionEntity,
+    hydrationLocked = false,
   ): Promise<Result<void, GameSessionError>> {
     if (session.status !== 'in-progress') return ok(undefined);
     const sessionId = session.gameSession.snapshot().sessionId;
@@ -81,7 +82,7 @@ export class GameSessionAgentOrchestrator {
         this.dueScheduledTasks(session, this.clock.now().valueOf()),
         (task) => task.dueAt,
       );
-      const result = await this.consumeDueScheduledTasks(dueTasks);
+      const result = await this.consumeDueScheduledTasks(dueTasks, hydrationLocked);
       return result;
     } finally {
       this.drainingSessionIds.delete(sessionId);
@@ -360,7 +361,8 @@ export class GameSessionAgentOrchestrator {
       filter((speech) => dayjs(speech.dueAt).valueOf() <= now),
       map((speech): DueScheduledTask => ({
         dueAt: speech.dueAt,
-        commit: () => this.commitPublicSpeech(session, speech, false),
+        commit: (hydrationLocked) =>
+          this.commitPublicSpeech(session, speech, false, hydrationLocked),
       })),
     );
     const finalDefence = session.scheduledAgentFinalDefence;
@@ -369,7 +371,8 @@ export class GameSessionAgentOrchestrator {
         ? [
             {
               dueAt: finalDefence.dueAt,
-              commit: () => this.commitFinalDefence(session, finalDefence, false),
+              commit: (hydrationLocked: boolean) =>
+                this.commitFinalDefence(session, finalDefence, false, hydrationLocked),
             },
           ]
         : [];
@@ -379,7 +382,8 @@ export class GameSessionAgentOrchestrator {
         ? [
             {
               dueAt: fallbackAt,
-              commit: () => this.commitMafiaTargetFallback(session, fallbackAt, false),
+              commit: (hydrationLocked: boolean) =>
+                this.commitMafiaTargetFallback(session, fallbackAt, false, hydrationLocked),
             },
           ]
         : [];
@@ -388,7 +392,7 @@ export class GameSessionAgentOrchestrator {
       filter((reply) => dayjs(reply.dueAt).valueOf() <= now),
       map((reply): DueScheduledTask => ({
         dueAt: reply.dueAt,
-        commit: () => this.commitMafiaChatReply(session, reply, false),
+        commit: (hydrationLocked) => this.commitMafiaChatReply(session, reply, hydrationLocked),
       })),
     );
     return [...publicSpeeches, ...finalDefenceTask, ...fallbackTask, ...mafiaChatReplies];
@@ -400,12 +404,13 @@ export class GameSessionAgentOrchestrator {
 
   private async consumeDueScheduledTasks(
     dueTasks: DueScheduledTask[],
+    hydrationLocked: boolean,
   ): Promise<Result<void, GameSessionError>> {
     const [task, ...remaining] = dueTasks;
     if (!task) return ok(undefined);
-    const committed = await task.commit();
+    const committed = await task.commit(hydrationLocked);
     if (committed.isErr()) return committed;
-    return this.consumeDueScheduledTasks(remaining);
+    return this.consumeDueScheduledTasks(remaining, hydrationLocked);
   }
 
   private async consumeMafiaChatReplies(
@@ -424,6 +429,7 @@ export class GameSessionAgentOrchestrator {
     session: StoredGameSessionEntity,
     scheduled: ScheduledAgentPublicSpeech,
     schedulePhaseTransition = true,
+    hydrationLocked = false,
   ) {
     const scheduledKey = scheduledAgentPublicSpeechKey(scheduled);
     return this.commitAgentMutation(
@@ -449,6 +455,7 @@ export class GameSessionAgentOrchestrator {
           .isOk();
       },
       schedulePhaseTransition,
+      hydrationLocked,
     );
   }
 
@@ -456,6 +463,7 @@ export class GameSessionAgentOrchestrator {
     session: StoredGameSessionEntity,
     scheduled: ScheduledAgentFinalDefence,
     schedulePhaseTransition = true,
+    hydrationLocked = false,
   ) {
     return this.commitAgentMutation(
       session,
@@ -476,6 +484,7 @@ export class GameSessionAgentOrchestrator {
           .isOk();
       },
       schedulePhaseTransition,
+      hydrationLocked,
     );
   }
 
@@ -513,6 +522,7 @@ export class GameSessionAgentOrchestrator {
     session: StoredGameSessionEntity,
     fallbackAt: string,
     schedulePhaseTransition = true,
+    hydrationLocked = false,
   ) {
     return this.commitAgentMutation(
       session,
@@ -526,6 +536,7 @@ export class GameSessionAgentOrchestrator {
         return before !== JSON.stringify(current.gameSession.snapshot());
       },
       schedulePhaseTransition,
+      hydrationLocked,
     );
   }
 }

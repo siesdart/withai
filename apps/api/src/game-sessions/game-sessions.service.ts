@@ -367,7 +367,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
             return this.projectionFor(refreshedSession);
           }
         }
-        const recovery = await this.lifecycle.recoverExpiredPhaseDurably(session);
+        const recovery = await this.lifecycle.recoverExpiredPhaseDurably(session, mutationLocked);
         if (recovery.isErr()) return err(recovery.error);
         const recoveredSession = this.sessions.get(sessionId);
         if (!recoveredSession) return err({ type: 'session-not-found', sessionId });
@@ -465,6 +465,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
                 authority,
                 sessionId,
                 connectionId,
+                session.value.holderId,
                 this.now().add(gameSessionsConfig.reconnectGraceMs, 'millisecond').toISOString(),
               );
             }),
@@ -1183,7 +1184,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       this.retryScheduledAgentTasks(sessionId);
       return err({ type: 'durability-unavailable' });
     }
-    const published = await this.publishAgentProjection(session);
+    const published = await this.publishAgentProjection(session, hydrationLocked);
     if (published.isOk()) {
       if (schedulePhaseTransition) this.lifecycle.schedulePhaseTransition(session);
       return ok(undefined);
@@ -1205,12 +1206,14 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     authority: RedisGameSessionAuthority,
     sessionId: string,
     connectionId: string,
+    holderId: string,
     reconnectGraceDeadline: string,
     attempt = 0,
   ): Promise<void> {
     const released = await authority.releaseReconnectLeaseAndBeginGrace(
       sessionId,
       connectionId,
+      holderId,
       reconnectGraceDeadline,
     );
     if (!released.isErr() || attempt >= 2) return;
@@ -1219,6 +1222,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       authority,
       sessionId,
       connectionId,
+      holderId,
       reconnectGraceDeadline,
       attempt + 1,
     );

@@ -45,6 +45,7 @@ import {
   lookupIdempotency,
   recordIdempotency,
 } from './idempotency/idempotency-ledger';
+import { KeyedRetryScheduler } from './keyed-retry-scheduler';
 
 export type { GameSessionError } from './game-session-error';
 
@@ -75,10 +76,10 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
   private readonly activeSessionIdsByHolder = new Map<string, string>();
   private readonly idempotencyKeys = new Map<string, IdempotencyRecord<string>>();
   private readonly sessionMutationTails = new Map<string, Promise<void>>();
-  private readonly agentActionRetryTimers = new Map<string, NodeJS.Timeout>();
-  private readonly phaseTransitionRetryTimers = new Map<string, NodeJS.Timeout>();
-  private readonly scheduledAgentRetryTimers = new Map<string, NodeJS.Timeout>();
-  private readonly mafiaChatReplyRetryTimers = new Map<string, NodeJS.Timeout>();
+  private readonly agentActionRetries: KeyedRetryScheduler;
+  private readonly phaseTransitionRetries: KeyedRetryScheduler;
+  private readonly scheduledAgentRetries: KeyedRetryScheduler;
+  private readonly mafiaChatReplyRetries: KeyedRetryScheduler;
   private readonly eventSubscriberCounts = new Map<string, number>();
   private readonly guestCookies = createGuestCookieSigner(
     gameSessionsConfig.guestCookieName,
@@ -94,6 +95,10 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     @Inject(agentDecisionGateway) agentDecisions: AgentDecisionGateway,
     @Inject(gameSessionClock) private readonly clock: GameSessionClock = nativeGameSessionClock,
   ) {
+    this.agentActionRetries = new KeyedRetryScheduler(this.clock);
+    this.phaseTransitionRetries = new KeyedRetryScheduler(this.clock);
+    this.scheduledAgentRetries = new KeyedRetryScheduler(this.clock);
+    this.mafiaChatReplyRetries = new KeyedRetryScheduler(this.clock);
     this.mafiaModule = new MafiaGameModule(undefined, undefined, () => this.clock.now());
     this.agentActions = new GameSessionAgentOrchestrator(
       agentDecisions,
@@ -106,11 +111,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       () => this.authority,
       this.clock,
       this.sessions,
-      (session) => {
-        if (session.phaseTimer) this.clock.clearTimeout(session.phaseTimer);
-        if (session.reconnectGraceTimer) this.clock.clearTimeout(session.reconnectGraceTimer);
-        this.agentActions.clearTimers(session);
-      },
+      this.disposeSession.bind(this),
     );
     this.lifecycle = new GameSessionLifecycle({
       state: {
@@ -137,6 +138,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       },
       clock: this.clock,
       agentActions: this.agentActions,
+      disposeSession: this.disposeSession.bind(this),
       now: this.now.bind(this),
       utcDay: this.utcDay.bind(this),
     });
@@ -158,14 +160,10 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     if (this.cleanupTimer) {
       this.clock.clearInterval(this.cleanupTimer);
     }
-    for (const timer of this.agentActionRetryTimers.values()) this.clock.clearTimeout(timer);
-    this.agentActionRetryTimers.clear();
-    for (const timer of this.phaseTransitionRetryTimers.values()) this.clock.clearTimeout(timer);
-    this.phaseTransitionRetryTimers.clear();
-    for (const timer of this.scheduledAgentRetryTimers.values()) this.clock.clearTimeout(timer);
-    this.scheduledAgentRetryTimers.clear();
-    for (const timer of this.mafiaChatReplyRetryTimers.values()) this.clock.clearTimeout(timer);
-    this.mafiaChatReplyRetryTimers.clear();
+    this.agentActionRetries.clearAll();
+    this.phaseTransitionRetries.clearAll();
+    this.scheduledAgentRetries.clearAll();
+    this.mafiaChatReplyRetries.clearAll();
     void this.authority?.close();
   }
 
@@ -1042,32 +1040,35 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     return err({ type: 'durability-unavailable' });
   }
 
-  private retryAgentActions(sessionId: string, attempt = 0) {
-    if (this.agentActionRetryTimers.has(sessionId)) return;
-    const delayMs = Math.min(1000 * 2 ** attempt, 30_000);
-    const timer = this.clock.setTimeout(() => {
-      this.agentActionRetryTimers.delete(sessionId);
-      void (async () => {
-        const hydrated = await this.hydrateAuthoritativeSession(sessionId, false, false);
-        if (hydrated.isErr()) {
-          this.retryAgentActions(sessionId, attempt + 1);
-          return;
-        }
-        const session = this.sessions.get(sessionId);
-        if (!session) return;
-        if (session.agentActionsPending) {
-          const actions = await this.submitAndCommitAgentActions(session);
-          if (actions.isErr()) {
-            this.retryAgentActions(sessionId, attempt + 1);
-            return;
-          }
-        }
-        this.agentActions.resumeScheduledTasks(session);
-        this.lifecycle.schedulePhaseTransition(session);
-      })();
-    }, delayMs);
-    this.agentActionRetryTimers.set(sessionId, timer);
-    timer.unref?.();
+  private disposeSession(session: StoredGameSessionEntity) {
+    if (session.phaseTimer) this.clock.clearTimeout(session.phaseTimer);
+    if (session.reconnectGraceTimer) this.clock.clearTimeout(session.reconnectGraceTimer);
+    session.phaseTimer = undefined;
+    session.reconnectGraceTimer = undefined;
+    session.reconnectGraceDeadline = undefined;
+    this.agentActions.clearTimers(session);
+
+    const sessionId = session.gameSession.snapshot().sessionId;
+    this.agentActionRetries.clear(sessionId);
+    this.phaseTransitionRetries.clear(sessionId);
+    this.scheduledAgentRetries.clear(sessionId);
+    this.mafiaChatReplyRetries.clear(sessionId);
+  }
+
+  private retryAgentActions(sessionId: string) {
+    this.agentActionRetries.retry(sessionId, async () => {
+      const hydrated = await this.hydrateAuthoritativeSession(sessionId, false, false);
+      if (hydrated.isErr()) return true;
+      const session = this.sessions.get(sessionId);
+      if (!session) return false;
+      if (session.agentActionsPending) {
+        const actions = await this.submitAndCommitAgentActions(session);
+        if (actions.isErr()) return true;
+      }
+      this.agentActions.resumeScheduledTasks(session);
+      this.lifecycle.schedulePhaseTransition(session);
+      return false;
+    });
   }
 
   private async deliverMafiaChatReplies(
@@ -1079,51 +1080,33 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     this.retryMafiaChatReplies(session.gameSession.snapshot().sessionId);
   }
 
-  private retryMafiaChatReplies(sessionId: string, attempt = 0) {
-    if (this.mafiaChatReplyRetryTimers.has(sessionId)) return;
-    const delayMs = Math.min(1000 * 2 ** attempt, 30_000);
-    const timer = this.clock.setTimeout(() => {
-      this.mafiaChatReplyRetryTimers.delete(sessionId);
-      void (async () => {
-        const hydrated = await this.hydrateAuthoritativeSession(sessionId);
-        if (hydrated.isErr()) {
-          this.retryMafiaChatReplies(sessionId, attempt + 1);
-          return;
-        }
-        const session = this.sessions.get(sessionId);
-        if (!session || session.scheduledAgentMafiaChatReplies.length === 0) return;
-        await this.deliverMafiaChatReplies(session);
-      })();
-    }, delayMs);
-    this.mafiaChatReplyRetryTimers.set(sessionId, timer);
-    timer.unref?.();
+  private retryMafiaChatReplies(sessionId: string) {
+    this.mafiaChatReplyRetries.retry(sessionId, async () => {
+      const hydrated = await this.hydrateAuthoritativeSession(sessionId);
+      if (hydrated.isErr()) return true;
+      const session = this.sessions.get(sessionId);
+      if (!session || session.scheduledAgentMafiaChatReplies.length === 0) return false;
+      await this.deliverMafiaChatReplies(session);
+      return false;
+    });
   }
 
-  private retryPhaseTransition(sessionId: string, attempt = 0) {
-    if (this.phaseTransitionRetryTimers.has(sessionId)) return;
-    const delayMs = Math.min(1000 * 2 ** attempt, 30_000);
-    const timer = this.clock.setTimeout(() => {
-      this.phaseTransitionRetryTimers.delete(sessionId);
-      void (async () => {
-        const hydrated = await this.hydrateAuthoritativeSession(sessionId);
-        if (hydrated.isErr()) {
-          this.retryPhaseTransition(sessionId, attempt + 1);
-          return;
-        }
-        const session = this.sessions.get(sessionId);
-        if (!session || session.status !== 'in-progress') return;
-        this.lifecycle.schedulePhaseTransition(session);
-      })();
-    }, delayMs);
-    this.phaseTransitionRetryTimers.set(sessionId, timer);
-    timer.unref?.();
+  private retryPhaseTransition(sessionId: string) {
+    this.phaseTransitionRetries.retry(sessionId, async () => {
+      const hydrated = await this.hydrateAuthoritativeSession(sessionId);
+      if (hydrated.isErr()) return true;
+      const session = this.sessions.get(sessionId);
+      if (!session || session.status !== 'in-progress') return false;
+      this.lifecycle.schedulePhaseTransition(session);
+      return false;
+    });
   }
 
   private retryPhaseTransitionAfterClaimLease(sessionId: string) {
-    if (this.phaseTransitionRetryTimers.has(sessionId)) return;
-    const timer = this.clock.setTimeout(() => {
-      this.phaseTransitionRetryTimers.delete(sessionId);
-      void (async () => {
+    this.phaseTransitionRetries.schedule(
+      sessionId,
+      gameSessionsConfig.phaseDeadlineClaimLeaseMs,
+      async () => {
         const hydrated = await this.hydrateAuthoritativeSession(sessionId);
         if (hydrated.isErr()) {
           this.retryPhaseTransition(sessionId);
@@ -1132,31 +1115,20 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         const session = this.sessions.get(sessionId);
         if (!session || session.status !== 'in-progress') return;
         this.lifecycle.schedulePhaseTransition(session);
-      })();
-    }, gameSessionsConfig.phaseDeadlineClaimLeaseMs);
-    this.phaseTransitionRetryTimers.set(sessionId, timer);
-    timer.unref?.();
+      },
+    );
   }
 
-  private retryScheduledAgentTasks(sessionId: string, attempt = 0) {
-    if (this.scheduledAgentRetryTimers.has(sessionId)) return;
-    const delayMs = Math.min(1000 * 2 ** attempt, 30_000);
-    const timer = this.clock.setTimeout(() => {
-      this.scheduledAgentRetryTimers.delete(sessionId);
-      void (async () => {
-        const hydrated = await this.hydrateAuthoritativeSession(sessionId);
-        if (hydrated.isErr()) {
-          this.retryScheduledAgentTasks(sessionId, attempt + 1);
-          return;
-        }
-        const session = this.sessions.get(sessionId);
-        if (!session || session.status !== 'in-progress') return;
-        this.agentActions.resumeScheduledTasks(session);
-        this.lifecycle.schedulePhaseTransition(session);
-      })();
-    }, delayMs);
-    this.scheduledAgentRetryTimers.set(sessionId, timer);
-    timer.unref?.();
+  private retryScheduledAgentTasks(sessionId: string) {
+    this.scheduledAgentRetries.retry(sessionId, async () => {
+      const hydrated = await this.hydrateAuthoritativeSession(sessionId);
+      if (hydrated.isErr()) return true;
+      const session = this.sessions.get(sessionId);
+      if (!session || session.status !== 'in-progress') return false;
+      this.agentActions.resumeScheduledTasks(session);
+      this.lifecycle.schedulePhaseTransition(session);
+      return false;
+    });
   }
 
   private async commitAgentMutation(

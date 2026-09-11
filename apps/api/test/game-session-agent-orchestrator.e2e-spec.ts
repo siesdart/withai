@@ -565,6 +565,7 @@ describe('GameSessionAgentOrchestrator', () => {
       },
       clock: nativeGameSessionClock,
       agentActions,
+      disposeSession: () => undefined,
       now: () => now,
       utcDay: () => now.format('YYYY-MM-DD'),
     });

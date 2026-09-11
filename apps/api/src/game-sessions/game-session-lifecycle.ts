@@ -58,6 +58,7 @@ type LifecycleRuntime = {
   phaseOperations: LifecyclePhaseOperations;
   clock: GameSessionClock;
   agentActions: GameSessionAgentOrchestrator;
+  disposeSession(session: StoredGameSessionEntity): void;
   now(): Dayjs;
   utcDay(): string;
 };
@@ -223,15 +224,14 @@ export class GameSessionLifecycle {
     remainingGraceMs = gameSessionsConfig.reconnectGraceMs,
   ) {
     if (session.status !== 'in-progress') return;
-    const { clock, agentActions } = this.runtime;
+    const { clock } = this.runtime;
     if (session.reconnectGraceTimer) clock.clearTimeout(session.reconnectGraceTimer);
     session.reconnectGraceDeadline = this.runtime.now().add(remainingGraceMs, 'millisecond');
     session.reconnectGraceTimer = clock.setTimeout(() => {
       if (this.hasEventSubscribers(session)) return;
       const abandon = () => {
         session.status = 'abandoned';
-        if (session.phaseTimer) clock.clearTimeout(session.phaseTimer);
-        agentActions.clearTimers(session);
+        this.runtime.disposeSession(session);
       };
       const authority = this.runtime.persistence.authorityFor();
       if (!authority) {
@@ -277,9 +277,7 @@ export class GameSessionLifecycle {
       )
         continue;
       session.events.complete();
-      if (session.phaseTimer) this.runtime.clock.clearTimeout(session.phaseTimer);
-      if (session.reconnectGraceTimer) this.runtime.clock.clearTimeout(session.reconnectGraceTimer);
-      this.runtime.agentActions.clearTimers(session);
+      this.runtime.disposeSession(session);
       this.runtime.state.sessions.delete(sessionId);
       this.runtime.state.eventSubscriberCounts.delete(sessionId);
       for (const [key, record] of this.runtime.state.idempotencyKeys)

@@ -14,7 +14,7 @@ export const mafiaAgentSnapshotGuide = [
   '- `personal.knownRoles`: own exact Role, others Allegiances. If you are Mafia, every Participant Allegiance is in. If you are Police, investigated Participant Allegiance is in. Despite its field name, an entry from a public reveal, Mafia teammate knowledge, or Police investigation is Allegiance-level knowledge: `Mafia` identifies the Mafia Role; `Citizen` identifies Citizen Allegiance only, leaving Police, Doctor, and Citizen Roles unresolved.',
   '',
   '## Timeline and records',
-  '- `timeline`: oldest → newest, authoritative visible history. `chat` = public claim, not proof. `mafia-chat` = private Mafia talk only when present; non-Mafia never see it.',
+  '- `timeline`: oldest → newest, authoritative visible history. `chat` = public claim, not proof. `mafia-chat` = private Mafia talk only when present; non-Mafia never see it. Focus primarily on the latest chats.',
   '- `record`: server public fact. `phase-changed`, `day-changed` = order. `allegiance-reveal` is an Allegiance result only: `Mafia` means the Mafia Role, while `Citizen` means one of Police, Doctor, or Citizen Roles; it never identifies an exact Citizen-side Role.',
   '- `nomination-resolved`: result, nominated target if unique leader, `leadingVoteCount`, per-target `voteCounts`. No voter identities. Unique leader nominates; no majority rule. Tie/no-nomination eliminates nobody.',
   '- `verdict-resolved`: nominee, result, `eliminateVotes`, `spareVotes`, `requiredEliminateVotes`. No voter identities. Eliminate only if `eliminateVotes >= requiredEliminateVotes`.',

@@ -92,7 +92,7 @@ const tanstackRunner: AgentDecisionRunner = async (
 ) => {
   return chat({
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    adapter: createOpenRouterText('@preset/gemini' as any, process.env.OPENROUTER_API_KEY!, {
+    adapter: createOpenRouterText('@preset/with-ai' as any, process.env.OPENROUTER_API_KEY!, {
       appTitle: 'WithAI',
     }),
     systemPrompts,

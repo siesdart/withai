@@ -100,6 +100,7 @@ const tanstackRunner: AgentDecisionRunner = async (
     systemPrompts,
     messages: [{ role: 'user', content: userPrompt }],
     outputSchema: toStandardJsonSchema(outputSchema),
+    stream: false,
     abortController,
   });
 };

@@ -1273,8 +1273,35 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     hydrationLocked = false,
   ): Promise<Result<void, GameSessionError>> {
     const sessionId = staleSession.gameSession.snapshot().sessionId;
+    if (!this.authority || hydrationLocked)
+      return this.commitAgentMutationUnlocked(
+        staleSession,
+        mutate,
+        attempt,
+        schedulePhaseTransition,
+        true,
+      );
+    return this.withSessionMutation(sessionId, () =>
+      this.commitAgentMutationUnlocked(
+        staleSession,
+        mutate,
+        attempt,
+        schedulePhaseTransition,
+        true,
+      ),
+    );
+  }
+
+  private async commitAgentMutationUnlocked(
+    staleSession: StoredGameSessionEntity,
+    mutate: (session: StoredGameSessionEntity) => boolean,
+    attempt: number,
+    schedulePhaseTransition: boolean,
+    hydrationLocked: boolean,
+  ): Promise<Result<void, GameSessionError>> {
+    const sessionId = staleSession.gameSession.snapshot().sessionId;
     if (this.authority) {
-      const hydrated = await this.hydrateAuthoritativeSession(sessionId, hydrationLocked);
+      const hydrated = await this.hydrateAuthoritativeSession(sessionId, true);
       if (hydrated.isErr()) {
         this.retryScheduledAgentTasks(sessionId);
         return err(hydrated.error);
@@ -1289,7 +1316,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         return ok(undefined);
       }
       if (attempt < 1)
-        return this.commitAgentMutation(
+        return this.commitAgentMutationUnlocked(
           staleSession,
           mutate,
           attempt + 1,
@@ -1309,7 +1336,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       this.retryScheduledAgentTasks(sessionId);
       return err(published.error);
     }
-    return this.commitAgentMutation(
+    return this.commitAgentMutationUnlocked(
       staleSession,
       mutate,
       attempt + 1,

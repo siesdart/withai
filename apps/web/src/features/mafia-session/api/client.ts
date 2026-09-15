@@ -105,9 +105,9 @@ export class MafiaGameSessionClient {
       idempotencyKey,
     );
   }
-  submitDetectiveInvestigation(targetParticipantId: string, idempotencyKey: string) {
+  submitPoliceInvestigation(targetParticipantId: string, idempotencyKey: string) {
     return MafiaGameSessionClient.#postProjection(
-      `${this.#sessionId}/actions/detective-investigation`,
+      `${this.#sessionId}/actions/police-investigation`,
       { targetParticipantId },
       idempotencyKey,
     );

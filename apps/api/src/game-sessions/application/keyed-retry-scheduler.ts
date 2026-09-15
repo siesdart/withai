@@ -1,4 +1,4 @@
-import type { GameSessionClock } from './game-session-clock';
+import type { GameSessionClock } from './game-session-clock.js';
 
 type RetryTask = () => Promise<boolean>;
 

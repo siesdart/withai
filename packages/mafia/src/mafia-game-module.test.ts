@@ -44,7 +44,7 @@ describe('MafiaGameModule', () => {
     if (initialProjection.isErr()) throw new Error('Expected an initial projection.');
     expect(initialProjection.value.public).toMatchObject({ dayNumber: 1, phase: 'night' });
     expect(initialProjection.value.personal.knownRoles).toEqual([
-      { participantId: 'participant-1', role: 'Detective' },
+      { participantId: 'participant-1', role: 'Police' },
     ]);
     const mafiaProjection = validSession.value.projectionFor('participant-5', 1);
     if (mafiaProjection.isErr()) throw new Error('Expected a Mafia projection.');
@@ -96,7 +96,7 @@ describe('MafiaGameModule', () => {
     const projection = session.projectionFor('participant-1', 2);
     if (projection.isErr()) throw new Error('Expected a projection.');
     expect(projection.value.personal.knownRoles).toEqual([
-      { participantId: 'participant-1', role: 'Detective' },
+      { participantId: 'participant-1', role: 'Police' },
       { participantId: 'participant-2', role: 'Doctor' },
       { participantId: 'participant-3', role: 'Citizen' },
       { participantId: 'participant-4', role: 'Citizen' },
@@ -170,6 +170,94 @@ describe('MafiaGameModule', () => {
     ]);
   });
 
+  it('shows an autonomous discussion limit record only to its intended Human Player', () => {
+    const session = new MafiaGameSession(
+      'session-private-discussion-limit',
+      [
+        { id: 'participant-1', name: 'You', alive: true, role: 'Mafia' },
+        { id: 'participant-2', name: 'Agent Mafia', alive: true, role: 'Mafia' },
+        { id: 'participant-3', name: 'Sora', alive: true, role: 'Citizen' },
+      ],
+      {
+        discussionDurationMs: 1,
+        nominationDurationMs: 1,
+        finalDefenceDurationMs: 1,
+        verdictDurationMs: 1,
+        nightDurationMs: 1,
+      },
+    );
+    session.advanceDayPhase(timeAt(0));
+    expect(session.recordAutonomousPublicSpeechLimitReached('participant-1')).toEqual({
+      value: undefined,
+    });
+
+    const humanProjection = session.projectionFor('participant-1', 1);
+    const agentProjection = session.projectionFor('participant-2', 1);
+    if (humanProjection.isErr() || agentProjection.isErr())
+      throw new Error('Expected projections.');
+
+    expect(humanProjection.value.timeline).toContainEqual({
+      id: 'personal-record-1',
+      type: 'personal-record',
+      recipientParticipantId: 'participant-1',
+      outcome: { type: 'autonomous-public-speech-limit-reached', dayNumber: 1 },
+    });
+    expect(agentProjection.value.timeline).not.toContainEqual(
+      expect.objectContaining({ type: 'personal-record' }),
+    );
+  });
+
+  it('gives each Agent only its authorized personal snapshot during private voting', () => {
+    const session = new MafiaGameSession(
+      'session-private-agent-context',
+      [
+        { id: 'participant-1', name: 'Police', alive: true, role: 'Police' },
+        { id: 'participant-2', name: 'Citizen', alive: true, role: 'Citizen' },
+        { id: 'participant-3', name: 'Mafia', alive: true, role: 'Mafia' },
+        { id: 'participant-4', name: 'Doctor', alive: true, role: 'Doctor' },
+        { id: 'participant-5', name: 'Other Citizen', alive: true, role: 'Citizen' },
+      ],
+      {
+        discussionDurationMs: 1,
+        nominationDurationMs: 1,
+        finalDefenceDurationMs: 1,
+        verdictDurationMs: 1,
+        nightDurationMs: 1,
+      },
+      () => new Date('2026-08-26T00:00:00.000Z'),
+    );
+
+    session.submitMafiaChat('participant-3', 'Private target discussion.', timeAt(0));
+    session.advanceDayPhase(timeAt(1));
+    session.advanceDayPhase(timeAt(2));
+    session.submitNomination('participant-1', 'participant-3', timeAt(2));
+    session.submitNomination('participant-2', 'participant-4', timeAt(2));
+    session.submitNomination('participant-3', 'participant-2', timeAt(2));
+
+    const citizenContext = session.agentSpeechContextFor('participant-2');
+    const mafiaContext = session.agentSpeechContextFor('participant-3');
+    if (citizenContext.isErr() || mafiaContext.isErr()) throw new Error('Expected Agent contexts.');
+
+    expect(citizenContext.value.personal).toEqual({
+      participantId: 'participant-2',
+      role: 'Citizen',
+      allegiance: 'Citizen',
+      vote: { phase: 'nomination', targetParticipantId: 'participant-4' },
+      nightAction: undefined,
+      knownRoles: [{ participantId: 'participant-2', role: 'Citizen' }],
+    });
+    expect(citizenContext.value.public.completedRecords).toEqual({
+      voteRecords: [],
+      nightActionRecords: [],
+    });
+    expect(citizenContext.value.timeline).not.toContainEqual(
+      expect.objectContaining({ type: 'mafia-chat' }),
+    );
+    expect(mafiaContext.value.timeline).toContainEqual(
+      expect.objectContaining({ type: 'mafia-chat' }),
+    );
+  });
+
   it('shares the last valid Mafia target and permits friendly fire', () => {
     const session = new MafiaGameSession(
       'session-shared-mafia-target',
@@ -211,7 +299,7 @@ describe('MafiaGameModule', () => {
     });
   });
 
-  it('allows a Detective to investigate only one participant per Night', () => {
+  it('allows a Police to investigate only one participant per Night', () => {
     vi.setSystemTime(timeAt(0));
     const gameModule = new MafiaGameModule(() => 0, {
       discussionDurationMs: 1,
@@ -221,24 +309,24 @@ describe('MafiaGameModule', () => {
       nightDurationMs: 1,
     });
     const sessionResult = gameModule.create({
-      sessionId: 'session-single-detective-investigation',
+      sessionId: 'session-single-police-investigation',
       participantCount: 5,
     });
     if (sessionResult.isErr()) throw new Error('Expected a valid Mafia Game Session.');
 
     const session = sessionResult.value;
     const now = new Date('2026-08-26T00:00:00.000Z');
-    expect(session.submitDetectiveInvestigation('participant-1', 'participant-5', now)).toEqual({
+    expect(session.submitPoliceInvestigation('participant-1', 'participant-5', now)).toEqual({
       value: undefined,
     });
-    expect(session.submitDetectiveInvestigation('participant-1', 'participant-2', now)).toEqual({
+    expect(session.submitPoliceInvestigation('participant-1', 'participant-2', now)).toEqual({
       error: { type: 'night-action-already-submitted', participantId: 'participant-1' },
     });
 
     const projection = session.projectionFor('participant-1', 2);
     if (projection.isErr()) throw new Error('Expected a projection.');
     expect(projection.value.personal.nightAction).toEqual({
-      type: 'detective-investigation',
+      type: 'police-investigation',
       targetParticipantId: 'participant-5',
     });
     expect(session.advanceDayPhase(new Date('2026-08-26T00:00:00.001Z'))).toEqual({
@@ -251,7 +339,7 @@ describe('MafiaGameModule', () => {
       value: { type: 'day-restarted', reason: 'no-nomination' },
     });
     expect(
-      session.submitDetectiveInvestigation(
+      session.submitPoliceInvestigation(
         'participant-1',
         'participant-2',
         new Date('2026-08-26T00:00:00.003Z'),
@@ -263,7 +351,7 @@ describe('MafiaGameModule', () => {
     expect(secondNightProjection.value.personal.knownRoles).toEqual([
       { participantId: 'participant-5', role: 'Mafia' },
       { participantId: 'participant-2', role: 'Citizen' },
-      { participantId: 'participant-1', role: 'Detective' },
+      { participantId: 'participant-1', role: 'Police' },
     ]);
   });
 
@@ -380,7 +468,7 @@ describe('MafiaGameModule', () => {
     }
     const projection = projectionResult.value;
 
-    expect(projection.personal.role).toBe('Detective');
+    expect(projection.personal.role).toBe('Police');
     expect(projection.public.participants).toHaveLength(5);
     expect(projection.public.participants).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ role: expect.anything() })]),
@@ -564,7 +652,7 @@ describe('MafiaGameModule', () => {
         }),
       ]),
     );
-    expect(JSON.stringify(projection.timeline)).not.toContain('Detective');
+    expect(JSON.stringify(projection.timeline)).not.toContain('Police');
   });
 
   it('resolves private Night actions with Doctor protection before beginning the next Day', () => {
@@ -602,7 +690,7 @@ describe('MafiaGameModule', () => {
     expect(nightProjection.value.public.phase).toBe('night');
 
     expect(
-      session.submitDetectiveInvestigation(
+      session.submitPoliceInvestigation(
         'participant-1',
         'participant-5',
         new Date('2026-08-26T00:00:04.000Z'),
@@ -644,13 +732,13 @@ describe('MafiaGameModule', () => {
 
     expect(projection.value.public).toMatchObject({ dayNumber: 2, phase: 'discussion' });
     expect(projection.value.personal.nightAction).toEqual({
-      type: 'detective-investigation',
+      type: 'police-investigation',
       targetParticipantId: 'participant-5',
     });
     expect(projection.value.public.participants).toEqual(
       expect.arrayContaining([expect.objectContaining({ id: 'participant-4', alive: true })]),
     );
-    expect(JSON.stringify(projection.value.timeline)).not.toContain('Detective');
+    expect(JSON.stringify(projection.value.timeline)).not.toContain('Police');
     expect(JSON.stringify(projection.value.timeline)).not.toContain('Doctor');
     expect(projection.value.public.completedRecords.nightActionRecords).toEqual([]);
 
@@ -678,21 +766,19 @@ describe('MafiaGameModule', () => {
         dayNumber: 1,
         mafiaTargetParticipantId: undefined,
         doctorActions: [{ participantId: 'participant-2', targetParticipantId: undefined }],
-        detectiveActions: [{ participantId: 'participant-1', targetParticipantId: undefined }],
+        policeActions: [{ participantId: 'participant-1', targetParticipantId: undefined }],
       },
       {
         id: 'night-action-record-2',
         dayNumber: 2,
         mafiaTargetParticipantId: 'participant-4',
         doctorActions: [{ participantId: 'participant-2', targetParticipantId: 'participant-4' }],
-        detectiveActions: [
-          { participantId: 'participant-1', targetParticipantId: 'participant-5' },
-        ],
+        policeActions: [{ participantId: 'participant-1', targetParticipantId: 'participant-5' }],
       },
     ]);
   });
 
-  it('eliminates an unprotected Mafia target when Detective and Doctor actions are missing', () => {
+  it('eliminates an unprotected Mafia target when Police and Doctor actions are missing', () => {
     const gameModule = new MafiaGameModule(() => 0, {
       discussionDurationMs: 1,
       nominationDurationMs: 1,
@@ -737,7 +823,7 @@ describe('MafiaGameModule', () => {
     expect(projection.value.personal.knownRoles).toEqual([
       { participantId: 'participant-3', role: 'Citizen' },
       { participantId: 'participant-4', role: 'Citizen' },
-      { participantId: 'participant-1', role: 'Detective' },
+      { participantId: 'participant-1', role: 'Police' },
     ]);
     expect(projection.value.timeline).toEqual(
       expect.arrayContaining([
@@ -769,7 +855,7 @@ describe('MafiaGameModule', () => {
       'allegiance-reveal',
     ]);
     expect(JSON.stringify(projection.value.timeline)).not.toContain('Doctor');
-    expect(JSON.stringify(projection.value.timeline)).not.toContain('Detective');
+    expect(JSON.stringify(projection.value.timeline)).not.toContain('Police');
 
     session.advanceDayPhase(new Date('2026-08-26T00:00:06.000Z'));
     for (const participantId of ['participant-1', 'participant-2', 'participant-4']) {
@@ -795,14 +881,14 @@ describe('MafiaGameModule', () => {
         dayNumber: 1,
         mafiaTargetParticipantId: undefined,
         doctorActions: [{ participantId: 'participant-2', targetParticipantId: undefined }],
-        detectiveActions: [{ participantId: 'participant-1', targetParticipantId: undefined }],
+        policeActions: [{ participantId: 'participant-1', targetParticipantId: undefined }],
       },
       {
         id: 'night-action-record-2',
         dayNumber: 2,
         mafiaTargetParticipantId: 'participant-4',
         doctorActions: [{ participantId: 'participant-2', targetParticipantId: undefined }],
-        detectiveActions: [{ participantId: 'participant-1', targetParticipantId: undefined }],
+        policeActions: [{ participantId: 'participant-1', targetParticipantId: undefined }],
       },
     ]);
   });

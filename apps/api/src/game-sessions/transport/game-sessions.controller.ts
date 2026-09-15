@@ -31,18 +31,21 @@ import type { Result } from 'neverthrow';
 import type { Subscription } from 'rxjs';
 import { match } from 'ts-pattern';
 
-import { retryAfterSeconds } from '../application/cooldown/cooldown';
-import { gameSessionsConfig } from '../application/game-sessions.config';
-import { type GameSessionError, GameSessionsService } from '../application/game-sessions.service';
-import { CreateDiscussionTimeAdjustmentDto } from './dto/create-discussion-time-adjustment.dto';
-import { CreateMafiaChatDto } from './dto/create-mafia-chat.dto';
-import { CreateMafiaSessionDto } from './dto/create-mafia-session.dto';
-import { CreateNominationDto } from './dto/create-nomination.dto';
-import { CreatePublicSpeechDto } from './dto/create-public-speech.dto';
-import { CreateVerdictDto } from './dto/create-verdict.dto';
-import { createGuestCookieSigner, guestCookieSecret } from './guest-cookie';
-import { OptionalIdempotencyKey, RequiredIdempotencyKey } from './idempotency-key.decorator';
-import { MafiaGameSessionProjectionEntity } from './mafia-game-session-projection.entity';
+import { retryAfterSeconds } from '../application/cooldown/cooldown.js';
+import { gameSessionsConfig } from '../application/game-sessions.config.js';
+import {
+  type GameSessionError,
+  GameSessionsService,
+} from '../application/game-sessions.service.js';
+import { CreateDiscussionTimeAdjustmentDto } from './dto/create-discussion-time-adjustment.dto.js';
+import { CreateMafiaChatDto } from './dto/create-mafia-chat.dto.js';
+import { CreateMafiaSessionDto } from './dto/create-mafia-session.dto.js';
+import { CreateNominationDto } from './dto/create-nomination.dto.js';
+import { CreatePublicSpeechDto } from './dto/create-public-speech.dto.js';
+import { CreateVerdictDto } from './dto/create-verdict.dto.js';
+import { createGuestCookieSigner, guestCookieSecret } from './guest-cookie.js';
+import { OptionalIdempotencyKey, RequiredIdempotencyKey } from './idempotency-key.decorator.js';
+import { MafiaGameSessionProjectionEntity } from './mafia-game-session-projection.entity.js';
 
 @ApiTags('Game Sessions')
 @ApiServiceUnavailableResponse({
@@ -306,20 +309,20 @@ export class GameSessionsController {
     );
   }
 
-  @Post(':sessionId/actions/detective-investigation')
-  @ApiOperation({ summary: 'Submit the Human Player private Detective investigation' })
+  @Post(':sessionId/actions/police-investigation')
+  @ApiOperation({ summary: 'Submit the Human Player private Police investigation' })
   @ApiCookieAuth('withai_guest')
   @ApiBody({ type: CreateNominationDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ApiCreatedResponse({ type: MafiaGameSessionProjectionEntity })
-  async submitDetectiveInvestigation(
+  async submitPoliceInvestigation(
     @Param('sessionId') sessionId: string,
     @Body() body: CreateNominationDto,
     @Req() request: Request,
     @RequiredIdempotencyKey() idempotencyKey: string,
   ) {
     return this.resolveGameSessionResult(
-      this.gameSessionsService.submitDetectiveInvestigation(
+      this.gameSessionsService.submitPoliceInvestigation(
         sessionId,
         this.holderId(request.headers.cookie),
         body.targetParticipantId,

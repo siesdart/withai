@@ -26,14 +26,14 @@ describe('completedRecordDays', () => {
           dayNumber: 2,
           mafiaTargetParticipantId: 'participant-3',
           doctorActions: [],
-          detectiveActions: [],
+          policeActions: [],
         },
         {
           id: 'night-action-record-2',
           dayNumber: 3,
           mafiaTargetParticipantId: undefined,
           doctorActions: [],
-          detectiveActions: [],
+          policeActions: [],
         },
       ],
     };

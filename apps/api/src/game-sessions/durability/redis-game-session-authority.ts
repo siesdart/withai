@@ -5,21 +5,22 @@ import {
 } from '@repo/mafia';
 import type { MafiaGameProjection } from '@repo/mafia';
 import dayjs from 'dayjs';
-import utc from 'dayjs/plugin/utc';
-import Redis from 'ioredis';
+import utc from 'dayjs/plugin/utc.js';
+import { Redis } from 'ioredis';
 import { ResultAsync, err, ok, type Result } from 'neverthrow';
 import { filter, map } from 'remeda';
 import { match } from 'ts-pattern';
 import * as v from 'valibot';
 
-import type { GameSessionStatus } from '../application/game-session-status';
-import { gameSessionsConfig } from '../application/game-sessions.config';
+import type { AgentMind } from '../agents/agent-mind.js';
+import type { GameSessionStatus } from '../application/game-session-status.js';
+import { gameSessionsConfig } from '../application/game-sessions.config.js';
 import type {
   ScheduledAgentFinalDefence,
   ScheduledAgentMafiaChatReply,
   ScheduledAgentPublicSpeech,
-} from '../application/stored-game-session.entity';
-import { runRedisLuaCommand } from './redis-lua-command-runner';
+} from '../application/stored-game-session.entity.js';
+import { runRedisLuaCommand } from './redis-lua-command-runner.js';
 
 dayjs.extend(utc);
 
@@ -28,6 +29,7 @@ export type DurableSessionSnapshot = {
   holderId: string;
   humanParticipantId: string;
   gameSession: MafiaGameSessionSnapshot;
+  agentMinds?: Record<string, AgentMind>;
   nextEventId: number;
   phaseDeadline: string;
   lastActivityAt: string;
@@ -44,6 +46,9 @@ export type DurableSessionSnapshot = {
   scheduledAgentFinalDefence?: ScheduledAgentFinalDefence;
   scheduledAgentMafiaChatReplies?: ScheduledAgentMafiaChatReply[];
   scheduledMafiaTargetFallbackAt?: string;
+  autonomousPublicSpeechTurns?: number;
+  lastAutonomousPublicSpeechSnapshotKey?: string;
+  autonomousPublicSpeechLimitReachedDiscussionKey?: string;
   agentActionsPending?: boolean;
 };
 
@@ -85,12 +90,38 @@ const ScheduledAgentMafiaChatReplySchema = v.object({
   content: v.string(),
   dueAt: v.string(),
 });
+const AgentMemorySchema = v.object({
+  revision: v.number(),
+  allegianceEstimates: v.optional(
+    v.array(
+      v.object({
+        participantId: v.string(),
+        mafiaProbability: v.pipe(v.number(), v.minValue(0), v.maxValue(100)),
+        roleProbabilities: v.optional(
+          v.object({
+            policeProbability: v.pipe(v.number(), v.minValue(0), v.maxValue(100)),
+            doctorProbability: v.pipe(v.number(), v.minValue(0), v.maxValue(100)),
+          }),
+        ),
+        basis: v.string(),
+      }),
+    ),
+    [],
+  ),
+  strategy: v.optional(
+    v.string(),
+    'Use current evidence and allegiance estimates to make the next legal move.',
+  ),
+  lastSnapshotKey: v.optional(v.string()),
+});
+const AgentMindSchema = v.object({ persona: v.string(), memory: AgentMemorySchema });
 const DurableSessionSnapshotSchema: v.GenericSchema<unknown, DurableSessionSnapshot> = v.pipe(
   v.object({
     sessionId: v.string(),
     holderId: v.string(),
     humanParticipantId: v.string(),
     gameSession: MafiaGameSessionSnapshotSchema,
+    agentMinds: v.optional(v.record(v.string(), AgentMindSchema)),
     nextEventId: v.number(),
     phaseDeadline: v.string(),
     lastActivityAt: v.string(),
@@ -111,6 +142,9 @@ const DurableSessionSnapshotSchema: v.GenericSchema<unknown, DurableSessionSnaps
     scheduledAgentFinalDefence: v.optional(ScheduledAgentPublicSpeechSchema),
     scheduledAgentMafiaChatReplies: v.optional(v.array(ScheduledAgentMafiaChatReplySchema)),
     scheduledMafiaTargetFallbackAt: v.optional(v.string()),
+    autonomousPublicSpeechTurns: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0))),
+    lastAutonomousPublicSpeechSnapshotKey: v.optional(v.string()),
+    autonomousPublicSpeechLimitReachedDiscussionKey: v.optional(v.string()),
     agentActionsPending: v.optional(v.boolean()),
   }),
   v.transform((snapshot): DurableSessionSnapshot => ({

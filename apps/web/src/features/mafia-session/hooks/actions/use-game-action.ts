@@ -106,8 +106,8 @@ function submitGameAction(client: MafiaGameSessionClient, action: GameActionDraf
     .with({ type: 'doctor-protection' }, (draft) =>
       client.submitDoctorProtection(draft.targetParticipantId, draft.idempotencyKey),
     )
-    .with({ type: 'detective-investigation' }, (draft) =>
-      client.submitDetectiveInvestigation(draft.targetParticipantId, draft.idempotencyKey),
+    .with({ type: 'police-investigation' }, (draft) =>
+      client.submitPoliceInvestigation(draft.targetParticipantId, draft.idempotencyKey),
     )
     .exhaustive();
 }

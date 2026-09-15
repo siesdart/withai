@@ -1,48 +1,59 @@
-import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { MafiaGameSession, type MafiaAgentSpeechContext } from '@repo/mafia';
+import { MafiaGameSession, type MafiaAgentContext } from '@repo/mafia';
 import dayjs from 'dayjs';
 import RedisMock from 'ioredis-mock';
 import { err, ok } from 'neverthrow';
 import { ReplaySubject } from 'rxjs';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type {
   AgentDecisionGateway,
   AgentFinalDefence,
+  AgentPhaseActionDecision,
   AgentPublicSpeechDecision,
-} from '../../../src/game-sessions/agents/agent-decision.gateway';
-import { GameSessionAgentOrchestrator } from '../../../src/game-sessions/agents/game-session-agent-orchestrator';
-import { nativeGameSessionClock } from '../../../src/game-sessions/application/game-session-clock';
-import { GameSessionDurability } from '../../../src/game-sessions/application/game-session-durability';
-import { GameSessionLifecycle } from '../../../src/game-sessions/application/game-session-lifecycle';
-import { gameSessionsConfig } from '../../../src/game-sessions/application/game-sessions.config';
+} from '../../../src/game-sessions/agents/agent-decision.gateway.js';
+import { GameSessionAgentOrchestrator } from '../../../src/game-sessions/agents/game-session-agent-orchestrator.js';
+import { nativeGameSessionClock } from '../../../src/game-sessions/application/game-session-clock.js';
+import { GameSessionDurability } from '../../../src/game-sessions/application/game-session-durability.js';
+import { GameSessionLifecycle } from '../../../src/game-sessions/application/game-session-lifecycle.js';
+import { gameSessionsConfig } from '../../../src/game-sessions/application/game-sessions.config.js';
 import {
   type StoredGameSessionEntity,
   scheduledAgentPublicSpeechKey,
-} from '../../../src/game-sessions/application/stored-game-session.entity';
-import { RedisGameSessionAuthority } from '../../../src/game-sessions/durability/redis-game-session-authority';
-import { MafiaGameSessionProjectionEntity } from '../../../src/game-sessions/transport/mafia-game-session-projection.entity';
+} from '../../../src/game-sessions/application/stored-game-session.entity.js';
+import { RedisGameSessionAuthority } from '../../../src/game-sessions/durability/redis-game-session-authority.js';
+import { MafiaGameSessionProjectionEntity } from '../../../src/game-sessions/transport/mafia-game-session-projection.entity.js';
 
 class SequencedMafiaTargetGateway implements AgentDecisionGateway {
   private readonly targets = ['participant-3', 'participant-4', 'participant-5'];
   private targetIndex = 0;
 
-  decidePublicSpeech(_context: MafiaAgentSpeechContext): AgentPublicSpeechDecision {
+  decidePublicSpeech(_context: MafiaAgentContext): AgentPublicSpeechDecision {
     return { type: 'remain-silent' };
   }
 
-  decideFinalDefence(_context: MafiaAgentSpeechContext): AgentFinalDefence {
+  decideFinalDefence(_context: MafiaAgentContext): AgentFinalDefence {
     return { opening: 'opening', followUp: 'follow-up' };
   }
 
-  decideMafiaChatOpening(_context: MafiaAgentSpeechContext, targetName: string) {
+  decidePhaseAction(
+    _context: MafiaAgentContext,
+    _candidateParticipantIds: readonly string[],
+  ): AgentPhaseActionDecision | Promise<AgentPhaseActionDecision> {
+    return {
+      targetParticipantId: 'participant-3',
+      verdict: 'eliminate',
+    };
+  }
+
+  decideMafiaChatOpening(_context: MafiaAgentContext, targetName: string) {
     return `Opening target: ${targetName}`;
   }
 
-  decideMafiaChatReply(_context: MafiaAgentSpeechContext, targetName: string) {
+  decideMafiaChatReply(_context: MafiaAgentContext, targetName: string) {
     return `Reply target: ${targetName}`;
   }
 
-  selectMafiaTarget(_context: MafiaAgentSpeechContext) {
+  selectMafiaTarget(_context: MafiaAgentContext): string | undefined | Promise<string | undefined> {
     const target = this.targets[this.targetIndex];
     this.targetIndex += 1;
     return target;
@@ -56,9 +67,106 @@ class SequencedMafiaTargetGateway implements AgentDecisionGateway {
 class CountingPublicSpeechGateway extends SequencedMafiaTargetGateway {
   publicSpeechDecisionCount = 0;
 
-  override decidePublicSpeech(_context: MafiaAgentSpeechContext): AgentPublicSpeechDecision {
+  override decidePublicSpeech(_context: MafiaAgentContext): AgentPublicSpeechDecision {
     this.publicSpeechDecisionCount += 1;
-    return { type: 'speak', content: 'I need more evidence.', delayMs: 500 };
+    return { type: 'speak', content: 'I need more evidence.' };
+  }
+}
+
+class CountingVerdictGateway extends SequencedMafiaTargetGateway {
+  phaseActionDecisionCount = 0;
+
+  override decidePhaseAction(
+    context: MafiaAgentContext,
+    candidateParticipantIds: readonly string[],
+  ): AgentPhaseActionDecision | Promise<AgentPhaseActionDecision> {
+    this.phaseActionDecisionCount += 1;
+    return super.decidePhaseAction(context, candidateParticipantIds);
+  }
+}
+
+class SilentThenSpeakingGateway extends SequencedMafiaTargetGateway {
+  publicSpeechDecisionCount = 0;
+
+  override decidePublicSpeech(_context: MafiaAgentContext): AgentPublicSpeechDecision {
+    this.publicSpeechDecisionCount += 1;
+    return this.publicSpeechDecisionCount === 1
+      ? { type: 'remain-silent' }
+      : { type: 'speak', content: 'I can add one point.' };
+  }
+}
+
+class NightActionGateway extends SequencedMafiaTargetGateway {
+  readonly mafiaOpeningRoles: string[] = [];
+  readonly phaseActionRoles: string[] = [];
+  readonly phaseActionCandidates = new Map<string, readonly string[]>();
+  readonly mafiaTargetRoles: string[] = [];
+
+  override decidePhaseAction(
+    context: MafiaAgentContext,
+    candidateParticipantIds: readonly string[],
+  ): AgentPhaseActionDecision | Promise<AgentPhaseActionDecision> {
+    this.phaseActionRoles.push(context.personal.role);
+    this.phaseActionCandidates.set(context.personal.role, candidateParticipantIds);
+    return {
+      targetParticipantId: candidateParticipantIds[0],
+    };
+  }
+
+  override selectMafiaTarget(context: MafiaAgentContext) {
+    this.mafiaTargetRoles.push(context.personal.role);
+    return context.public.participants[0]?.id;
+  }
+
+  override decideMafiaChatOpening(context: MafiaAgentContext, targetName: string) {
+    this.mafiaOpeningRoles.push(context.personal.role);
+    return super.decideMafiaChatOpening(context, targetName);
+  }
+}
+
+class DeferredDoctorNightActionGateway extends NightActionGateway {
+  private markDoctorActionStarted: (() => void) | undefined;
+  private resolveDoctorAction: (() => void) | undefined;
+  readonly doctorActionStarted = new Promise<void>((resolve) => {
+    this.markDoctorActionStarted = resolve;
+  });
+
+  override decidePhaseAction(
+    context: MafiaAgentContext,
+    candidateParticipantIds: readonly string[],
+  ): AgentPhaseActionDecision | Promise<AgentPhaseActionDecision> {
+    if (context.personal.role !== 'Doctor')
+      return super.decidePhaseAction(context, candidateParticipantIds);
+    this.markDoctorActionStarted?.();
+    return new Promise((resolve) => {
+      this.resolveDoctorAction = () =>
+        resolve({
+          targetParticipantId: candidateParticipantIds[0],
+        });
+    });
+  }
+
+  releaseDoctorAction() {
+    this.resolveDoctorAction?.();
+  }
+}
+
+class DeferredMafiaTargetGateway extends SequencedMafiaTargetGateway {
+  private markTargetSelectionStarted: (() => void) | undefined;
+  private resolveTargetSelection: ((targetParticipantId: string | undefined) => void) | undefined;
+  readonly targetSelectionStarted = new Promise<void>((resolve) => {
+    this.markTargetSelectionStarted = resolve;
+  });
+
+  override selectMafiaTarget(_context: MafiaAgentContext) {
+    this.markTargetSelectionStarted?.();
+    return new Promise<string | undefined>((resolve) => {
+      this.resolveTargetSelection = resolve;
+    });
+  }
+
+  releaseTargetSelection(targetParticipantId: string | undefined = 'participant-3') {
+    this.resolveTargetSelection?.(targetParticipantId);
   }
 }
 
@@ -82,6 +190,7 @@ const createSession = (): StoredGameSessionEntity => ({
       nightDurationMs: 1_000,
     },
   ),
+  agentMinds: {},
   events: new ReplaySubject<MafiaGameSessionProjectionEntity>(10),
   nextEventId: 0,
   nextPublicSpeechAt: undefined,
@@ -96,11 +205,15 @@ const createSession = (): StoredGameSessionEntity => ({
   phaseTimer: undefined,
   agentFinalDefenceTimer: undefined,
   publicSpeechAgentTimers: new Map(),
+  mafiaChatReplyTimers: new Map(),
   mafiaTargetFallbackTimer: undefined,
   scheduledAgentPublicSpeeches: [],
   scheduledAgentFinalDefence: undefined,
   scheduledAgentMafiaChatReplies: [],
   scheduledMafiaTargetFallbackAt: undefined,
+  autonomousPublicSpeechTurns: 0,
+  lastAutonomousPublicSpeechSnapshotKey: undefined,
+  autonomousPublicSpeechLimitReachedDiscussionKey: undefined,
   agentActionsPending: false,
   reconnectGraceTimer: undefined,
   reconnectGraceDeadline: undefined,
@@ -131,12 +244,34 @@ const createAgentOnlyMafiaSession = (): StoredGameSessionEntity => ({
   ),
 });
 
+const createNightActionSession = (): StoredGameSessionEntity => ({
+  ...createSession(),
+  humanParticipantId: 'participant-1',
+  gameSession: new MafiaGameSession(
+    'session-night-actions',
+    [
+      { id: 'participant-1', name: 'You', alive: true, role: 'Citizen' },
+      { id: 'participant-2', name: 'Agent Mafia', alive: true, role: 'Mafia' },
+      { id: 'participant-3', name: 'Agent Doctor', alive: true, role: 'Doctor' },
+      { id: 'participant-4', name: 'Agent Police', alive: true, role: 'Police' },
+      { id: 'participant-5', name: 'Agent Citizen', alive: true, role: 'Citizen' },
+    ],
+    {
+      discussionDurationMs: 1,
+      nominationDurationMs: 1,
+      finalDefenceDurationMs: 1,
+      verdictDurationMs: 1,
+      nightDurationMs: 1_000,
+    },
+  ),
+});
+
 describe('GameSessionAgentOrchestrator', () => {
   beforeEach(() => {
-    jest.useFakeTimers({ now: new Date('2026-08-28T00:00:00.000Z') });
+    vi.useFakeTimers({ now: new Date('2026-08-28T00:00:00.000Z') });
   });
   afterEach(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   it('commits Mafia Chat replies with the held mutation lock state', async () => {
@@ -149,7 +284,7 @@ describe('GameSessionAgentOrchestrator', () => {
         dueAt: '2026-08-28T00:00:00.000Z',
       },
     ];
-    const commitAgentMutation = jest.fn(
+    const commitAgentMutation = vi.fn(
       async (
         _stale: StoredGameSessionEntity,
         mutate: (current: StoredGameSessionEntity) => boolean,
@@ -160,7 +295,6 @@ describe('GameSessionAgentOrchestrator', () => {
     );
     const orchestrator = new GameSessionAgentOrchestrator(
       new SequencedMafiaTargetGateway(),
-      async () => ok(new MafiaGameSessionProjectionEntity()),
       commitAgentMutation,
     );
 
@@ -174,51 +308,32 @@ describe('GameSessionAgentOrchestrator', () => {
     const session = createSession();
     const orchestrator = new GameSessionAgentOrchestrator(
       new SequencedMafiaTargetGateway(),
-      async () => ok(new MafiaGameSessionProjectionEntity()),
       async (_stale, mutate) => {
         mutate(session);
         return ok(undefined);
       },
     );
 
-    orchestrator.submitDayActions(session);
+    await orchestrator.submitDayActions(session);
     session.gameSession.submitMafiaChat('participant-1', 'What about Hana?');
-    orchestrator.prepareMafiaChatReplies(session);
-    await orchestrator.publishMafiaChatReplies(session);
+    await orchestrator.prepareMafiaChatReplies(session);
+    orchestrator.resumeScheduledTasks(session);
     session.gameSession.submitMafiaChat('participant-1', 'I disagree.');
-    orchestrator.prepareMafiaChatReplies(session);
-    await orchestrator.publishMafiaChatReplies(session);
-    jest.runOnlyPendingTimers();
-
-    const projection = session.gameSession.projectionFor('participant-2', 1);
-    if (projection.isErr()) throw new Error('Expected an Agent Mafia projection.');
-
-    expect(projection.value.timeline).toEqual(
+    await orchestrator.prepareMafiaChatReplies(session);
+    orchestrator.resumeScheduledTasks(session);
+    expect(session.scheduledAgentMafiaChatReplies).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          type: 'mafia-chat',
-          message: expect.objectContaining({
-            participantId: 'participant-2',
-            content: 'Opening target: Sora',
-          }),
-        }),
-        expect.objectContaining({
-          type: 'mafia-chat',
-          message: expect.objectContaining({
-            participantId: 'participant-2',
-            content: 'Reply target: Sora',
-          }),
+          participantId: 'participant-2',
+          content: 'Reply target: Sora',
         }),
       ]),
     );
-    expect(projection.value.timeline).not.toEqual(
+    expect(session.scheduledAgentMafiaChatReplies).not.toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          type: 'mafia-chat',
-          message: expect.objectContaining({
-            participantId: 'participant-2',
-            content: 'Reply target: Hana',
-          }),
+          participantId: 'participant-2',
+          content: 'Reply target: Hana',
         }),
       ]),
     );
@@ -241,16 +356,15 @@ describe('GameSessionAgentOrchestrator', () => {
     });
   });
 
-  it('uses one Agent Mafia coordinator to choose the shared Night target', () => {
+  it('uses one Agent Mafia coordinator to choose the shared Night target', async () => {
     const session = createAgentOnlyMafiaSession();
     const decisions = new SequencedMafiaTargetGateway();
-    const orchestrator = new GameSessionAgentOrchestrator(
-      decisions,
-      async () => ok(new MafiaGameSessionProjectionEntity()),
-      async () => ok(undefined),
-    );
+    const orchestrator = new GameSessionAgentOrchestrator(decisions, async (_stale, mutate) => {
+      mutate(session);
+      return ok(undefined);
+    });
 
-    orchestrator.submitDayActions(session);
+    await orchestrator.submitDayActions(session);
 
     expect(decisions.selectedTargetCount()).toBe(1);
     for (const participantId of ['participant-2', 'participant-3']) {
@@ -263,45 +377,398 @@ describe('GameSessionAgentOrchestrator', () => {
     }
   });
 
-  it('does not re-invoke the Agent gateway when a scheduled public reply is cancelled', () => {
-    const session = createSession();
-    const decisions = new CountingPublicSpeechGateway();
+  it('commits an Agent Mafia target to the current session after rehydration', async () => {
+    const staleSession = createSession();
+    const currentSession = createSession();
     const orchestrator = new GameSessionAgentOrchestrator(
-      decisions,
-      async () => ok(new MafiaGameSessionProjectionEntity()),
-      async () => ok(undefined),
+      new SequencedMafiaTargetGateway(),
+      async (_stale, mutate) => {
+        mutate(currentSession);
+        return ok(undefined);
+      },
+      undefined,
+      () => currentSession,
     );
 
-    orchestrator.publishPublicSpeechReplies(session);
-    orchestrator.clearTimers(session);
-    jest.advanceTimersByTime(1_000);
+    await orchestrator.submitDayActions(staleSession);
 
-    expect(decisions.publicSpeechDecisionCount).toBe(4);
+    expect(currentSession.gameSession.snapshot().mafiaTargetParticipantId).toBe('participant-3');
   });
 
-  it('removes fired public-speech timer handles before committing', () => {
+  it('commits Agent Police and Doctor actions to the current session after rehydration', async () => {
+    const staleSession = createNightActionSession();
+    const currentSession = createNightActionSession();
+    const orchestrator = new GameSessionAgentOrchestrator(
+      new NightActionGateway(),
+      async (_stale, mutate) => {
+        mutate(currentSession);
+        return ok(undefined);
+      },
+      undefined,
+      () => currentSession,
+    );
+
+    await orchestrator.submitDayActions(staleSession);
+
+    const snapshot = currentSession.gameSession.snapshot();
+    expect(snapshot.doctorProtections).toContainEqual(['participant-3', 'participant-1']);
+    expect(snapshot.policeInvestigations).toContainEqual(['participant-4', 'participant-1']);
+  });
+
+  it('commits the fallback Agent Mafia target before resolving Night', async () => {
+    const session = createSession();
+    const decisions = new DeferredMafiaTargetGateway();
+    let persistedMafiaTargetParticipantId: string | undefined;
+    const orchestrator = new GameSessionAgentOrchestrator(decisions, async (_stale, mutate) => {
+      mutate(session);
+      persistedMafiaTargetParticipantId = session.gameSession.snapshot().mafiaTargetParticipantId;
+      return ok(undefined);
+    });
+    session.scheduledMafiaTargetFallbackAt = '2026-08-28T00:00:00.000Z';
+
+    const drained = orchestrator.drainDueScheduledTasks(session);
+    await decisions.targetSelectionStarted;
+    decisions.releaseTargetSelection();
+    await expect(drained).resolves.toEqual(ok(undefined));
+
+    expect(persistedMafiaTargetParticipantId).toBe('participant-3');
+  });
+
+  it('records an Agent nomination that returns after the nomination countdown', async () => {
+    const session = createSession();
+    const orchestrator = new GameSessionAgentOrchestrator(
+      new SequencedMafiaTargetGateway(),
+      async (_stale, mutate) => {
+        mutate(session);
+        return ok(undefined);
+      },
+    );
+    const nightEnd = new Date(Date.parse(session.gameSession.snapshot().phaseDeadline) + 1);
+    session.gameSession.advanceDayPhase(nightEnd);
+    const nominationStart = new Date(Date.parse(session.gameSession.snapshot().phaseDeadline) + 1);
+    session.gameSession.advanceDayPhase(nominationStart);
+    vi.setSystemTime(new Date(Date.parse(session.gameSession.snapshot().phaseDeadline) + 1_000));
+
+    await orchestrator.submitDayActions(session);
+
+    expect(session.gameSession.snapshot().nominations).toContainEqual([
+      'participant-2',
+      'participant-3',
+    ]);
+  });
+
+  it('commits an Agent nomination to the latest hydrated session', async () => {
+    const staleSession = createSession();
+    const currentSession = createSession();
+    const orchestrator = new GameSessionAgentOrchestrator(
+      new SequencedMafiaTargetGateway(),
+      async (_stale, mutate) => {
+        mutate(currentSession);
+        return ok(undefined);
+      },
+      undefined,
+      () => currentSession,
+    );
+    const nightEnd = new Date(Date.parse(staleSession.gameSession.snapshot().phaseDeadline) + 1);
+    staleSession.gameSession.advanceDayPhase(nightEnd);
+    const nominationStart = new Date(
+      Date.parse(staleSession.gameSession.snapshot().phaseDeadline) + 1,
+    );
+    staleSession.gameSession.advanceDayPhase(nominationStart);
+    currentSession.gameSession.advanceDayPhase(nightEnd);
+    currentSession.gameSession.advanceDayPhase(nominationStart);
+
+    await orchestrator.submitDayActions(staleSession);
+
+    expect(currentSession.gameSession.snapshot().nominations).toContainEqual([
+      'participant-2',
+      'participant-3',
+    ]);
+  });
+
+  it('records an Agent verdict that returns after the verdict countdown', async () => {
+    const session = createSession();
+    const orchestrator = new GameSessionAgentOrchestrator(
+      new SequencedMafiaTargetGateway(),
+      async (_stale, mutate) => {
+        mutate(session);
+        return ok(undefined);
+      },
+    );
+    const nightEnd = new Date(Date.parse(session.gameSession.snapshot().phaseDeadline) + 1);
+    session.gameSession.advanceDayPhase(nightEnd);
+    const nominationStart = new Date(Date.parse(session.gameSession.snapshot().phaseDeadline) + 1);
+    session.gameSession.advanceDayPhase(nominationStart);
+    const nominationEnd = new Date(Date.parse(session.gameSession.snapshot().phaseDeadline) + 1);
+    session.gameSession.submitNomination('participant-1', 'participant-3', nominationStart);
+    session.gameSession.submitNomination('participant-2', 'participant-3', nominationStart);
+    session.gameSession.advanceDayPhase(nominationEnd);
+    const verdictStart = new Date(Date.parse(session.gameSession.snapshot().phaseDeadline) + 1);
+    session.gameSession.advanceDayPhase(verdictStart);
+    vi.setSystemTime(new Date(Date.parse(session.gameSession.snapshot().phaseDeadline) + 1_000));
+
+    await orchestrator.submitDayActions(session);
+
+    expect(session.gameSession.snapshot().verdicts).toContainEqual(['participant-2', 'eliminate']);
+  });
+
+  it('coalesces concurrent verdict requests for the same phase', async () => {
+    const session = createSession();
+    for (const participantId of [
+      'participant-2',
+      'participant-3',
+      'participant-4',
+      'participant-5',
+    ]) {
+      session.agentMinds[participantId] = {
+        persona: `${participantId} is a test Agent.`,
+        memory: {
+          revision: 0,
+          allegianceEstimates: [],
+          strategy: 'Use current evidence and allegiance estimates to make the next legal move.',
+        },
+      };
+    }
+    const decisions = new CountingVerdictGateway();
+    const orchestrator = new GameSessionAgentOrchestrator(decisions, async (_stale, mutate) => {
+      mutate(session);
+      return ok(undefined);
+    });
+    const nightEnd = new Date(Date.parse(session.gameSession.snapshot().phaseDeadline) + 1);
+    session.gameSession.advanceDayPhase(nightEnd);
+    const nominationStart = new Date(Date.parse(session.gameSession.snapshot().phaseDeadline) + 1);
+    session.gameSession.advanceDayPhase(nominationStart);
+    const nominationEnd = new Date(Date.parse(session.gameSession.snapshot().phaseDeadline) + 1);
+    session.gameSession.submitNomination('participant-1', 'participant-3', nominationStart);
+    session.gameSession.submitNomination('participant-2', 'participant-3', nominationStart);
+    session.gameSession.advanceDayPhase(nominationEnd);
+    const verdictStart = new Date(Date.parse(session.gameSession.snapshot().phaseDeadline) + 1);
+    session.gameSession.advanceDayPhase(verdictStart);
+
+    await Promise.all([
+      orchestrator.submitDayActions(session),
+      orchestrator.submitDayActions(session),
+    ]);
+    await orchestrator.submitDayActions(session);
+
+    expect(decisions.phaseActionDecisionCount).toBe(4);
+  });
+
+  it('requests Night actions from Mafia, Doctor, and Police, but never a Citizen', async () => {
+    const session = createNightActionSession();
+    const decisions = new NightActionGateway();
+    const orchestrator = new GameSessionAgentOrchestrator(decisions, async (_stale, mutate) => {
+      mutate(session);
+      return ok(undefined);
+    });
+
+    await orchestrator.submitDayActions(session);
+
+    expect(decisions.mafiaTargetRoles).toEqual(['Mafia']);
+    expect(decisions.mafiaOpeningRoles).toEqual(['Mafia']);
+    expect(decisions.phaseActionRoles).toEqual(['Doctor', 'Police']);
+    expect(decisions.phaseActionCandidates.get('Doctor')).toContain('participant-3');
+    expect(decisions.phaseActionCandidates.get('Police')).not.toContain('participant-4');
+    for (const participantId of ['participant-2', 'participant-3', 'participant-4']) {
+      const projection = session.gameSession.projectionFor(participantId, 1);
+      if (projection.isErr()) throw new Error('Expected an actionable Agent projection.');
+      expect(projection.value.personal.nightAction).toBeDefined();
+    }
+    const citizenProjection = session.gameSession.projectionFor('participant-5', 1);
+    if (citizenProjection.isErr()) throw new Error('Expected an Agent Citizen projection.');
+    expect(citizenProjection.value.personal.nightAction).toBeUndefined();
+  });
+
+  it('does not re-request submitted Night actions when the Night entry is replayed', async () => {
+    const session = createNightActionSession();
+    const decisions = new NightActionGateway();
+    const orchestrator = new GameSessionAgentOrchestrator(decisions, async (_stale, mutate) => {
+      mutate(session);
+      return ok(undefined);
+    });
+
+    await Promise.all([
+      orchestrator.submitDayActions(session),
+      orchestrator.submitDayActions(session),
+    ]);
+    await orchestrator.submitDayActions(session);
+
+    expect(decisions.mafiaTargetRoles).toEqual(['Mafia']);
+    expect(decisions.phaseActionRoles).toEqual(['Doctor', 'Police']);
+  });
+
+  it('starts Mafia and Police requests even while the Doctor request is pending', async () => {
+    const session = createNightActionSession();
+    const decisions = new DeferredDoctorNightActionGateway();
+    const orchestrator = new GameSessionAgentOrchestrator(decisions, async () => ok(undefined));
+    const submission = orchestrator.submitDayActions(session);
+
+    await decisions.doctorActionStarted;
+    await Promise.resolve();
+    await Promise.resolve();
+    try {
+      expect(decisions.mafiaTargetRoles).toEqual(['Mafia']);
+      expect(decisions.phaseActionRoles).toEqual(['Police']);
+    } finally {
+      decisions.releaseDoctorAction();
+      await submission;
+    }
+  });
+
+  it('does not request public-speech decisions during Night', async () => {
+    const session = createSession();
+    const decisions = new CountingPublicSpeechGateway();
+    const orchestrator = new GameSessionAgentOrchestrator(decisions, async () => ok(undefined));
+
+    await orchestrator.publishPublicSpeechReplies(session);
+    expect(decisions.publicSpeechDecisionCount).toBe(0);
+  });
+
+  it('does not re-invoke the Agent gateway when a scheduled public reply is cancelled', async () => {
+    const session = createSession();
+    const decisions = new CountingPublicSpeechGateway();
+    const orchestrator = new GameSessionAgentOrchestrator(decisions, async () => ok(undefined));
+    while (session.gameSession.snapshot().phase !== 'discussion') {
+      session.gameSession.advanceDayPhase(
+        new Date(new Date(session.gameSession.snapshot().phaseDeadline).valueOf() + 1),
+      );
+    }
+
+    await orchestrator.publishPublicSpeechReplies(session);
+    orchestrator.clearTimers(session);
+    vi.advanceTimersByTime(1_000);
+
+    expect(decisions.publicSpeechDecisionCount).toBe(1);
+  });
+
+  it('lets every Agent reconsider only after the public snapshot changes', async () => {
+    const session = createSession();
+    const decisions = new CountingPublicSpeechGateway();
+    const orchestrator = new GameSessionAgentOrchestrator(decisions, async () => ok(undefined));
+
+    while (session.gameSession.snapshot().phase !== 'discussion') {
+      session.gameSession.advanceDayPhase(
+        new Date(new Date(session.gameSession.snapshot().phaseDeadline).valueOf() + 1),
+      );
+    }
+    await orchestrator.publishPublicSpeechReplies(session);
+    await orchestrator.publishPublicSpeechReplies(session);
+    expect(decisions.publicSpeechDecisionCount).toBe(1);
+
+    session.gameSession.submitPublicSpeech('participant-1', 'I want to compare the evidence.');
+
+    await orchestrator.publishPublicSpeechReplies(session);
+    expect(decisions.publicSpeechDecisionCount).toBe(2);
+  });
+
+  it('tries one shuffled Agent at a time until one chooses to speak', async () => {
+    const session = createSession();
+    const decisions = new SilentThenSpeakingGateway();
+    const orchestrator = new GameSessionAgentOrchestrator(decisions, async () => ok(undefined));
+
+    while (session.gameSession.snapshot().phase !== 'discussion') {
+      session.gameSession.advanceDayPhase(
+        new Date(new Date(session.gameSession.snapshot().phaseDeadline).valueOf() + 1),
+      );
+    }
+
+    await orchestrator.publishPublicSpeechReplies(session);
+    expect(session.scheduledAgentPublicSpeeches).toEqual(
+      expect.arrayContaining([expect.objectContaining({ content: 'I can add one point.' })]),
+    );
+    expect(decisions.publicSpeechDecisionCount).toBe(2);
+  });
+
+  it('stops scheduling autonomous public speeches when the discussion turn budget is spent', async () => {
+    const session = createSession();
+    const decisions = new CountingPublicSpeechGateway();
+    const orchestrator = new GameSessionAgentOrchestrator(decisions, async () => ok(undefined));
+
+    while (session.gameSession.snapshot().phase !== 'discussion') {
+      session.gameSession.advanceDayPhase(
+        new Date(new Date(session.gameSession.snapshot().phaseDeadline).valueOf() + 1),
+      );
+    }
+    session.autonomousPublicSpeechTurns =
+      gameSessionsConfig.maximumAutonomousPublicSpeechTurnsPerDiscussion;
+
+    await orchestrator.publishPublicSpeechReplies(session);
+    expect(decisions.publicSpeechDecisionCount).toBe(0);
+  });
+
+  it('records the spent discussion turn budget for the Human Player only once', async () => {
+    const session = createSession();
+    const decisions = new CountingPublicSpeechGateway();
+    const orchestrator = new GameSessionAgentOrchestrator(decisions, async (_stale, mutate) => {
+      mutate(session);
+      return ok(undefined);
+    });
+
+    while (session.gameSession.snapshot().phase !== 'discussion') {
+      session.gameSession.advanceDayPhase(
+        new Date(new Date(session.gameSession.snapshot().phaseDeadline).valueOf() + 1),
+      );
+    }
+    session.autonomousPublicSpeechTurns =
+      gameSessionsConfig.maximumAutonomousPublicSpeechTurnsPerDiscussion;
+
+    await orchestrator.publishPublicSpeechReplies(session);
+    await orchestrator.publishPublicSpeechReplies(session);
+
+    expect(decisions.publicSpeechDecisionCount).toBe(0);
+    expect(
+      session.gameSession
+        .projectionFor(session.humanParticipantId, 1)
+        .map((projection) => projection.timeline),
+    ).toEqual({
+      value: expect.arrayContaining([
+        expect.objectContaining({
+          type: 'personal-record',
+          recipientParticipantId: session.humanParticipantId,
+          outcome: { type: 'autonomous-public-speech-limit-reached', dayNumber: 1 },
+        }),
+      ]),
+    });
+    expect(
+      session.gameSession
+        .projectionFor('participant-2', 1)
+        .map((projection) => projection.timeline),
+    ).toEqual({
+      value: expect.not.arrayContaining([expect.objectContaining({ type: 'personal-record' })]),
+    });
+  });
+
+  it('removes fired public-speech timer handles before committing', async () => {
     const session = createSession();
     const timerCountsAtCommit: number[] = [];
     const orchestrator = new GameSessionAgentOrchestrator(
       new CountingPublicSpeechGateway(),
-      async () => ok(new MafiaGameSessionProjectionEntity()),
-      async () => {
+      async (_stale, mutate) => {
         timerCountsAtCommit.push(session.publicSpeechAgentTimers.size);
+        mutate(session);
         return ok(undefined);
       },
     );
 
-    orchestrator.publishPublicSpeechReplies(session);
-    jest.advanceTimersByTime(500);
-
-    expect(timerCountsAtCommit).toEqual([3, 2, 1, 0]);
+    while (session.gameSession.snapshot().phase !== 'discussion') {
+      session.gameSession.advanceDayPhase(
+        new Date(new Date(session.gameSession.snapshot().phaseDeadline).valueOf() + 1),
+      );
+    }
+    await orchestrator.publishPublicSpeechReplies(session);
+    expect(timerCountsAtCommit).toEqual([]);
+    expect(session.autonomousPublicSpeechTurns).toBe(0);
+    expect(session.publicSpeechAgentTimers.size).toBe(1);
+    expect(session.scheduledAgentPublicSpeeches[0]).toEqual(
+      expect.objectContaining({ content: 'I need more evidence.' }),
+    );
   });
 
   it('drains overdue public speeches by due time and snapshot order', async () => {
     const session = createSession();
     const committedContents: string[] = [];
     const heldMutationLocks: boolean[] = [];
-    const commitAgentMutation = jest.fn(
+    const commitAgentMutation = vi.fn(
       async (
         _stale: StoredGameSessionEntity,
         mutate: (current: StoredGameSessionEntity) => boolean,
@@ -317,7 +784,6 @@ describe('GameSessionAgentOrchestrator', () => {
     );
     const orchestrator = new GameSessionAgentOrchestrator(
       new SequencedMafiaTargetGateway(),
-      async () => ok(new MafiaGameSessionProjectionEntity()),
       commitAgentMutation,
     );
     session.scheduledAgentPublicSpeeches = [
@@ -338,7 +804,6 @@ describe('GameSessionAgentOrchestrator', () => {
     const session = createSession();
     const orchestrator = new GameSessionAgentOrchestrator(
       new SequencedMafiaTargetGateway(),
-      async () => ok(new MafiaGameSessionProjectionEntity()),
       async (_stale, mutate) => {
         mutate(session);
         return ok(undefined);
@@ -353,7 +818,7 @@ describe('GameSessionAgentOrchestrator', () => {
         dueAt: scheduledAt.toISOString(),
       },
     ];
-    jest.setSystemTime(new Date('2026-08-28T00:00:02.000Z'));
+    vi.setSystemTime(new Date('2026-08-28T00:00:02.000Z'));
 
     await expect(orchestrator.drainDueScheduledTasks(session)).resolves.toEqual(ok(undefined));
 
@@ -373,7 +838,6 @@ describe('GameSessionAgentOrchestrator', () => {
     const session = createSession();
     const orchestrator = new GameSessionAgentOrchestrator(
       new SequencedMafiaTargetGateway(),
-      async () => ok(new MafiaGameSessionProjectionEntity()),
       async (_stale, mutate) => {
         mutate(session);
         return ok(undefined);
@@ -388,7 +852,7 @@ describe('GameSessionAgentOrchestrator', () => {
         dueAt: scheduledAt,
       },
     ];
-    jest.setSystemTime(new Date('2026-08-28T00:00:02.000Z'));
+    vi.setSystemTime(new Date('2026-08-28T00:00:02.000Z'));
 
     await expect(orchestrator.drainDueScheduledTasks(session)).resolves.toEqual(ok(undefined));
 
@@ -423,7 +887,6 @@ describe('GameSessionAgentOrchestrator', () => {
     ];
     const orchestrator = new GameSessionAgentOrchestrator(
       new SequencedMafiaTargetGateway(),
-      async () => ok(new MafiaGameSessionProjectionEntity()),
       async () => err({ type: 'durability-unavailable' }),
     );
 
@@ -436,10 +899,9 @@ describe('GameSessionAgentOrchestrator', () => {
 
   it('does not resume or drain Scheduled Agent Actions for a terminal Game Session', async () => {
     const session = createSession();
-    const commitAgentMutation = jest.fn(async () => ok(undefined));
+    const commitAgentMutation = vi.fn(async () => ok(undefined));
     const orchestrator = new GameSessionAgentOrchestrator(
       new SequencedMafiaTargetGateway(),
-      async () => ok(new MafiaGameSessionProjectionEntity()),
       commitAgentMutation,
     );
     session.status = 'abandoned';
@@ -452,6 +914,57 @@ describe('GameSessionAgentOrchestrator', () => {
 
     expect(commitAgentMutation).not.toHaveBeenCalled();
     expect(session.publicSpeechAgentTimers.size).toBe(0);
+  });
+
+  it('keeps Night open while required Agent actions are pending during durable recovery', async () => {
+    const session = createNightActionSession();
+    const sessions = new Map([[session.gameSession.snapshot().sessionId, session]]);
+    const agentActions = new GameSessionAgentOrchestrator(new NightActionGateway(), async () =>
+      ok(undefined),
+    );
+    const lifecycle = new GameSessionLifecycle({
+      state: {
+        sessions,
+        guestSessionCounts: new Map(),
+        idempotencyKeys: new Map(),
+        eventSubscriberCounts: new Map(),
+      },
+      persistence: {
+        authorityFor: () => undefined,
+        save: async () => ok(true),
+        hydrate: async () => ok(undefined),
+        snapshotFor: () => {
+          throw new Error('A pending Night must not resolve.');
+        },
+        restore: () => {
+          throw new Error('Unexpected restore.');
+        },
+      },
+      phaseOperations: {
+        projectionFor: () => {
+          throw new Error('A pending Night must not publish a projection.');
+        },
+        publishProjection: () => {
+          throw new Error('A pending Night must not publish a projection.');
+        },
+        submitAgentActions: async () => ok(undefined),
+        retryAgentActions: () => undefined,
+        retryMafiaChatReplies: () => undefined,
+        retryPhaseTransition: () => undefined,
+        retryPhaseTransitionAfterClaimLease: () => undefined,
+      },
+      clock: nativeGameSessionClock,
+      agentActions,
+      disposeSession: () => undefined,
+      now: () => dayjs(),
+      utcDay: () => dayjs().format('YYYY-MM-DD'),
+    });
+    session.agentActionsPending = true;
+    vi.setSystemTime(new Date(Date.parse(session.gameSession.snapshot().phaseDeadline) + 1));
+
+    await expect(lifecycle.recoverExpiredPhaseDurably(session)).resolves.toEqual(ok(undefined));
+
+    expect(session.gameSession.snapshot().phase).toBe('night');
   });
 
   it('schedules a newly restored public reply while retaining a local timer', async () => {
@@ -473,7 +986,6 @@ describe('GameSessionAgentOrchestrator', () => {
 
     const orchestrator = new GameSessionAgentOrchestrator(
       new SequencedMafiaTargetGateway(),
-      async () => ok(new MafiaGameSessionProjectionEntity()),
       async () => ok(undefined),
     );
     const durability = new GameSessionDurability(
@@ -529,7 +1041,6 @@ describe('GameSessionAgentOrchestrator', () => {
     ]);
     const agentActions = new GameSessionAgentOrchestrator(
       new SequencedMafiaTargetGateway(),
-      async () => ok(new MafiaGameSessionProjectionEntity()),
       async () => ok(undefined),
     );
     const lifecycle = new GameSessionLifecycle({
@@ -607,7 +1118,6 @@ describe('GameSessionAgentOrchestrator', () => {
     let committedFollowUps = 0;
     orchestrator = new GameSessionAgentOrchestrator(
       new SequencedMafiaTargetGateway(),
-      async () => ok(new MafiaGameSessionProjectionEntity()),
       async (_stale, mutate) => {
         const current = sessions.get('session-1');
         if (current && mutate(current)) committedFollowUps += 1;
@@ -615,8 +1125,8 @@ describe('GameSessionAgentOrchestrator', () => {
       },
     );
 
-    jest.setSystemTime(at(1_005));
-    orchestrator.submitDayActions(session);
+    vi.setSystemTime(at(1_005));
+    await orchestrator.submitDayActions(session);
     session.nextEventId = 1;
     const projection = session.gameSession.projectionFor(
       session.humanParticipantId,
@@ -644,7 +1154,7 @@ describe('GameSessionAgentOrchestrator', () => {
     if (!refreshed) throw new Error('Expected a refreshed Game Session.');
     expect(refreshed.agentFinalDefenceTimer).toBeUndefined();
     orchestrator.resumeScheduledTasks(refreshed);
-    jest.advanceTimersByTime(1_000);
+    vi.advanceTimersByTime(1_000);
 
     expect(committedFollowUps).toBe(1);
     redis.disconnect();

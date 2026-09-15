@@ -2,7 +2,8 @@ import { map } from 'remeda';
 
 import { mafiaGameConfig } from './config';
 
-export type MafiaRole = 'Mafia' | 'Detective' | 'Doctor' | 'Citizen';
+export const mafiaRoles = ['Mafia', 'Police', 'Doctor', 'Citizen'] as const;
+export type MafiaRole = (typeof mafiaRoles)[number];
 export type MafiaAllegiance = 'Mafia' | 'Citizen';
 export type MafiaParticipant = { id: string; name: string; alive: boolean; role: MafiaRole };
 export type MafiaPersonalInformation = {
@@ -17,7 +18,7 @@ export type MafiaPersonalInformation = {
     | { type: 'mafia-target'; targetParticipantId: string }
     | { type: 'doctor-protection'; targetParticipantId: string }
     | {
-        type: 'detective-investigation';
+        type: 'police-investigation';
         targetParticipantId: string;
       }
     | undefined;
@@ -40,14 +41,18 @@ const participantNames = [
 
 const allegianceFor = (role: MafiaRole): MafiaAllegiance =>
   role === 'Mafia' ? 'Mafia' : 'Citizen';
-const assignRoles = (participantCount: number): MafiaRole[] => {
+export const mafiaRoleCountsFor = (participantCount: number): Record<MafiaRole, number> => {
   const mafiaCount = participantCount <= mafiaGameConfig.mafiaRoleThreshold ? 1 : 2;
-  return [
-    ...Array<MafiaRole>(mafiaCount).fill('Mafia'),
-    'Detective',
-    'Doctor',
-    ...Array<MafiaRole>(participantCount - mafiaCount - 2).fill('Citizen'),
-  ];
+  return {
+    Mafia: mafiaCount,
+    Police: 1,
+    Doctor: 1,
+    Citizen: participantCount - mafiaCount - 2,
+  };
+};
+const assignRoles = (participantCount: number): MafiaRole[] => {
+  const counts = mafiaRoleCountsFor(participantCount);
+  return mafiaRoles.flatMap((role) => Array<MafiaRole>(counts[role]).fill(role));
 };
 function shuffleRoles(roles: MafiaRole[], randomIntExclusive: RandomInt): MafiaRole[] {
   const shuffledRoles = [...roles];

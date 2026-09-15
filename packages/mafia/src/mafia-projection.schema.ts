@@ -11,7 +11,7 @@ const MafiaPhaseSchema = v.picklist([
   'night',
   'completed',
 ] as const);
-const MafiaRoleSchema = v.picklist(['Mafia', 'Detective', 'Doctor', 'Citizen'] as const);
+const MafiaRoleSchema = v.picklist(['Mafia', 'Police', 'Doctor', 'Citizen'] as const);
 const MafiaAllegianceSchema = v.picklist(['Mafia', 'Citizen'] as const);
 const MafiaParticipantSchema = v.object({ id: v.string(), name: v.string(), alive: v.boolean() });
 const MafiaChatMessageSchema = v.object({
@@ -70,12 +70,22 @@ const PublicTimelineItemVariants = [
   }),
   v.object({ id: v.string(), type: v.literal('record'), outcome: PublicOutcomeSchema }),
 ];
+const PersonalRecordSchema = v.object({
+  type: v.literal('autonomous-public-speech-limit-reached'),
+  dayNumber: v.number(),
+});
 const PersonalTimelineItemSchema = v.variant('type', [
   ...PublicTimelineItemVariants,
   v.object({
     id: v.string(),
     type: v.literal('mafia-chat'),
     message: MafiaChatMessageSchema,
+  }),
+  v.object({
+    id: v.string(),
+    type: v.literal('personal-record'),
+    recipientParticipantId: v.string(),
+    outcome: PersonalRecordSchema,
   }),
 ]);
 const CompletedVoteRecordSchema = v.object({
@@ -98,7 +108,7 @@ const CompletedNightActionRecordSchema = v.object({
   dayNumber: v.number(),
   mafiaTargetParticipantId: v.optional(v.string()),
   doctorActions: v.array(CompletedNightActionSchema),
-  detectiveActions: v.array(CompletedNightActionSchema),
+  policeActions: v.array(CompletedNightActionSchema),
 });
 
 const SnapshotParticipantSchema = v.object({
@@ -122,14 +132,17 @@ export const MafiaGameSessionSnapshotSchema: v.GenericSchema<unknown, MafiaGameS
       }),
       timeline: v.array(PersonalTimelineItemSchema),
       timelineItemCounts: v.array(
-        v.tuple([v.picklist(['chat', 'record', 'mafia-chat'] as const), v.number()]),
+        v.tuple([
+          v.picklist(['chat', 'record', 'mafia-chat', 'personal-record'] as const),
+          v.number(),
+        ]),
       ),
       nominations: v.array(v.tuple([v.string(), v.string()])),
       verdicts: v.array(v.tuple([v.string(), v.picklist(['eliminate', 'spare'] as const)])),
       mafiaTargetParticipantId: v.optional(v.string()),
       doctorProtections: v.array(v.tuple([v.string(), v.string()])),
-      detectiveInvestigations: v.array(v.tuple([v.string(), v.string()])),
-      detectiveInvestigationHistory: v.array(
+      policeInvestigations: v.array(v.tuple([v.string(), v.string()])),
+      policeInvestigationHistory: v.array(
         v.tuple([v.string(), v.array(v.tuple([v.string(), MafiaAllegianceSchema]))]),
       ),
       completedVoteRecords: v.array(CompletedVoteRecordSchema),
@@ -183,7 +196,7 @@ const MafiaGameProjectionPayloadSchema = v.object({
         v.object({ type: v.literal('mafia-target'), targetParticipantId: v.string() }),
         v.object({ type: v.literal('doctor-protection'), targetParticipantId: v.string() }),
         v.object({
-          type: v.literal('detective-investigation'),
+          type: v.literal('police-investigation'),
           targetParticipantId: v.string(),
         }),
       ]),
@@ -224,7 +237,7 @@ function normalizeCompletedNightActionRecords(
       ...action,
       targetParticipantId: action.targetParticipantId,
     })),
-    detectiveActions: map(record.detectiveActions, (action) => ({
+    policeActions: map(record.policeActions, (action) => ({
       ...action,
       targetParticipantId: action.targetParticipantId,
     })),
@@ -251,7 +264,7 @@ function normalizeMafiaGameProjection(projection: ParsedMafiaGameProjection): Ma
               ...action,
               targetParticipantId: action.targetParticipantId,
             })),
-            detectiveActions: map(record.detectiveActions, (action) => ({
+            policeActions: map(record.policeActions, (action) => ({
               ...action,
               targetParticipantId: action.targetParticipantId,
             })),

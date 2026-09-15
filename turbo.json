@@ -14,7 +14,7 @@
       "dependsOn": ["^build"],
       "cache": false,
       "persistent": true,
-      "passThroughEnv": ["REDIS_URL"]
+      "passThroughEnv": ["NODE_ENV"]
     }
   }
 }

@@ -17,8 +17,16 @@ An AI-controlled Participant with an independent private context and decision pr
 _Avoid_: Bot, NPC
 
 **Persona**:
-A stable set of behavioral traits and conversational tendencies that guides an Agent's decisions within a Game Session.
+A randomly allocated, stable set of behavioral traits and conversational tendencies that guides an Agent's decisions within one Game Session. It is independent of the Agent's Role and Allegiance.
 _Avoid_: Prompt, character sheet
+
+**Agent Memory**:
+An Agent-only, structured summary of its observations, hypotheses, commitments, and action rationales within an in-progress Game Session. It never contains raw model reasoning and is deleted when that Game Session completes or is abandoned.
+_Avoid_: Chain of thought, chat history
+
+**Personal Snapshot**:
+The authorized current game view from which one Agent forms a decision: its Persona, Agent Memory, Public Information, and its own Private Information.
+_Avoid_: Prompt context, full game state
 
 **Private Information**:
 Information visible only to the Participant it belongs to, including that Participant's Role, private reasoning, and active Vote Choice.
@@ -135,7 +143,7 @@ The complete list of Vote Choices from resolved Nominations and Verdicts. It bec
 _Avoid_: Audit log, vote history
 
 **Night Action Record**:
-The completed-only record of each Night's resolved Mafia target and each eligible Doctor's and Detective's submitted target or lack of action. It does not disclose a Detective's learned Allegiance.
+The completed-only record of each Night's resolved Mafia target and each eligible Doctor's and Police's submitted target or lack of action. It does not disclose a Police's learned Allegiance.
 _Avoid_: Night vote, night history
 
 **Eliminated Participant**:
@@ -160,9 +168,9 @@ _Avoid_: Werewolf
 The initial non-Mafia Allegiance, which wins when no Mafia remain alive.
 _Avoid_: Town, villager
 
-**Detective**:
+**Police**:
 A Citizen Role that may privately learn a selected Participant's Allegiance during an eligible night phase.
-_Avoid_: Police, cop
+_Avoid_: Detective, cop
 
 **Doctor**:
 A Citizen Role that may protect a selected Participant from the Mafia's eligible night action.

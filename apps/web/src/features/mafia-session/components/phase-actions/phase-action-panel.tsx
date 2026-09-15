@@ -76,7 +76,7 @@ export function PhaseActionPanel({ panel, isNight }: { panel: PhasePanel; isNigh
           {match(p.role)
             .with('Mafia', () => 'Choose a target')
             .with('Doctor', () => 'Choose someone to protect')
-            .with('Detective', () => 'Choose someone to investigate')
+            .with('Police', () => 'Choose someone to investigate')
             .with('Citizen', () => 'Night actions are private')
             .exhaustive()}
         </h3>

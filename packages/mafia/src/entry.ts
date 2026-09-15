@@ -1,4 +1,6 @@
 export * from './config';
+export { mafiaAgentRulesBriefing } from './mafia-agent-rules';
+export { mafiaAgentSnapshotGuide } from './mafia-agent-snapshot-guide';
 export { MafiaGameSession } from './mafia-game-session';
 export * from './mafia-game-module';
 export {
@@ -7,7 +9,7 @@ export {
 } from './mafia-projection.schema';
 export type {
   MafiaActionError,
-  MafiaAgentSpeechContext,
+  MafiaAgentContext,
   MafiaDayPhaseResult,
   MafiaGameProjection,
   MafiaGameSessionSnapshot,
@@ -29,4 +31,5 @@ export type {
   MafiaRole,
   RandomInt,
 } from './participants';
-export type { MafiaChatMessage, MafiaPersonalTimelineItem } from './timeline';
+export { mafiaRoleCountsFor, mafiaRoles } from './participants';
+export type { MafiaChatMessage, MafiaPersonalRecord, MafiaPersonalTimelineItem } from './timeline';

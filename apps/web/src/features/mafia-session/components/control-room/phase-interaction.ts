@@ -131,9 +131,9 @@ export function createPhaseInteraction({
     .with({ phase: 'night', role: 'Doctor' }, () =>
       nightInteraction('Doctor', snapshot, disabled, gameAction),
     )
-    .with({ phase: 'night', role: 'Detective' }, () =>
+    .with({ phase: 'night', role: 'Police' }, () =>
       nightInteraction(
-        'Detective',
+        'Police',
         snapshot,
         disabled || snapshot.personal.nightAction !== undefined,
         gameAction,
@@ -147,7 +147,7 @@ export function createPhaseInteraction({
 }
 
 function nightInteraction(
-  role: Extract<MafiaGameProjection['personal']['role'], 'Mafia' | 'Doctor' | 'Detective'>,
+  role: Extract<MafiaGameProjection['personal']['role'], 'Mafia' | 'Doctor' | 'Police'>,
   snapshot: MafiaGameProjection,
   disabled: boolean,
   gameAction: UseGameActionResult,
@@ -165,22 +165,22 @@ function nightInteraction(
 }
 
 function nightActionLabel(
-  role: Extract<MafiaGameProjection['personal']['role'], 'Mafia' | 'Doctor' | 'Detective'>,
+  role: Extract<MafiaGameProjection['personal']['role'], 'Mafia' | 'Doctor' | 'Police'>,
 ) {
   return match(role)
     .with('Mafia', () => 'Target' as const)
     .with('Doctor', () => 'Protect' as const)
-    .with('Detective', () => 'Investigate' as const)
+    .with('Police', () => 'Investigate' as const)
     .exhaustive();
 }
 
 function nightAction(
-  role: Extract<MafiaGameProjection['personal']['role'], 'Mafia' | 'Doctor' | 'Detective'>,
+  role: Extract<MafiaGameProjection['personal']['role'], 'Mafia' | 'Doctor' | 'Police'>,
   targetParticipantId: string,
 ) {
   return match(role)
     .with('Mafia', () => ({ type: 'mafia-target' as const, targetParticipantId }))
     .with('Doctor', () => ({ type: 'doctor-protection' as const, targetParticipantId }))
-    .with('Detective', () => ({ type: 'detective-investigation' as const, targetParticipantId }))
+    .with('Police', () => ({ type: 'police-investigation' as const, targetParticipantId }))
     .exhaustive();
 }

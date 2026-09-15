@@ -26,6 +26,7 @@ export type {
 } from './mafia-game-session';
 export type {
   MafiaAllegiance,
+  MafiaOutputLanguage,
   MafiaParticipant,
   MafiaPersonalInformation,
   MafiaRole,

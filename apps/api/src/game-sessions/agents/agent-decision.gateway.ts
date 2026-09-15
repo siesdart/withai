@@ -61,6 +61,7 @@ type AgentVerdictDecision = AgentPhaseActionDecision & { verdict: 'eliminate' | 
 type MaybePromise<T> = T | Promise<T>;
 
 export type AgentDecisionGateway = {
+  readonly outputLanguage?: AgentOutputLanguage;
   decidePublicSpeech(
     context: MafiaAgentContext,
     options?: AgentPublicSpeechOptions,
@@ -103,10 +104,14 @@ const tanstackRunner: AgentDecisionRunner = async (
 };
 
 export class LLMAgentDecisionGateway implements AgentDecisionGateway {
+  readonly outputLanguage: AgentOutputLanguage;
+
   constructor(
     private readonly runDecision: AgentDecisionRunner = tanstackRunner,
-    private readonly outputLanguage: AgentOutputLanguage = 'ko',
-  ) {}
+    outputLanguage: AgentOutputLanguage = 'ko',
+  ) {
+    this.outputLanguage = outputLanguage;
+  }
 
   decidePublicSpeech(
     context: MafiaAgentContext,
@@ -289,7 +294,7 @@ const toPhaseActionDecision = (
 });
 
 export class DeterministicAgentDecisionGateway implements AgentDecisionGateway {
-  constructor(private readonly outputLanguage: AgentOutputLanguage = 'ko') {}
+  constructor(readonly outputLanguage: AgentOutputLanguage = 'ko') {}
 
   decidePublicSpeech(context: MafiaAgentContext): AgentPublicSpeechDecision {
     const latestChat = findLast(context.timeline, (item) => item.type === 'chat');

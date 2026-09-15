@@ -5,6 +5,7 @@ import { mafiaGameConfig } from './config';
 export const mafiaRoles = ['Mafia', 'Police', 'Doctor', 'Citizen'] as const;
 export type MafiaRole = (typeof mafiaRoles)[number];
 export type MafiaAllegiance = 'Mafia' | 'Citizen';
+export type MafiaOutputLanguage = 'ko' | 'en';
 export type MafiaParticipant = { id: string; name: string; alive: boolean; role: MafiaRole };
 export type MafiaPersonalInformation = {
   participantId: string;
@@ -26,18 +27,10 @@ export type MafiaPersonalInformation = {
 };
 export type RandomInt = (maxExclusive: number) => number;
 
-const participantNames = [
-  'You',
-  'Mina',
-  'Joon',
-  'Sora',
-  'Hana',
-  'Theo',
-  'Iris',
-  'Noah',
-  'Yuna',
-  'Eli',
-] as const;
+const participantNamesByLanguage: Record<MafiaOutputLanguage, readonly string[]> = {
+  ko: ['You', '민아', '준', '소라', '하나', '태오', '아이리스', '노아', '유나', '엘리'],
+  en: ['You', 'Mina', 'Joon', 'Sora', 'Hana', 'Theo', 'Iris', 'Noah', 'Yuna', 'Eli'],
+};
 
 const allegianceFor = (role: MafiaRole): MafiaAllegiance =>
   role === 'Mafia' ? 'Mafia' : 'Citizen';
@@ -68,9 +61,11 @@ function shuffleRoles(roles: MafiaRole[], randomIntExclusive: RandomInt): MafiaR
 export function createParticipants(
   participantCount: number,
   randomIntExclusive: RandomInt,
+  outputLanguage: MafiaOutputLanguage = 'ko',
 ): MafiaParticipant[] {
   const roles = shuffleRoles(assignRoles(participantCount), randomIntExclusive);
-  return map(participantNames.slice(0, participantCount), (name, index) => ({
+  const names = participantNamesByLanguage[outputLanguage];
+  return map(names.slice(0, participantCount), (name, index) => ({
     id: `participant-${index + 1}`,
     name,
     alive: true,

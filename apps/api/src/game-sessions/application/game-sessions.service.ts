@@ -101,7 +101,12 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     this.phaseTransitionRetries = new KeyedRetryScheduler(this.clock);
     this.scheduledAgentRetries = new KeyedRetryScheduler(this.clock);
     this.mafiaChatReplyRetries = new KeyedRetryScheduler(this.clock);
-    this.mafiaModule = new MafiaGameModule(undefined, undefined, () => this.clock.now());
+    this.mafiaModule = new MafiaGameModule(
+      undefined,
+      undefined,
+      () => this.clock.now(),
+      agentDecisions.outputLanguage ?? 'ko',
+    );
     this.agentActions = new GameSessionAgentOrchestrator(
       agentDecisions,
       (session, mutate, schedulePhaseTransition, hydrationLocked) =>

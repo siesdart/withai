@@ -11,7 +11,7 @@ export type GameAction =
   | { type: 'final-defence'; content: string }
   | { type: 'mafia-target'; targetParticipantId: string }
   | { type: 'doctor-protection'; targetParticipantId: string }
-  | { type: 'detective-investigation'; targetParticipantId: string };
+  | { type: 'police-investigation'; targetParticipantId: string };
 
 export type GameActionDraft = IdempotentDraft<GameAction>;
 export type GameActionDrafts = Partial<Record<GameAction['type'], GameActionDraft>>;
@@ -88,9 +88,9 @@ function isSameGameAction(action: GameAction, draft: GameActionDraft) {
         next.targetParticipantId === draft.targetParticipantId,
     )
     .with(
-      { type: 'detective-investigation' },
+      { type: 'police-investigation' },
       (next) =>
-        draft.type === 'detective-investigation' &&
+        draft.type === 'police-investigation' &&
         next.targetParticipantId === draft.targetParticipantId,
     )
     .exhaustive();

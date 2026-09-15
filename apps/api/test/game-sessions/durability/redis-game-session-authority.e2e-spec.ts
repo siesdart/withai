@@ -1,14 +1,14 @@
-import { afterEach, describe, expect, it, jest } from '@jest/globals';
 import { MafiaGameSession, type MafiaParticipant } from '@repo/mafia';
 import dayjs from 'dayjs';
 import type { Redis } from 'ioredis';
 import RedisMock from 'ioredis-mock';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { RedisGameSessionAuthority } from '../../../src/game-sessions/durability/redis-game-session-authority';
+import { RedisGameSessionAuthority } from '../../../src/game-sessions/durability/redis-game-session-authority.js';
 
 const mafiaParticipants: MafiaParticipant[] = [
   { id: 'participant-1', name: 'You', alive: true, role: 'Mafia' },
-  { id: 'participant-2', name: 'Mina', alive: true, role: 'Detective' },
+  { id: 'participant-2', name: 'Mina', alive: true, role: 'Police' },
   { id: 'participant-3', name: 'Joon', alive: true, role: 'Doctor' },
   { id: 'participant-4', name: 'Sora', alive: true, role: 'Citizen' },
   { id: 'participant-5', name: 'Hana', alive: true, role: 'Citizen' },
@@ -461,7 +461,7 @@ describe('RedisGameSessionAuthority', () => {
     await authority.save(healthy, { eventId: 1, projection: healthyProjection.value });
     await authority.save(retrying, { eventId: 1, projection: retryingProjection.value });
     const originalGet = redis.get.bind(redis);
-    const get = jest.spyOn(redis, 'get');
+    const get = vi.spyOn(redis, 'get');
     let retryingSnapshotFailed = false;
     get.mockImplementation((key) => {
       if (!retryingSnapshotFailed && key === `${prefix}:snapshots:retrying-session`) {

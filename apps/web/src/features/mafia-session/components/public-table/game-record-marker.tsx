@@ -7,7 +7,10 @@ import { match } from 'ts-pattern';
 import type { MafiaGameProjection } from '../../api/client';
 
 type GameRecordMarkerProps = {
-  outcome: Extract<MafiaGameProjection['timeline'][number], { type: 'record' }>['outcome'];
+  outcome: Extract<
+    MafiaGameProjection['timeline'][number],
+    { type: 'record' | 'personal-record' }
+  >['outcome'];
   completedRecords: MafiaGameProjection['public']['completedRecords'];
   participantNames: Map<string, string>;
   isNight?: boolean;
@@ -89,6 +92,11 @@ const outcomeCopy = (
       { type: 'night-resolved', result: 'participant-eliminated' },
       (value) =>
         `Day ${value.dayNumber}: ${participantNames.get(value.participantId ?? '') ?? 'A participant'} was eliminated overnight.`,
+    )
+    .with(
+      { type: 'autonomous-public-speech-limit-reached' },
+      (value) =>
+        `Day ${value.dayNumber}: Agents have reached their discussion turn limit. Move to the next phase when you are ready.`,
     )
     .exhaustive();
 
@@ -185,10 +193,9 @@ export function GameRecordMarker({
                               {actionTargetCopy(action, participantNames)}
                             </li>
                           ))}
-                          {map(record.detectiveActions, (action) => (
-                            <li key={`detective-${action.participantId}`}>
-                              Detective{' '}
-                              {participantNames.get(action.participantId) ?? 'Participant'}:{' '}
+                          {map(record.policeActions, (action) => (
+                            <li key={`police-${action.participantId}`}>
+                              Police {participantNames.get(action.participantId) ?? 'Participant'}:{' '}
                               {actionTargetCopy(action, participantNames)}
                             </li>
                           ))}

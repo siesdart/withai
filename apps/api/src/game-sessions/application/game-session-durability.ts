@@ -7,11 +7,11 @@ import { ReplaySubject } from 'rxjs';
 import {
   type DurableSessionSnapshot,
   RedisGameSessionAuthority,
-} from '../durability/redis-game-session-authority';
-import type { GameSessionClock } from './game-session-clock';
-import type { GameSessionError } from './game-session-error';
-import { gameSessionsConfig } from './game-sessions.config';
-import type { StoredGameSessionEntity } from './stored-game-session.entity';
+} from '../durability/redis-game-session-authority.js';
+import type { GameSessionClock } from './game-session-clock.js';
+import type { GameSessionError } from './game-session-error.js';
+import { gameSessionsConfig } from './game-sessions.config.js';
+import type { StoredGameSessionEntity } from './stored-game-session.entity.js';
 
 type SessionDisposer = (session: StoredGameSessionEntity) => void;
 
@@ -101,6 +101,7 @@ export class GameSessionDurability {
       holderId: session.holderId,
       humanParticipantId: session.humanParticipantId,
       gameSession: session.gameSession.snapshot(),
+      agentMinds: session.agentMinds,
       nextEventId: session.nextEventId,
       phaseDeadline: projection.public.phaseDeadline,
       lastActivityAt: session.lastAccessedAt.toISOString(),
@@ -121,6 +122,10 @@ export class GameSessionDurability {
       scheduledAgentFinalDefence: session.scheduledAgentFinalDefence,
       scheduledAgentMafiaChatReplies: session.scheduledAgentMafiaChatReplies,
       scheduledMafiaTargetFallbackAt: session.scheduledMafiaTargetFallbackAt,
+      autonomousPublicSpeechTurns: session.autonomousPublicSpeechTurns,
+      lastAutonomousPublicSpeechSnapshotKey: session.lastAutonomousPublicSpeechSnapshotKey,
+      autonomousPublicSpeechLimitReachedDiscussionKey:
+        session.autonomousPublicSpeechLimitReachedDiscussionKey,
       agentActionsPending: session.agentActionsPending,
     };
   }
@@ -130,6 +135,7 @@ export class GameSessionDurability {
       holderId: snapshot.holderId,
       humanParticipantId: snapshot.humanParticipantId,
       gameSession: MafiaGameSession.restore(snapshot.gameSession, () => this.clock.now()),
+      agentMinds: snapshot.agentMinds ?? {},
       events: new ReplaySubject<MafiaGameProjection>(gameSessionsConfig.eventReplayBufferSize),
       nextEventId: snapshot.nextEventId,
       nextPublicSpeechAt: snapshot.cooldowns?.publicSpeech
@@ -152,11 +158,16 @@ export class GameSessionDurability {
       phaseTimer: undefined,
       agentFinalDefenceTimer: undefined,
       publicSpeechAgentTimers: new Map(),
+      mafiaChatReplyTimers: new Map(),
       mafiaTargetFallbackTimer: undefined,
       scheduledAgentPublicSpeeches: snapshot.scheduledAgentPublicSpeeches ?? [],
       scheduledAgentFinalDefence: snapshot.scheduledAgentFinalDefence,
       scheduledAgentMafiaChatReplies: snapshot.scheduledAgentMafiaChatReplies ?? [],
       scheduledMafiaTargetFallbackAt: snapshot.scheduledMafiaTargetFallbackAt,
+      autonomousPublicSpeechTurns: snapshot.autonomousPublicSpeechTurns ?? 0,
+      lastAutonomousPublicSpeechSnapshotKey: snapshot.lastAutonomousPublicSpeechSnapshotKey,
+      autonomousPublicSpeechLimitReachedDiscussionKey:
+        snapshot.autonomousPublicSpeechLimitReachedDiscussionKey,
       agentActionsPending: snapshot.agentActionsPending ?? false,
       reconnectGraceTimer: undefined,
       reconnectGraceDeadline: snapshot.reconnectGraceDeadline

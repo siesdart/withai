@@ -37,10 +37,20 @@
 - Always use TanStack Query when writing server-state code.
 - Before any Tanstack Query work, find and read the relevant doc in `/router-query`.
 
+## Tanstack AI: ALWAYS read docs before coding
+
+- Before any Tanstack AI work, find and read the relevant doc in `/ai-core`.
+
 ## Valibot: ALWAYS read docs before coding
 
 - Before any Valibot work, find and read the relevant doc in `/valibot`.
 - Always use Valibot instead of Zod.
+
+## Gemini structured output
+
+- Define Gemini response schemas with its supported OpenAPI subset only: use object fields, `enum` values via `v.picklist`, arrays, scalar constraints, and `anyOf` where needed.
+- `v.literal` and `v.variant` serialize to `const` and `oneOf`; model discriminator values with `v.picklist` and restore conditional requirements after response validation.
+- Keep provider-facing schemas flat when a conditional field is needed; instruct the model to return neutral values for inactive fields, then normalize them in application code.
 
 ## Nest.js
 
@@ -50,11 +60,6 @@
 
 - After making code changes, run `npx oxlint --fix`, then run `npx oxfmt`.
 - Before finishing, run `npx oxlint --deny-warnings --format=agent`.
-
-## Tests
-
-- Run API Jest suites directly with `node node_modules/jest/bin/jest.js --config jest.config.cjs --runInBand --forceExit`; in this workspace, `pnpm exec jest` can stall before producing output.
-- API HTTP E2E tests create a local Nest listener. Run them with escalated sandbox permission when the default sandbox reports `listen EPERM`.
 
 ## Agent skills
 

@@ -92,7 +92,7 @@ describe('createPhaseInteraction', () => {
     const roles = [
       ['Mafia', 'Target', 'mafia-target'],
       ['Doctor', 'Protect', 'doctor-protection'],
-      ['Detective', 'Investigate', 'detective-investigation'],
+      ['Police', 'Investigate', 'police-investigation'],
     ] as const;
 
     for (const [role, actionLabel, type] of roles) {

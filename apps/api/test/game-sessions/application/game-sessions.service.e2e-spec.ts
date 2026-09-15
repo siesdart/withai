@@ -1,18 +1,19 @@
 /* oxlint-disable typescript/no-unsafe-type-assertion -- The controller is exercised with the narrow HTTP surface it uses. */
 import { EventEmitter } from 'node:events';
 
-import { afterEach, describe, expect, it, jest } from '@jest/globals';
-import { MafiaGameSession } from '@repo/mafia';
+import { MafiaGameModule, MafiaGameSession } from '@repo/mafia';
 import type { Request, Response } from 'express';
 import RedisMock from 'ioredis-mock';
 import { errAsync, ok, okAsync, type Result } from 'neverthrow';
 import { Observable } from 'rxjs';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { GameSessionError } from '../../../src/game-sessions/application/game-session-error';
-import { GameSessionsService } from '../../../src/game-sessions/application/game-sessions.service';
-import { RedisGameSessionAuthority } from '../../../src/game-sessions/durability/redis-game-session-authority';
-import { GameSessionsController } from '../../../src/game-sessions/transport/game-sessions.controller';
-import { MafiaGameSessionProjectionEntity } from '../../../src/game-sessions/transport/mafia-game-session-projection.entity';
+import type { AgentDecisionGateway } from '../../../src/game-sessions/agents/agent-decision.gateway.js';
+import type { GameSessionError } from '../../../src/game-sessions/application/game-session-error.js';
+import { GameSessionsService } from '../../../src/game-sessions/application/game-sessions.service.js';
+import { RedisGameSessionAuthority } from '../../../src/game-sessions/durability/redis-game-session-authority.js';
+import { GameSessionsController } from '../../../src/game-sessions/transport/game-sessions.controller.js';
+import { MafiaGameSessionProjectionEntity } from '../../../src/game-sessions/transport/mafia-game-session-projection.entity.js';
 
 const createDeferred = <Value>() => {
   let resolve: (value: Value) => void;
@@ -22,9 +23,96 @@ const createDeferred = <Value>() => {
   return { promise, resolve: (value: Value) => resolve(value) };
 };
 
+const flushMicrotasks = async (remaining = 10): Promise<void> => {
+  if (remaining === 0) return;
+  await Promise.resolve();
+  return flushMicrotasks(remaining - 1);
+};
+
 describe('GameSessionsService', () => {
   afterEach(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
+  });
+
+  it('coalesces concurrent Agent action submissions for one session', async () => {
+    const service = new GameSessionsService({
+      decidePublicSpeech: () => ({ type: 'remain-silent' as const }),
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
+    });
+    const created = await service.createMafiaSession(undefined, 5, 'coalesce-agent-actions-key');
+    if (created.isErr()) throw new Error('Expected an in-memory session.');
+    const state = service as unknown as {
+      sessions: Map<string, { agentActionsPending: boolean }>;
+      agentActions: { submitDayActions(session: unknown): Promise<void> };
+      submitAndCommitAgentActions(session: unknown): Promise<Result<void, GameSessionError>>;
+    };
+    const session = state.sessions.get(created.value.projection.sessionId);
+    if (!session) throw new Error('Expected a stored session.');
+    session.agentActionsPending = true;
+    const submitDayActions = vi
+      .spyOn(state.agentActions, 'submitDayActions')
+      .mockResolvedValue(undefined);
+
+    await Promise.all([
+      state.submitAndCommitAgentActions(session),
+      state.submitAndCommitAgentActions(session),
+    ]);
+
+    expect(submitDayActions).toHaveBeenCalledOnce();
+    service.onModuleDestroy();
+  });
+
+  it('submits nomination actions after an in-flight Agent action crosses into Nomination', async () => {
+    const service = new GameSessionsService({
+      decidePublicSpeech: () => ({ type: 'remain-silent' as const }),
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
+    });
+    const created = await service.createMafiaSession(
+      undefined,
+      5,
+      'phase-change-agent-actions-key',
+    );
+    if (created.isErr()) throw new Error('Expected an in-memory session.');
+    const state = service as unknown as {
+      sessions: Map<string, { agentActionsPending: boolean; gameSession: MafiaGameSession }>;
+      agentActions: { submitDayActions(session: unknown): Promise<void> };
+      submitAndCommitAgentActions(session: unknown): Promise<Result<void, GameSessionError>>;
+    };
+    const session = state.sessions.get(created.value.projection.sessionId);
+    if (!session) throw new Error('Expected a stored session.');
+    while (session.gameSession.snapshot().phase !== 'discussion') {
+      session.gameSession.advanceDayPhase(
+        new Date(Date.parse(session.gameSession.snapshot().phaseDeadline) + 1),
+      );
+    }
+    session.agentActionsPending = true;
+
+    let submissions = 0;
+    vi.spyOn(state.agentActions, 'submitDayActions').mockImplementation(async () => {
+      submissions += 1;
+      if (submissions === 1) {
+        session.gameSession.advanceDayPhase(
+          new Date(Date.parse(session.gameSession.snapshot().phaseDeadline) + 1),
+        );
+        return;
+      }
+      session.gameSession.submitNomination('participant-2', 'participant-3', new Date());
+    });
+
+    await state.submitAndCommitAgentActions(session);
+
+    expect(submissions).toBe(2);
+    expect(session.gameSession.snapshot().nominations).toContainEqual([
+      'participant-2',
+      'participant-3',
+    ]);
+    service.onModuleDestroy();
   });
 
   it('rehydrates a committed session in a new service instance', async () => {
@@ -49,6 +137,983 @@ describe('GameSessionsService', () => {
       restartedService.getProjection(created.value.projection.sessionId, holderId),
     ).resolves.toMatchObject({ value: { sessionId: created.value.projection.sessionId } });
     redis.disconnect();
+  });
+
+  it('returns a Mafia Chat projection before Agent LLM replies complete', async () => {
+    const deferredReply = createDeferred<string>();
+    const service = new GameSessionsService({
+      decidePublicSpeech: () => ({ type: 'remain-silent' }),
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => deferredReply.promise,
+      selectMafiaTarget: () => 'participant-2',
+    });
+    Object.assign(service, {
+      mafiaModule: new MafiaGameModule(() => 0),
+    });
+    const created = await service.createMafiaSession(undefined, 8, 'async-mafia-chat-key');
+    if (created.isErr()) throw new Error('Expected an in-memory session.');
+    const state = service as unknown as {
+      sessions: Map<
+        string,
+        {
+          gameSession: MafiaGameSession;
+          scheduledAgentMafiaChatReplies: { content: string; dueAt: string }[];
+        }
+      >;
+    };
+    const session = state.sessions.get(created.value.projection.sessionId);
+    if (!session) throw new Error('Expected a stored session.');
+    while (session.gameSession.snapshot().phase !== 'night') {
+      session.gameSession.advanceDayPhase(
+        new Date(new Date(session.gameSession.snapshot().phaseDeadline).valueOf() + 1),
+      );
+    }
+
+    let settled = false;
+    const submission = service
+      .submitMafiaChat(
+        created.value.projection.sessionId,
+        created.value.holderId,
+        'Let us focus on Hana.',
+        'async-mafia-chat-action-key',
+      )
+      .then((result) => {
+        settled = true;
+        return result;
+      });
+
+    await flushMicrotasks();
+    expect(settled).toBe(true);
+    await expect(submission).resolves.toMatchObject({ value: expect.any(Object) });
+
+    deferredReply.resolve('Hana is the strongest target.');
+    await flushMicrotasks();
+    expect(session.scheduledAgentMafiaChatReplies).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          content: 'Hana is the strongest target.',
+          dueAt: expect.any(String),
+        }),
+      ]),
+    );
+    service.onModuleDestroy();
+  });
+
+  it('returns a Public Speech projection before Agent LLM replies complete', async () => {
+    const deferredSpeech = createDeferred<{
+      type: 'speak';
+      content: string;
+    }>();
+    let decisions = 0;
+    const service = new GameSessionsService({
+      decidePublicSpeech: () => {
+        decisions += 1;
+        return decisions === 1 ? deferredSpeech.promise : { type: 'remain-silent' as const };
+      },
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
+    });
+    const created = await service.createMafiaSession(undefined, 5, 'async-public-speech-key');
+    if (created.isErr()) throw new Error('Expected an in-memory session.');
+    const state = service as unknown as {
+      sessions: Map<
+        string,
+        { gameSession: MafiaGameSession; scheduledAgentPublicSpeeches: { content: string }[] }
+      >;
+    };
+    const session = state.sessions.get(created.value.projection.sessionId);
+    if (!session) throw new Error('Expected a stored session.');
+    while (session.gameSession.snapshot().phase !== 'discussion') {
+      session.gameSession.advanceDayPhase(
+        new Date(new Date(session.gameSession.snapshot().phaseDeadline).valueOf() + 1),
+      );
+    }
+
+    let settled = false;
+    const submission = service
+      .submitPublicSpeech(
+        created.value.projection.sessionId,
+        created.value.holderId,
+        'I want to hear everyone before deciding.',
+        'async-public-speech-action-key',
+      )
+      .then((result) => {
+        settled = true;
+        return result;
+      });
+
+    await flushMicrotasks();
+    expect(settled).toBe(true);
+    await expect(submission).resolves.toMatchObject({ value: expect.any(Object) });
+
+    deferredSpeech.resolve({
+      type: 'speak',
+      content: 'Let us assess the facts first.',
+    });
+    await flushMicrotasks();
+    expect(session.scheduledAgentPublicSpeeches).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ content: 'Let us assess the facts first.' }),
+      ]),
+    );
+    service.onModuleDestroy();
+  });
+
+  it('applies a Discussion Time Adjustment while an Agent public-speech decision is in flight', async () => {
+    const deferredSpeech = createDeferred<{ type: 'speak'; content: string }>();
+    const decisionStarted = createDeferred<void>();
+    let decisions = 0;
+    const service = new GameSessionsService({
+      decidePublicSpeech: () => {
+        decisions += 1;
+        if (decisions > 1) return { type: 'remain-silent' as const };
+        decisionStarted.resolve(undefined);
+        return deferredSpeech.promise;
+      },
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
+    });
+    const created = await service.createMafiaSession(undefined, 5, 'adjustment-during-speech-key');
+    if (created.isErr()) throw new Error('Expected an in-memory session.');
+    const state = service as unknown as {
+      sessions: Map<string, { gameSession: MafiaGameSession }>;
+    };
+    const session = state.sessions.get(created.value.projection.sessionId);
+    if (!session) throw new Error('Expected a stored session.');
+    while (session.gameSession.snapshot().phase !== 'discussion') {
+      session.gameSession.advanceDayPhase(
+        new Date(Date.parse(session.gameSession.snapshot().phaseDeadline) + 1),
+      );
+    }
+    const expectedDeadline = session.gameSession.snapshot().phaseDeadline;
+
+    await service.submitPublicSpeech(
+      created.value.projection.sessionId,
+      created.value.holderId,
+      'I want to hear everyone before deciding.',
+      'speech-before-adjustment-key',
+    );
+    await decisionStarted.promise;
+
+    let settled = false;
+    const adjustment = service
+      .adjustDiscussionTime(
+        created.value.projection.sessionId,
+        created.value.holderId,
+        10,
+        expectedDeadline,
+        'adjustment-during-speech-key',
+      )
+      .then((result) => {
+        settled = true;
+        return result;
+      });
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    expect(settled).toBe(true);
+    await expect(adjustment).resolves.toMatchObject({
+      value: { public: { phaseDeadline: expect.not.stringMatching(expectedDeadline) } },
+    });
+
+    deferredSpeech.resolve({
+      type: 'speak',
+      content: 'This response was not needed to adjust time.',
+    });
+    await flushMicrotasks();
+    service.onModuleDestroy();
+  });
+
+  it('commits an Agent public speech when a snapshot read hydrates during its decision', async () => {
+    vi.useFakeTimers({ now: new Date('2026-09-13T00:00:00.000Z') });
+    const deferredSpeech = createDeferred<{ type: 'speak'; content: string }>();
+    let publicSpeechDecisions = 0;
+    const redis = new RedisMock();
+    const authority = new RedisGameSessionAuthority(redis, 'withai:public-speech-hydration');
+    const service = new GameSessionsService({
+      decidePublicSpeech: () => {
+        publicSpeechDecisions += 1;
+        return publicSpeechDecisions <= 4
+          ? { type: 'remain-silent' as const }
+          : deferredSpeech.promise;
+      },
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
+    });
+    Object.assign(service, { authority });
+    const created = await service.createMafiaSession(undefined, 5, 'public-speech-hydration-key');
+    if (created.isErr()) throw new Error('Expected a durable session.');
+
+    await vi.advanceTimersByTimeAsync(30_001);
+    await flushMicrotasks();
+    await service.submitPublicSpeech(
+      created.value.projection.sessionId,
+      created.value.holderId,
+      'I want to compare the evidence.',
+      'public-speech-hydration-action-key',
+    );
+    await flushMicrotasks();
+    expect(publicSpeechDecisions).toBe(5);
+
+    const readingSnapshot = service.getProjection(
+      created.value.projection.sessionId,
+      created.value.holderId,
+    );
+    deferredSpeech.resolve({ type: 'speak', content: 'I want to hear another perspective.' });
+
+    await readingSnapshot;
+    await vi.advanceTimersByTimeAsync(10_000);
+    await expect(
+      service.getProjection(created.value.projection.sessionId, created.value.holderId),
+    ).resolves.toMatchObject({
+      value: {
+        timeline: expect.arrayContaining([
+          expect.objectContaining({
+            type: 'chat',
+            message: expect.objectContaining({ content: 'I want to hear another perspective.' }),
+          }),
+        ]),
+      },
+    });
+
+    service.onModuleDestroy();
+    redis.disconnect();
+  });
+
+  it('commits a newer Human public speech while an obsolete Agent decision is aborted', async () => {
+    vi.useFakeTimers();
+    const deferredSpeech = createDeferred<{ type: 'speak'; content: string }>();
+    let publicSpeechDecisions = 0;
+    let firstAbortController: AbortController | undefined;
+    const service = new GameSessionsService({
+      decidePublicSpeech: (_context, options) => {
+        publicSpeechDecisions += 1;
+        if (publicSpeechDecisions > 1) return { type: 'remain-silent' as const };
+        firstAbortController = options?.abortController;
+        return deferredSpeech.promise;
+      },
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
+    });
+    const created = await service.createMafiaSession(
+      undefined,
+      5,
+      'cancel-stale-public-speech-key',
+    );
+    if (created.isErr()) throw new Error('Expected an in-memory session.');
+    const state = service as unknown as {
+      sessions: Map<
+        string,
+        { gameSession: MafiaGameSession; scheduledAgentPublicSpeeches: { content: string }[] }
+      >;
+    };
+    const session = state.sessions.get(created.value.projection.sessionId);
+    if (!session) throw new Error('Expected a stored session.');
+    while (session.gameSession.snapshot().phase !== 'discussion') {
+      session.gameSession.advanceDayPhase(
+        new Date(new Date(session.gameSession.snapshot().phaseDeadline).valueOf() + 1),
+      );
+    }
+
+    await service.submitPublicSpeech(
+      created.value.projection.sessionId,
+      created.value.holderId,
+      'I want to hear everyone before deciding.',
+      'first-public-speech-action-key',
+    );
+    await flushMicrotasks();
+    expect(firstAbortController).toBeDefined();
+
+    vi.advanceTimersByTime(1_001);
+    let settled = false;
+    const newerSpeech = service
+      .submitPublicSpeech(
+        created.value.projection.sessionId,
+        created.value.holderId,
+        'One more point before we decide.',
+        'newer-public-speech-action-key',
+      )
+      .then((result) => {
+        settled = true;
+        return result;
+      });
+
+    await flushMicrotasks();
+    expect(settled).toBe(true);
+    await expect(newerSpeech).resolves.toMatchObject({ value: expect.any(Object) });
+    expect(firstAbortController?.signal.aborted).toBe(true);
+
+    deferredSpeech.resolve({ type: 'speak', content: 'This stale message must not be scheduled.' });
+    await flushMicrotasks();
+    expect(session.gameSession.snapshot().timeline).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'chat',
+          message: expect.objectContaining({
+            content: 'This stale message must not be scheduled.',
+          }),
+        }),
+      ]),
+    );
+    expect(session.scheduledAgentPublicSpeeches).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ content: 'This stale message must not be scheduled.' }),
+      ]),
+    );
+    service.onModuleDestroy();
+  });
+
+  it('aborts an in-flight Agent public-speech decision when Discussion advances to Nomination', async () => {
+    vi.useFakeTimers({ now: new Date('2026-09-12T00:00:00.000Z') });
+    const deferredSpeech = createDeferred<{ type: 'speak'; content: string }>();
+    let abortController: AbortController | undefined;
+    const service = new GameSessionsService({
+      decidePublicSpeech: (_context, options) => {
+        abortController = options?.abortController;
+        return deferredSpeech.promise;
+      },
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decidePhaseAction: () => ({ targetParticipantId: 'participant-2' }),
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
+    });
+    const created = await service.createMafiaSession(undefined, 5, 'abort-on-nomination-key');
+    if (created.isErr()) throw new Error('Expected an in-memory session.');
+    const state = service as unknown as {
+      sessions: Map<
+        string,
+        { gameSession: MafiaGameSession; scheduledAgentPublicSpeeches: { content: string }[] }
+      >;
+    };
+    const session = state.sessions.get(created.value.projection.sessionId);
+    if (!session) throw new Error('Expected a stored session.');
+
+    vi.clearAllTimers();
+    let discussionStart: Date | undefined;
+    for (
+      let transitionCount = 0;
+      session.gameSession.snapshot().phase !== 'discussion' && transitionCount < 10;
+      transitionCount += 1
+    ) {
+      const nextPhaseAt = new Date(
+        new Date(session.gameSession.snapshot().phaseDeadline).valueOf() + 1,
+      );
+      session.gameSession.advanceDayPhase(nextPhaseAt);
+      if (session.gameSession.snapshot().phase === 'discussion') discussionStart = nextPhaseAt;
+    }
+    if (!discussionStart) throw new Error('Expected Discussion to begin.');
+    vi.setSystemTime(discussionStart);
+    let publicSpeechSubmitted = false;
+    const publicSpeech = service
+      .submitPublicSpeech(
+        created.value.projection.sessionId,
+        created.value.holderId,
+        'I want to hear everyone before deciding.',
+        'discussion-speech-trigger-key',
+      )
+      .then((result) => {
+        publicSpeechSubmitted = true;
+        return result;
+      });
+    await flushMicrotasks();
+    expect(publicSpeechSubmitted).toBe(true);
+    await expect(publicSpeech).resolves.toMatchObject({ value: expect.any(Object) });
+    expect(session.gameSession.snapshot().phase).toBe('discussion');
+    expect(abortController).toBeDefined();
+
+    const lifecycle = (
+      service as unknown as {
+        lifecycle: { schedulePhaseTransition(current: typeof session): void };
+      }
+    ).lifecycle;
+    lifecycle.schedulePhaseTransition(session);
+    await vi.advanceTimersByTimeAsync(120_001);
+    await flushMicrotasks();
+    expect(session.gameSession.snapshot().phase).toBe('nomination');
+    expect(abortController?.signal.aborted).toBe(true);
+    deferredSpeech.resolve({ type: 'speak', content: 'This stale message must not be scheduled.' });
+    await flushMicrotasks();
+    expect(session.scheduledAgentPublicSpeeches).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ content: 'This stale message must not be scheduled.' }),
+      ]),
+    );
+    service.onModuleDestroy();
+  });
+
+  it('submits pending Agent nominations after a Human nomination', async () => {
+    const agentDecisions = {
+      decidePublicSpeech: () => ({ type: 'remain-silent' as const }),
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decidePhaseAction: () => ({
+        targetParticipantId: 'participant-2',
+      }),
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
+    };
+    const service = new GameSessionsService(agentDecisions);
+    const created = await service.createMafiaSession(undefined, 5, 'human-nomination-key');
+    if (created.isErr()) throw new Error('Expected an in-memory session.');
+    const state = service as unknown as {
+      sessions: Map<string, { agentActionsPending: boolean; gameSession: MafiaGameSession }>;
+    };
+    const session = state.sessions.get(created.value.projection.sessionId);
+    if (!session) throw new Error('Expected a stored session.');
+    const nightEnd = new Date(new Date(session.gameSession.snapshot().phaseDeadline).valueOf() + 1);
+    session.gameSession.advanceDayPhase(nightEnd);
+    const nominationStart = new Date(
+      new Date(session.gameSession.snapshot().phaseDeadline).valueOf() + 1,
+    );
+    expect(session.gameSession.advanceDayPhase(nominationStart)).toEqual({
+      value: { type: 'phase-advanced', phase: 'nomination' },
+    });
+    session.agentActionsPending = true;
+
+    await expect(
+      service.submitNomination(
+        created.value.projection.sessionId,
+        created.value.holderId,
+        'participant-4',
+        'human-nomination-action-key',
+      ),
+    ).resolves.toMatchObject({ value: expect.any(Object) });
+
+    await flushMicrotasks();
+
+    expect(session.gameSession.snapshot().nominations).toEqual(
+      expect.arrayContaining([
+        ['participant-1', 'participant-4'],
+        ['participant-2', 'participant-2'],
+        ['participant-3', 'participant-2'],
+        ['participant-4', 'participant-2'],
+        ['participant-5', 'participant-2'],
+      ]),
+    );
+    expect(session.agentActionsPending).toBe(false);
+    service.onModuleDestroy();
+  });
+
+  it('returns a Human nomination projection before pending Agent LLM decisions complete', async () => {
+    const deferredDecision = createDeferred<{ targetParticipantId: string }>();
+    const redis = new RedisMock();
+    const authority = new RedisGameSessionAuthority(redis);
+    const agentDecisions: AgentDecisionGateway = {
+      decidePublicSpeech: () => ({ type: 'remain-silent' as const }),
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decidePhaseAction: (context) =>
+        context.public.phase === 'nomination'
+          ? deferredDecision.promise
+          : {
+              targetParticipantId: 'participant-2',
+            },
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
+    };
+    const firstService = new GameSessionsService(agentDecisions);
+    Object.assign(firstService, { authority });
+    const created = await firstService.createMafiaSession(
+      undefined,
+      5,
+      'async-human-nomination-key',
+    );
+    if (created.isErr()) throw new Error('Expected an in-memory session.');
+    const state = firstService as unknown as {
+      sessions: Map<string, { agentActionsPending: boolean; gameSession: MafiaGameSession }>;
+    };
+    const session = state.sessions.get(created.value.projection.sessionId);
+    if (!session) throw new Error('Expected a stored session.');
+    session.gameSession.advanceDayPhase(
+      new Date(new Date(session.gameSession.snapshot().phaseDeadline).valueOf() + 1),
+    );
+    session.gameSession.advanceDayPhase(
+      new Date(new Date(session.gameSession.snapshot().phaseDeadline).valueOf() + 1),
+    );
+    session.agentActionsPending = true;
+    const stored = await authority.load(created.value.projection.sessionId);
+    if (stored.isErr() || !stored.value) throw new Error('Expected an authoritative snapshot.');
+    await authority.saveSnapshot({
+      ...stored.value,
+      gameSession: session.gameSession.snapshot(),
+      agentActionsPending: true,
+    });
+
+    const service = new GameSessionsService(agentDecisions);
+    Object.assign(service, { authority });
+
+    let settled = false;
+    const submission = service
+      .submitNomination(
+        created.value.projection.sessionId,
+        created.value.holderId,
+        'participant-4',
+        'async-human-nomination-action-key',
+      )
+      .then((result) => {
+        settled = true;
+        return result;
+      });
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    expect(settled).toBe(true);
+    await expect(submission).resolves.toMatchObject({
+      value: { personal: { vote: { phase: 'nomination', targetParticipantId: 'participant-4' } } },
+    });
+
+    deferredDecision.resolve({
+      targetParticipantId: 'participant-2',
+    });
+    await flushMicrotasks();
+
+    firstService.onModuleDestroy();
+    service.onModuleDestroy();
+    redis.disconnect();
+  });
+
+  it('does not block a Human nomination behind an Agent LLM decision already in flight', async () => {
+    const deferredDecision = createDeferred<{ targetParticipantId: string }>();
+    const decisionStarted = createDeferred<void>();
+    const redis = new RedisMock();
+    const authority = new RedisGameSessionAuthority(redis);
+    const agentDecisions: AgentDecisionGateway = {
+      decidePublicSpeech: () => ({ type: 'remain-silent' as const }),
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decidePhaseAction: (context) => {
+        if (context.public.phase !== 'nomination') {
+          return {
+            targetParticipantId: 'participant-2',
+          };
+        }
+        decisionStarted.resolve(undefined);
+        return deferredDecision.promise;
+      },
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
+    };
+    const firstService = new GameSessionsService(agentDecisions);
+    Object.assign(firstService, { authority });
+    const created = await firstService.createMafiaSession(
+      undefined,
+      5,
+      'in-flight-agent-nomination-key',
+    );
+    if (created.isErr()) throw new Error('Expected a durable session.');
+    const state = firstService as unknown as {
+      sessions: Map<string, { agentActionsPending: boolean; gameSession: MafiaGameSession }>;
+    };
+    const session = state.sessions.get(created.value.projection.sessionId);
+    if (!session) throw new Error('Expected a stored session.');
+    session.gameSession.advanceDayPhase(
+      new Date(new Date(session.gameSession.snapshot().phaseDeadline).valueOf() + 1),
+    );
+    session.gameSession.advanceDayPhase(
+      new Date(new Date(session.gameSession.snapshot().phaseDeadline).valueOf() + 1),
+    );
+    session.agentActionsPending = true;
+    const stored = await authority.load(created.value.projection.sessionId);
+    if (stored.isErr() || !stored.value) throw new Error('Expected an authoritative snapshot.');
+    await authority.saveSnapshot({
+      ...stored.value,
+      gameSession: session.gameSession.snapshot(),
+      agentActionsPending: true,
+    });
+
+    const service = new GameSessionsService(agentDecisions);
+    Object.assign(service, { authority });
+    await service.getProjection(created.value.projection.sessionId, created.value.holderId);
+    await decisionStarted.promise;
+
+    let settled = false;
+    const submission = service
+      .submitNomination(
+        created.value.projection.sessionId,
+        created.value.holderId,
+        'participant-4',
+        'human-nomination-while-agent-is-thinking-key',
+      )
+      .then((result) => {
+        settled = true;
+        return result;
+      });
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    expect(settled).toBe(true);
+    await expect(submission).resolves.toMatchObject({
+      value: { personal: { vote: { phase: 'nomination', targetParticipantId: 'participant-4' } } },
+    });
+
+    deferredDecision.resolve({
+      targetParticipantId: 'participant-2',
+    });
+    await flushMicrotasks();
+    firstService.onModuleDestroy();
+    service.onModuleDestroy();
+    redis.disconnect();
+  });
+
+  it('preserves Agent nominations when a Human nomination hydrates a pending durable session', async () => {
+    const redis = new RedisMock();
+    const authority = new RedisGameSessionAuthority(redis);
+    const agentDecisions = {
+      decidePublicSpeech: () => ({ type: 'remain-silent' as const }),
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decidePhaseAction: () => ({
+        targetParticipantId: 'participant-2',
+      }),
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
+    };
+    const firstService = new GameSessionsService(agentDecisions);
+    Object.assign(firstService, { authority });
+    const created = await firstService.createMafiaSession(
+      undefined,
+      5,
+      'durable-human-nomination-key',
+    );
+    if (created.isErr()) throw new Error('Expected a durable session.');
+    const state = firstService as unknown as {
+      sessions: Map<string, { agentActionsPending: boolean; gameSession: MafiaGameSession }>;
+    };
+    const session = state.sessions.get(created.value.projection.sessionId);
+    if (!session) throw new Error('Expected a stored session.');
+    session.gameSession.advanceDayPhase(
+      new Date(new Date(session.gameSession.snapshot().phaseDeadline).valueOf() + 1),
+    );
+    session.gameSession.advanceDayPhase(
+      new Date(new Date(session.gameSession.snapshot().phaseDeadline).valueOf() + 1),
+    );
+    session.agentActionsPending = true;
+    const stored = await authority.load(created.value.projection.sessionId);
+    if (stored.isErr() || !stored.value) throw new Error('Expected an authoritative snapshot.');
+    await authority.saveSnapshot({
+      ...stored.value,
+      gameSession: session.gameSession.snapshot(),
+      agentActionsPending: true,
+    });
+
+    const secondService = new GameSessionsService(agentDecisions);
+    Object.assign(secondService, { authority });
+    await expect(
+      secondService.submitNomination(
+        created.value.projection.sessionId,
+        created.value.holderId,
+        'participant-4',
+        'durable-human-nomination-action-key',
+      ),
+    ).resolves.toMatchObject({ value: expect.any(Object) });
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await expect(authority.load(created.value.projection.sessionId)).resolves.toMatchObject({
+      value: {
+        agentActionsPending: false,
+        gameSession: {
+          nominations: expect.arrayContaining([
+            ['participant-1', 'participant-4'],
+            ['participant-2', 'participant-2'],
+            ['participant-3', 'participant-2'],
+            ['participant-4', 'participant-2'],
+            ['participant-5', 'participant-2'],
+          ]),
+        },
+      },
+    });
+    firstService.onModuleDestroy();
+    secondService.onModuleDestroy();
+    redis.disconnect();
+  });
+
+  it('persists Agent verdicts alongside a Human verdict in a pending durable session', async () => {
+    const redis = new RedisMock();
+    const authority = new RedisGameSessionAuthority(redis);
+    const agentDecisions = {
+      decidePublicSpeech: () => ({ type: 'remain-silent' as const }),
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decidePhaseAction: () => ({ verdict: 'eliminate' as const }),
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
+    };
+    const firstService = new GameSessionsService(agentDecisions);
+    Object.assign(firstService, { authority });
+    const created = await firstService.createMafiaSession(
+      undefined,
+      5,
+      'durable-human-verdict-key',
+    );
+    if (created.isErr()) throw new Error('Expected a durable session.');
+    const state = firstService as unknown as {
+      sessions: Map<string, { agentActionsPending: boolean; gameSession: MafiaGameSession }>;
+    };
+    const session = state.sessions.get(created.value.projection.sessionId);
+    if (!session) throw new Error('Expected a stored session.');
+    const afterNight = new Date(
+      new Date(session.gameSession.snapshot().phaseDeadline).valueOf() + 1,
+    );
+    session.gameSession.advanceDayPhase(afterNight);
+    const afterDiscussion = new Date(
+      new Date(session.gameSession.snapshot().phaseDeadline).valueOf() + 1,
+    );
+    session.gameSession.advanceDayPhase(afterDiscussion);
+    session.gameSession.submitNomination('participant-1', 'participant-2', afterDiscussion);
+    session.gameSession.submitNomination('participant-2', 'participant-2', afterDiscussion);
+    const afterNomination = new Date(
+      new Date(session.gameSession.snapshot().phaseDeadline).valueOf() + 1,
+    );
+    session.gameSession.advanceDayPhase(afterNomination);
+    const afterFinalDefence = new Date(
+      new Date(session.gameSession.snapshot().phaseDeadline).valueOf() + 1,
+    );
+    session.gameSession.advanceDayPhase(afterFinalDefence);
+    session.agentActionsPending = true;
+    const stored = await authority.load(created.value.projection.sessionId);
+    if (stored.isErr() || !stored.value) throw new Error('Expected an authoritative snapshot.');
+    await authority.saveSnapshot({
+      ...stored.value,
+      gameSession: session.gameSession.snapshot(),
+      agentActionsPending: true,
+    });
+
+    const secondService = new GameSessionsService(agentDecisions);
+    Object.assign(secondService, { authority });
+    await expect(
+      secondService.submitVerdict(
+        created.value.projection.sessionId,
+        created.value.holderId,
+        'spare',
+        'durable-human-verdict-action-key',
+      ),
+    ).resolves.toMatchObject({ value: expect.any(Object) });
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await expect(authority.load(created.value.projection.sessionId)).resolves.toMatchObject({
+      value: {
+        agentActionsPending: false,
+        gameSession: {
+          verdicts: expect.arrayContaining([
+            ['participant-1', 'spare'],
+            ['participant-2', 'eliminate'],
+            ['participant-3', 'eliminate'],
+            ['participant-4', 'eliminate'],
+            ['participant-5', 'eliminate'],
+          ]),
+        },
+      },
+    });
+    firstService.onModuleDestroy();
+    secondService.onModuleDestroy();
+    redis.disconnect();
+  });
+
+  it('waits for pending Agent verdicts before resolving the verdict deadline after hydration', async () => {
+    vi.useFakeTimers({ now: new Date('2026-09-13T00:00:00.000Z') });
+    const deferredVerdict = createDeferred<{ verdict: 'eliminate' }>();
+    const verdictStarted = createDeferred<void>();
+    const redis = new RedisMock();
+    const authority = new RedisGameSessionAuthority(redis, undefined, () => new Date());
+    const agentDecisions: AgentDecisionGateway = {
+      decidePublicSpeech: () => ({ type: 'remain-silent' as const }),
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decidePhaseAction: (context) => {
+        if (context.public.phase !== 'verdict') return { targetParticipantId: 'participant-2' };
+        verdictStarted.resolve(undefined);
+        return deferredVerdict.promise;
+      },
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
+    };
+    const firstService = new GameSessionsService(agentDecisions);
+    Object.assign(firstService, { authority });
+    const created = await firstService.createMafiaSession(
+      undefined,
+      5,
+      'pending-verdict-deadline-key',
+    );
+    if (created.isErr()) throw new Error('Expected a durable session.');
+    const state = firstService as unknown as {
+      sessions: Map<string, { agentActionsPending: boolean; gameSession: MafiaGameSession }>;
+    };
+    const session = state.sessions.get(created.value.projection.sessionId);
+    if (!session) throw new Error('Expected a stored session.');
+    const afterNight = new Date(
+      new Date(session.gameSession.snapshot().phaseDeadline).valueOf() + 1,
+    );
+    session.gameSession.advanceDayPhase(afterNight);
+    const afterDiscussion = new Date(
+      new Date(session.gameSession.snapshot().phaseDeadline).valueOf() + 1,
+    );
+    session.gameSession.advanceDayPhase(afterDiscussion);
+    session.gameSession.submitNomination('participant-1', 'participant-2', afterDiscussion);
+    session.gameSession.submitNomination('participant-2', 'participant-2', afterDiscussion);
+    const afterNomination = new Date(
+      new Date(session.gameSession.snapshot().phaseDeadline).valueOf() + 1,
+    );
+    session.gameSession.advanceDayPhase(afterNomination);
+    const afterFinalDefence = new Date(
+      new Date(session.gameSession.snapshot().phaseDeadline).valueOf() + 1,
+    );
+    session.gameSession.advanceDayPhase(afterFinalDefence);
+    session.agentActionsPending = true;
+    const stored = await authority.load(created.value.projection.sessionId);
+    if (stored.isErr() || !stored.value) throw new Error('Expected an authoritative snapshot.');
+    await authority.saveSnapshot({
+      ...stored.value,
+      gameSession: session.gameSession.snapshot(),
+      agentActionsPending: true,
+    });
+
+    const secondService = new GameSessionsService(agentDecisions);
+    Object.assign(secondService, { authority });
+    await secondService.getProjection(created.value.projection.sessionId, created.value.holderId);
+    await verdictStarted.promise;
+    await secondService.submitVerdict(
+      created.value.projection.sessionId,
+      created.value.holderId,
+      'spare',
+      'human-verdict-during-agent-thinking-key',
+    );
+    await vi.advanceTimersByTimeAsync(10_001);
+
+    await expect(authority.load(created.value.projection.sessionId)).resolves.toMatchObject({
+      value: { gameSession: { phase: 'verdict' } },
+    });
+
+    deferredVerdict.resolve({ verdict: 'eliminate' });
+    await flushMicrotasks();
+    firstService.onModuleDestroy();
+    secondService.onModuleDestroy();
+    redis.disconnect();
+  });
+
+  it('persists Agent nominations when a Discussion Time Adjustment starts nomination', async () => {
+    vi.useFakeTimers({ now: new Date('2026-09-12T00:00:00.000Z') });
+    const agentDecisions = {
+      decidePublicSpeech: () => ({ type: 'remain-silent' as const }),
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decidePhaseAction: () => ({
+        targetParticipantId: 'participant-2',
+      }),
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
+    };
+    const service = new GameSessionsService(agentDecisions);
+    const created = await service.createMafiaSession(undefined, 5, 'adjustment-nomination-key');
+    if (created.isErr()) throw new Error('Expected an in-memory session.');
+    const state = service as unknown as {
+      sessions: Map<string, { gameSession: MafiaGameSession }>;
+    };
+    const session = state.sessions.get(created.value.projection.sessionId);
+    if (!session) throw new Error('Expected a stored session.');
+    vi.clearAllTimers();
+    vi.setSystemTime(new Date(Date.parse(created.value.projection.public.phaseDeadline) + 1));
+    const discussion = await service.getProjection(
+      created.value.projection.sessionId,
+      created.value.holderId,
+    );
+    if (discussion.isErr()) throw new Error('Expected the initial Night to resolve.');
+    for (let index = 0; index < 11; index += 1) {
+      session.gameSession.adjustDiscussionTime('participant-1', -10, new Date());
+    }
+    const expectedDeadline = session.gameSession.snapshot().phaseDeadline;
+
+    await expect(
+      service.adjustDiscussionTime(
+        created.value.projection.sessionId,
+        created.value.holderId,
+        -10,
+        expectedDeadline,
+        'adjustment-starts-nomination-key',
+      ),
+    ).resolves.toMatchObject({ value: { public: { phase: 'nomination' } } });
+
+    await flushMicrotasks();
+
+    expect(session.gameSession.snapshot().nominations).toEqual(
+      expect.arrayContaining([
+        ['participant-2', 'participant-2'],
+        ['participant-3', 'participant-2'],
+        ['participant-4', 'participant-2'],
+        ['participant-5', 'participant-2'],
+      ]),
+    );
+    service.onModuleDestroy();
+  });
+
+  it('waits for pending Agent nominations before resolving a shortened Discussion', async () => {
+    vi.useFakeTimers({ now: new Date('2026-09-12T00:00:00.000Z') });
+    const deferredNomination = createDeferred<{ targetParticipantId: string }>();
+    const service = new GameSessionsService({
+      decidePublicSpeech: () => ({ type: 'remain-silent' as const }),
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decidePhaseAction: (context) =>
+        context.public.phase === 'nomination'
+          ? deferredNomination.promise
+          : { targetParticipantId: 'participant-2' },
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
+    });
+    const created = await service.createMafiaSession(undefined, 5, 'delayed-adjustment-key');
+    if (created.isErr()) throw new Error('Expected an in-memory session.');
+    const state = service as unknown as {
+      sessions: Map<string, { gameSession: MafiaGameSession }>;
+    };
+    const session = state.sessions.get(created.value.projection.sessionId);
+    if (!session) throw new Error('Expected a stored session.');
+    vi.clearAllTimers();
+    vi.setSystemTime(new Date(Date.parse(created.value.projection.public.phaseDeadline) + 1));
+    const discussion = await service.getProjection(
+      created.value.projection.sessionId,
+      created.value.holderId,
+    );
+    if (discussion.isErr()) throw new Error('Expected the initial Night to resolve.');
+    for (let index = 0; index < 11; index += 1) {
+      session.gameSession.adjustDiscussionTime('participant-1', -10, new Date());
+    }
+    const expectedDeadline = session.gameSession.snapshot().phaseDeadline;
+
+    await service.adjustDiscussionTime(
+      created.value.projection.sessionId,
+      created.value.holderId,
+      -10,
+      expectedDeadline,
+      'delayed-adjustment-starts-nomination-key',
+    );
+    await service.submitNomination(
+      created.value.projection.sessionId,
+      created.value.holderId,
+      'participant-3',
+      'human-nomination-during-agent-thinking-key',
+    );
+    vi.advanceTimersByTime(15_000);
+    await flushMicrotasks();
+
+    expect(session.gameSession.snapshot().phase).toBe('nomination');
+
+    deferredNomination.resolve({ targetParticipantId: 'participant-2' });
+    await flushMicrotasks();
+
+    expect(session.gameSession.snapshot().nominations).toEqual(
+      expect.arrayContaining([
+        ['participant-1', 'participant-3'],
+        ['participant-2', 'participant-2'],
+        ['participant-3', 'participant-2'],
+        ['participant-4', 'participant-2'],
+        ['participant-5', 'participant-2'],
+      ]),
+    );
+    service.onModuleDestroy();
   });
 
   it('consumes pending phase-entry actions when request hydration restores a session', async () => {
@@ -81,8 +1146,8 @@ describe('GameSessionsService', () => {
     redis.disconnect();
   });
 
-  it('unwinds a failed pending-action save before retrying it', async () => {
-    jest.useFakeTimers({ now: new Date('2026-09-11T00:00:00.000Z') });
+  it('does not fail request hydration when a queued pending-action save fails', async () => {
+    vi.useFakeTimers({ now: new Date('2026-09-11T00:00:00.000Z') });
     const redis = new RedisMock();
     const authority = new RedisGameSessionAuthority(redis);
     const agentDecisions = {
@@ -106,7 +1171,7 @@ describe('GameSessionsService', () => {
 
     const restartedService = new GameSessionsService(agentDecisions);
     Object.assign(restartedService, { authority });
-    const save = jest
+    const save = vi
       .spyOn(authority, 'save')
       .mockImplementationOnce(() =>
         errAsync({ type: 'authority-unavailable', cause: 'write failed' }),
@@ -115,12 +1180,12 @@ describe('GameSessionsService', () => {
 
     await expect(
       restartedService.getProjection(created.value.projection.sessionId, holderId),
-    ).resolves.toMatchObject({ error: { type: 'durability-unavailable' } });
+    ).resolves.toMatchObject({ value: { sessionId: created.value.projection.sessionId } });
+    await vi.advanceTimersByTimeAsync(0);
     expect(save).toHaveBeenCalledTimes(1);
 
-    await jest.advanceTimersByTimeAsync(1001);
     await expect(authority.load(created.value.projection.sessionId)).resolves.toMatchObject({
-      value: { agentActionsPending: false },
+      value: { agentActionsPending: true },
     });
 
     firstService.onModuleDestroy();
@@ -129,7 +1194,7 @@ describe('GameSessionsService', () => {
   });
 
   it('retains a pending Agent Mafia Night Chat reply after request hydration', async () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     const redis = new RedisMock();
     const authority = new RedisGameSessionAuthority(redis);
     const agentDecisions = {
@@ -171,7 +1236,7 @@ describe('GameSessionsService', () => {
   });
 
   it('retries durable Phase recovery after a transient startup failure', async () => {
-    jest.useFakeTimers({ now: new Date('2026-09-11T00:00:00.000Z') });
+    vi.useFakeTimers({ now: new Date('2026-09-11T00:00:00.000Z') });
     const redis = new RedisMock();
     const authority = new RedisGameSessionAuthority(redis);
     const agentDecisions = {
@@ -186,9 +1251,9 @@ describe('GameSessionsService', () => {
     const created = await firstService.createMafiaSession(undefined, 5, 'startup-recovery-key');
     if (created.isErr()) throw new Error('Expected a durable session.');
 
-    jest.clearAllTimers();
-    jest.setSystemTime(new Date('2026-09-11T00:10:00.000Z'));
-    const resolveExpiredPhase = jest
+    vi.clearAllTimers();
+    vi.setSystemTime(new Date('2026-09-11T00:10:00.000Z'));
+    const resolveExpiredPhase = vi
       .spyOn(authority, 'resolveExpiredPhase')
       .mockImplementationOnce(() =>
         errAsync({ type: 'authority-unavailable', cause: 'temporary' }),
@@ -197,8 +1262,8 @@ describe('GameSessionsService', () => {
     Object.assign(restartedService, { authority });
 
     await restartedService.onModuleInit();
-    await jest.advanceTimersByTimeAsync(1001);
-    await jest.advanceTimersByTimeAsync(1);
+    await vi.advanceTimersByTimeAsync(1001);
+    await vi.advanceTimersByTimeAsync(1);
 
     expect(resolveExpiredPhase).toHaveBeenCalledTimes(1);
     const recoveredEvents = await authority.eventsAfter(created.value.projection.sessionId, 1);
@@ -331,7 +1396,7 @@ describe('GameSessionsService', () => {
   });
 
   it('recovers an expired phase when its timer was missed before a snapshot is read', async () => {
-    jest.useFakeTimers({ now: new Date('2026-08-27T17:11:51.000Z') });
+    vi.useFakeTimers({ now: new Date('2026-08-27T17:11:51.000Z') });
     const service = new GameSessionsService({
       decidePublicSpeech: () => ({ type: 'remain-silent' }),
       decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
@@ -344,8 +1409,8 @@ describe('GameSessionsService', () => {
     expect(created.isOk()).toBe(true);
     if (created.isErr()) throw new Error('Expected a session.');
 
-    jest.clearAllTimers();
-    jest.setSystemTime(new Date('2026-08-27T17:13:51.001Z'));
+    vi.clearAllTimers();
+    vi.setSystemTime(new Date('2026-08-27T17:13:51.001Z'));
 
     const holderId = created.value.holderId;
     expect(await service.getProjection(created.value.projection.sessionId, holderId)).toMatchObject(
@@ -358,8 +1423,40 @@ describe('GameSessionsService', () => {
     );
   });
 
+  it('recovers an expired phase when another replica still holds its deadline claim', async () => {
+    vi.useFakeTimers({ now: new Date('2026-08-27T17:11:51.000Z') });
+    const redis = new RedisMock();
+    const authority = new RedisGameSessionAuthority(redis, 'withai:stale-claim-read-test');
+    const agentDecisions = {
+      decidePublicSpeech: () => ({ type: 'remain-silent' as const }),
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
+    };
+    const service = new GameSessionsService(agentDecisions);
+    Object.assign(service, { authority });
+    const created = await service.createMafiaSession(undefined, 5, 'stale-claim-read-key');
+    if (created.isErr()) throw new Error('Expected a durable session.');
+
+    vi.clearAllTimers();
+    vi.setSystemTime(new Date('2026-08-27T17:13:51.001Z'));
+    const holderId = created.value.holderId;
+    const discussion = await service.getProjection(created.value.projection.sessionId, holderId);
+    if (discussion.isErr()) throw new Error('Expected the night phase to recover.');
+
+    vi.clearAllTimers();
+    vi.setSystemTime(new Date(Date.parse(discussion.value.public.phaseDeadline) + 1));
+    vi.spyOn(authority, 'claimPhaseDeadline').mockReturnValueOnce(okAsync(false));
+
+    await expect(
+      service.getProjection(created.value.projection.sessionId, holderId),
+    ).resolves.toMatchObject({ value: { public: { phase: 'nomination' } } });
+    redis.disconnect();
+  });
+
   it('retries a phase timer that fires before its deadline', async () => {
-    jest.useFakeTimers({ now: new Date('2026-08-27T17:11:51.000Z') });
+    vi.useFakeTimers({ now: new Date('2026-08-27T17:11:51.000Z') });
     const service = new GameSessionsService({
       decidePublicSpeech: () => ({ type: 'remain-silent' }),
       decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
@@ -370,13 +1467,13 @@ describe('GameSessionsService', () => {
     const created = await service.createMafiaSession(undefined, 5, undefined);
     if (created.isErr()) throw new Error('Expected a session.');
 
-    jest
-      .spyOn(MafiaGameSession.prototype, 'advanceDayPhase')
-      .mockImplementationOnce(() => ok({ type: 'not-due' }));
+    vi.spyOn(MafiaGameSession.prototype, 'advanceDayPhase').mockImplementationOnce(() =>
+      ok({ type: 'not-due' }),
+    );
 
     const deadlineMs = Date.parse(created.value.projection.public.phaseDeadline) - Date.now();
-    jest.advanceTimersByTime(deadlineMs);
-    jest.advanceTimersByTime(1);
+    await vi.advanceTimersByTimeAsync(deadlineMs);
+    await vi.advanceTimersByTimeAsync(1);
 
     expect(service.publishSessionProjection(created.value.projection.sessionId)).toMatchObject({
       value: { public: { phase: 'discussion' } },
@@ -384,7 +1481,7 @@ describe('GameSessionsService', () => {
   });
 
   it('retries a phase timer after an authority claim failure', async () => {
-    jest.useFakeTimers({ now: new Date('2026-08-27T17:11:51.000Z') });
+    vi.useFakeTimers({ now: new Date('2026-08-27T17:11:51.000Z') });
     const redis = new RedisMock();
     const authority = new RedisGameSessionAuthority(redis, 'withai:claim-retry-test');
     const service = new GameSessionsService({
@@ -397,23 +1494,23 @@ describe('GameSessionsService', () => {
     Object.assign(service, { authority });
     const created = await service.createMafiaSession(undefined, 5, undefined);
     if (created.isErr()) throw new Error('Expected a durable session.');
-    const claimPhaseDeadline = jest
+    const claimPhaseDeadline = vi
       .spyOn(authority, 'claimPhaseDeadline')
       .mockReturnValueOnce(
         errAsync({ type: 'authority-unavailable', cause: new Error('offline') }),
       );
 
     const deadlineMs = Date.parse(created.value.projection.public.phaseDeadline) - Date.now();
-    await jest.advanceTimersByTimeAsync(deadlineMs);
-    await jest.advanceTimersByTimeAsync(1000);
-    await jest.runOnlyPendingTimersAsync();
+    await vi.advanceTimersByTimeAsync(deadlineMs);
+    await vi.advanceTimersByTimeAsync(1000);
+    await vi.runOnlyPendingTimersAsync();
 
     expect(claimPhaseDeadline).toHaveBeenCalledTimes(2);
     redis.disconnect();
   });
 
   it('retries a phase timer after another replica holds its deadline claim', async () => {
-    jest.useFakeTimers({ now: new Date('2026-08-27T17:11:51.000Z') });
+    vi.useFakeTimers({ now: new Date('2026-08-27T17:11:51.000Z') });
     const redis = new RedisMock();
     const authority = new RedisGameSessionAuthority(redis, 'withai:claim-lease-retry-test');
     const service = new GameSessionsService({
@@ -426,19 +1523,19 @@ describe('GameSessionsService', () => {
     Object.assign(service, { authority });
     const created = await service.createMafiaSession(undefined, 5, undefined);
     if (created.isErr()) throw new Error('Expected a durable session.');
-    const claimPhaseDeadline = jest
+    const claimPhaseDeadline = vi
       .spyOn(authority, 'claimPhaseDeadline')
       .mockReturnValueOnce(okAsync(false));
 
     const deadlineMs = Date.parse(created.value.projection.public.phaseDeadline) - Date.now();
-    await jest.advanceTimersByTimeAsync(deadlineMs);
-    await jest.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(deadlineMs);
+    await vi.advanceTimersByTimeAsync(0);
     expect(claimPhaseDeadline).toHaveBeenCalledTimes(1);
 
-    await jest.advanceTimersByTimeAsync(59_999);
+    await vi.advanceTimersByTimeAsync(59_999);
     expect(claimPhaseDeadline).toHaveBeenCalledTimes(1);
-    await jest.advanceTimersByTimeAsync(1);
-    await jest.runOnlyPendingTimersAsync();
+    await vi.advanceTimersByTimeAsync(1);
+    await vi.runOnlyPendingTimersAsync();
 
     expect(claimPhaseDeadline).toHaveBeenCalledTimes(2);
     redis.disconnect();
@@ -455,17 +1552,17 @@ describe('GameSessionsService', () => {
     const controller = new GameSessionsController(service);
     type EventsResult = Result<Observable<MafiaGameSessionProjectionEntity>, GameSessionError>;
     const eventsFor = createDeferred<EventsResult>();
-    jest.spyOn(service, 'eventsFor').mockReturnValue(eventsFor.promise);
+    vi.spyOn(service, 'eventsFor').mockReturnValue(eventsFor.promise);
     const request = Object.assign(new EventEmitter(), {
       destroyed: false,
       headers: {},
     }) as unknown as Request;
-    const flushHeaders = jest.fn();
-    const write = jest.fn();
+    const flushHeaders = vi.fn();
+    const write = vi.fn();
     const response = {
-      end: jest.fn(),
+      end: vi.fn(),
       flushHeaders,
-      set: jest.fn(),
+      set: vi.fn(),
       write,
     } as unknown as Response;
     let subscribed = false;
@@ -484,7 +1581,7 @@ describe('GameSessionsService', () => {
   });
 
   it('keeps a durable SSE session alive during local idle cleanup', async () => {
-    jest.useFakeTimers({ now: new Date('2026-09-11T00:00:00.000Z') });
+    vi.useFakeTimers({ now: new Date('2026-09-11T00:00:00.000Z') });
     const redis = new RedisMock();
     const authority = new RedisGameSessionAuthority(redis);
     const service = new GameSessionsService({
@@ -512,7 +1609,7 @@ describe('GameSessionsService', () => {
       sessions: Map<string, unknown>;
     };
 
-    jest.setSystemTime(new Date('2026-09-11T00:15:01.000Z'));
+    vi.setSystemTime(new Date('2026-09-11T00:15:01.000Z'));
     await state.lifecycle.cleanupExpiredSessions();
 
     expect(state.eventSubscriberCounts.get(created.value.projection.sessionId)).toBe(1);
@@ -531,7 +1628,6 @@ describe('GameSessionsService', () => {
       deadline: number;
       cancelled: boolean;
     };
-    const timers: TestTimer[] = [];
     const timerMetadata = new Map<NodeJS.Timeout, TestTimer>();
     const redis = new RedisMock();
     const authority = new RedisGameSessionAuthority(redis);
@@ -545,7 +1641,6 @@ describe('GameSessionsService', () => {
         };
         const timer = setTimeout(() => undefined, delayMs);
         timer.unref();
-        timers.push(metadata);
         timerMetadata.set(timer, metadata);
         return timer;
       },
@@ -573,44 +1668,44 @@ describe('GameSessionsService', () => {
     Object.assign(service, { authority });
     const created = await service.createMafiaSession(undefined, 5, undefined);
     if (created.isErr()) throw new Error('Expected a durable session.');
-    const claimPhaseDeadline = jest.spyOn(authority, 'claimPhaseDeadline');
+    const claimPhaseDeadline = vi.spyOn(authority, 'claimPhaseDeadline');
+    const state = service as unknown as {
+      sessions: Map<string, { phaseTimer: NodeJS.Timeout | undefined }>;
+    };
     const holderId = created.value.holderId;
     const projection = await service.getProjection(created.value.projection.sessionId, holderId);
     expect(projection.isOk()).toBe(true);
-
-    const runNextDueTimer = async () => {
-      const timer = timers.find(
-        (candidate) => !candidate.cancelled && candidate.deadline <= now.valueOf(),
-      );
-      if (!timer) throw new Error('Expected a phase timer.');
-      timer.cancelled = true;
-      timer.callback();
-      await Promise.all(
-        Array.from({ length: 5 }, () => new Promise<void>((resolve) => setImmediate(resolve))),
-      );
-    };
     now = new Date(new Date(created.value.projection.public.phaseDeadline).valueOf() + 1);
-    await runNextDueTimer();
-    await runNextDueTimer();
-    await runNextDueTimer();
-    expect(claimPhaseDeadline).toHaveBeenCalledTimes(1);
+    const session = state.sessions.get(created.value.projection.sessionId);
+    const phaseTimer = session?.phaseTimer;
+    if (!phaseTimer) throw new Error('Expected a phase timer.');
+    const phaseTimerMetadata = timerMetadata.get(phaseTimer);
+    if (!phaseTimerMetadata) throw new Error('Expected phase timer metadata.');
+    phaseTimerMetadata.cancelled = true;
+    phaseTimerMetadata.callback();
+    await vi.waitFor(() => expect(claimPhaseDeadline).toHaveBeenCalledTimes(1), {
+      timeout: 1_000,
+      interval: 10,
+    });
 
-    await expect(
-      authority.eventsAfter(created.value.projection.sessionId, 0),
-    ).resolves.toMatchObject({
-      value: expect.arrayContaining([
-        expect.objectContaining({
-          projection: expect.objectContaining({
-            public: expect.objectContaining({ phase: 'discussion' }),
+    await vi.waitFor(async () => {
+      await expect(
+        authority.eventsAfter(created.value.projection.sessionId, 0),
+      ).resolves.toMatchObject({
+        value: expect.arrayContaining([
+          expect.objectContaining({
+            projection: expect.objectContaining({
+              public: expect.objectContaining({ phase: 'discussion' }),
+            }),
           }),
-        }),
-      ]),
+        ]),
+      });
     });
     redis.disconnect();
   });
 
   it('throttles Discussion Time Adjustments while allowing an idempotent retry', async () => {
-    jest.useFakeTimers({ now: new Date('2026-08-27T17:11:51.000Z') });
+    vi.useFakeTimers({ now: new Date('2026-08-27T17:11:51.000Z') });
     const service = new GameSessionsService({
       decidePublicSpeech: () => ({ type: 'remain-silent' }),
       decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
@@ -622,8 +1717,8 @@ describe('GameSessionsService', () => {
     if (created.isErr()) throw new Error('Expected a session.');
 
     const holderId = created.value.holderId;
-    jest.clearAllTimers();
-    jest.setSystemTime(new Date(Date.parse(created.value.projection.public.phaseDeadline) + 1));
+    vi.clearAllTimers();
+    vi.setSystemTime(new Date(Date.parse(created.value.projection.public.phaseDeadline) + 1));
     const discussion = await service.getProjection(created.value.projection.sessionId, holderId);
     if (discussion.isErr()) throw new Error('Expected the initial Night to resolve.');
     const { phaseDeadline } = discussion.value.public;
@@ -670,7 +1765,7 @@ describe('GameSessionsService', () => {
   });
 
   it('rejects a Discussion Time Adjustment for a stale Phase deadline', async () => {
-    jest.useFakeTimers({ now: new Date('2026-08-27T17:11:51.000Z') });
+    vi.useFakeTimers({ now: new Date('2026-08-27T17:11:51.000Z') });
     const service = new GameSessionsService({
       decidePublicSpeech: () => ({ type: 'remain-silent' }),
       decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
@@ -682,8 +1777,8 @@ describe('GameSessionsService', () => {
     if (created.isErr()) throw new Error('Expected a session.');
 
     const holderId = created.value.holderId;
-    jest.clearAllTimers();
-    jest.setSystemTime(new Date(Date.parse(created.value.projection.public.phaseDeadline) + 1));
+    vi.clearAllTimers();
+    vi.setSystemTime(new Date(Date.parse(created.value.projection.public.phaseDeadline) + 1));
     const discussion = await service.getProjection(created.value.projection.sessionId, holderId);
     if (discussion.isErr()) throw new Error('Expected the initial Night to resolve.');
     expect(

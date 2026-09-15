@@ -5,7 +5,7 @@
     "outDir": "./dist",
     "strictNullChecks": true,
     "tsBuildInfoFile": "./tsconfig.build.tsbuildinfo",
-    "types": ["node", "jest"]
+    "types": ["node"]
   },
-  "exclude": ["node_modules", "test", "dist", "**/*spec.ts"]
+  "exclude": ["node_modules", "test", "dist", "**/*spec.ts", "vitest.config.ts"]
 }

@@ -22,31 +22,35 @@ import {
 } from 'rxjs';
 import { match, P } from 'ts-pattern';
 
-import { agentDecisionGateway, type AgentDecisionGateway } from '../agents/agent-decision.gateway';
-import { GameSessionAgentOrchestrator } from '../agents/game-session-agent-orchestrator';
+import {
+  agentDecisionGateway,
+  type AgentDecisionGateway,
+} from '../agents/agent-decision.gateway.js';
+import { createAgentMinds } from '../agents/agent-mind.js';
+import { GameSessionAgentOrchestrator } from '../agents/game-session-agent-orchestrator.js';
 import {
   type DurableSessionSnapshot,
   RedisGameSessionAuthority,
-} from '../durability/redis-game-session-authority';
-import { cooldownRetryAfterMs } from './cooldown/cooldown';
+} from '../durability/redis-game-session-authority.js';
+import { cooldownRetryAfterMs } from './cooldown/cooldown.js';
 import {
   gameSessionClock,
   nativeGameSessionClock,
   type GameSessionClock,
-} from './game-session-clock';
-import { GameSessionDurability } from './game-session-durability';
-import type { GameSessionError } from './game-session-error';
-import { GameSessionLifecycle } from './game-session-lifecycle';
-import { gameSessionsConfig } from './game-sessions.config';
+} from './game-session-clock.js';
+import { GameSessionDurability } from './game-session-durability.js';
+import type { GameSessionError } from './game-session-error.js';
+import { GameSessionLifecycle } from './game-session-lifecycle.js';
+import { gameSessionsConfig } from './game-sessions.config.js';
 import {
   type IdempotencyRecord,
   lookupIdempotency,
   recordIdempotency,
-} from './idempotency/idempotency-ledger';
-import { KeyedRetryScheduler } from './keyed-retry-scheduler';
-import type { StoredGameSessionEntity } from './stored-game-session.entity';
+} from './idempotency/idempotency-ledger.js';
+import { KeyedRetryScheduler } from './keyed-retry-scheduler.js';
+import { mafiaNightPhaseKey, type StoredGameSessionEntity } from './stored-game-session.entity.js';
 
-export type { GameSessionError } from './game-session-error';
+export type { GameSessionError } from './game-session-error.js';
 
 type CreatedMafiaSession = {
   holderId: string;
@@ -62,7 +66,7 @@ type IdempotentProjectionAction = {
   ) => Map<string, IdempotencyRecord<MafiaGameProjection>>;
   submit: (session: StoredGameSessionEntity) => Result<MafiaGameProjection, GameSessionError>;
   beforeSave?: (session: StoredGameSessionEntity) => void | Promise<void>;
-  afterCommit?: (session: StoredGameSessionEntity) => void | Promise<void>;
+  afterCommit?: (session: StoredGameSessionEntity) => void;
 };
 
 @Injectable()
@@ -77,6 +81,11 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
   private readonly phaseTransitionRetries: KeyedRetryScheduler;
   private readonly scheduledAgentRetries: KeyedRetryScheduler;
   private readonly mafiaChatReplyRetries: KeyedRetryScheduler;
+  private readonly pendingAgentActionSessionIds = new Set<string>();
+  private readonly agentActionSubmissions = new Map<
+    string,
+    Promise<Result<void, GameSessionError>>
+  >();
   private readonly eventSubscriberCounts = new Map<string, number>();
   private readonly agentActions: GameSessionAgentOrchestrator;
   private readonly durability: GameSessionDurability;
@@ -92,13 +101,18 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     this.phaseTransitionRetries = new KeyedRetryScheduler(this.clock);
     this.scheduledAgentRetries = new KeyedRetryScheduler(this.clock);
     this.mafiaChatReplyRetries = new KeyedRetryScheduler(this.clock);
-    this.mafiaModule = new MafiaGameModule(undefined, undefined, () => this.clock.now());
+    this.mafiaModule = new MafiaGameModule(
+      undefined,
+      undefined,
+      () => this.clock.now(),
+      agentDecisions.outputLanguage ?? 'ko',
+    );
     this.agentActions = new GameSessionAgentOrchestrator(
       agentDecisions,
-      this.publishAgentProjection.bind(this),
       (session, mutate, schedulePhaseTransition, hydrationLocked) =>
         this.commitAgentMutation(session, mutate, 0, schedulePhaseTransition, hydrationLocked),
       this.clock,
+      (session) => this.sessions.get(session.gameSession.snapshot().sessionId),
     );
     this.durability = new GameSessionDurability(
       () => this.authority,
@@ -233,6 +247,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       holderId: resolvedHolderId,
       humanParticipantId: 'participant-1',
       gameSession,
+      agentMinds: createAgentMinds(gameSession, 'participant-1'),
       events: new ReplaySubject<MafiaGameProjection>(gameSessionsConfig.eventReplayBufferSize),
       nextEventId: 0,
       nextPublicSpeechAt: undefined,
@@ -247,11 +262,15 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       phaseTimer: undefined,
       agentFinalDefenceTimer: undefined,
       publicSpeechAgentTimers: new Map(),
+      mafiaChatReplyTimers: new Map(),
       mafiaTargetFallbackTimer: undefined,
       scheduledAgentPublicSpeeches: [],
       scheduledAgentFinalDefence: undefined,
       scheduledAgentMafiaChatReplies: [],
       scheduledMafiaTargetFallbackAt: undefined,
+      autonomousPublicSpeechTurns: 0,
+      lastAutonomousPublicSpeechSnapshotKey: undefined,
+      autonomousPublicSpeechLimitReachedDiscussionKey: undefined,
       agentActionsPending: true,
       reconnectGraceTimer: undefined,
       reconnectGraceDeadline: undefined,
@@ -284,7 +303,11 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       }
       if (creation.value.type === 'conflict') return err({ type: 'idempotency-conflict' });
       if (creation.value.type === 'replayed') {
-        const hydrated = await this.hydrateAuthoritativeSession(creation.value.record.sessionId);
+        const hydrated = await this.hydrateAuthoritativeSession(
+          creation.value.record.sessionId,
+          false,
+          false,
+        );
         if (hydrated.isErr()) return err(hydrated.error);
         const existingSession = this.sessions.get(creation.value.record.sessionId);
         if (!existingSession || existingSession.status === 'abandoned') {
@@ -296,7 +319,11 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         }));
       }
       if (creation.value.type === 'active-session') {
-        const hydrated = await this.hydrateAuthoritativeSession(creation.value.sessionId);
+        const hydrated = await this.hydrateAuthoritativeSession(
+          creation.value.sessionId,
+          false,
+          false,
+        );
         if (hydrated.isErr()) return err(hydrated.error);
         const activeSession = this.sessions.get(creation.value.sessionId);
         if (!activeSession || activeSession.status !== 'in-progress') {
@@ -354,13 +381,6 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
             currentProjection.value.public.phaseDeadline,
           );
           if (claimed.isErr()) return err({ type: 'durability-unavailable' });
-          if (!claimed.value) {
-            const refreshed = await this.hydrateAuthoritativeSession(sessionId, mutationLocked);
-            if (refreshed.isErr()) return err(refreshed.error);
-            const refreshedSession = this.sessions.get(sessionId);
-            if (!refreshedSession) return err({ type: 'session-not-found', sessionId });
-            return this.projectionFor(refreshedSession);
-          }
         }
         const recovery = await this.lifecycle.recoverExpiredPhaseDurably(session, mutationLocked);
         if (recovery.isErr()) return err(recovery.error);
@@ -520,6 +540,8 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     content: string,
     idempotencyKey: string,
   ): Promise<Result<MafiaGameProjection, GameSessionError>> {
+    const current = this.sessions.get(sessionId);
+    if (current) this.agentActions.cancelPublicSpeechReply(current);
     return this.runIdempotentProjectionAction(sessionId, holderId, {
       idempotencyKey,
       fingerprint: content,
@@ -578,7 +600,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
           );
         });
       },
-      beforeSave: (session) => this.agentActions.publishPublicSpeechReplies(session),
+      afterCommit: (session) => this.queuePublicSpeechReplies(session),
     });
   }
 
@@ -608,8 +630,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
             );
           });
       },
-      beforeSave: (session) => this.agentActions.prepareMafiaChatReplies(session),
-      afterCommit: (session) => this.deliverMafiaChatReplies(session, true),
+      afterCommit: (session) => this.queueMafiaChatReplies(session),
     });
   }
 
@@ -672,7 +693,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
-  async submitDetectiveInvestigation(
+  async submitPoliceInvestigation(
     sessionId: string,
     holderId: string | undefined,
     targetParticipantId: string,
@@ -681,10 +702,10 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     return this.submitDayAction(
       sessionId,
       holderId,
-      `detective-investigation:${targetParticipantId}`,
+      `police-investigation:${targetParticipantId}`,
       idempotencyKey,
       (session) =>
-        session.gameSession.submitDetectiveInvestigation(
+        session.gameSession.submitPoliceInvestigation(
           session.humanParticipantId,
           targetParticipantId,
         ),
@@ -698,6 +719,9 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     expectedDeadline: string,
     idempotencyKey: string,
   ): Promise<Result<MafiaGameProjection, GameSessionError>> {
+    const current = this.sessions.get(sessionId);
+    if (current && current.holderId === holderId)
+      this.agentActions.cancelPublicSpeechReply(current);
     const fingerprint = `${adjustmentSeconds}:${expectedDeadline}`;
     return this.runIdempotentProjectionAction(sessionId, holderId, {
       idempotencyKey,
@@ -765,7 +789,9 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         const phaseResult = session.gameSession.advanceDayPhase(now.toDate());
         phaseResult.match(
           (result) => {
-            if (result.type !== 'not-due') this.agentActions.submitDayActions(session);
+            if (result.type === 'not-due') return;
+            this.agentActions.clearTimers(session);
+            session.agentActionsPending = true;
           },
           () => undefined,
         );
@@ -777,6 +803,11 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
           );
           this.lifecycle.schedulePhaseTransition(session);
         });
+      },
+      afterCommit: (session) => {
+        this.queuePendingAgentActions(session);
+        if (session.gameSession.snapshot().phase === 'discussion')
+          this.queuePublicSpeechReplies(session);
       },
     });
   }
@@ -843,7 +874,29 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         }
         return this.publishProjection(session);
       },
+      afterCommit: (session) => this.queuePendingAgentActions(session),
     });
+  }
+
+  private async submitPendingAgentActions(session: StoredGameSessionEntity) {
+    if (!session.agentActionsPending) return;
+    const actions = await this.submitAndCommitAgentActions(session);
+    if (actions.isErr()) this.retryAgentActions(session.gameSession.snapshot().sessionId);
+  }
+
+  private queuePendingAgentActions(session: StoredGameSessionEntity) {
+    const sessionId = session.gameSession.snapshot().sessionId;
+    if (this.pendingAgentActionSessionIds.has(sessionId)) return;
+    this.pendingAgentActionSessionIds.add(sessionId);
+    void Promise.resolve()
+      .then(() =>
+        // Deliberately do not hold the human-action mutex while the gateway waits for an LLM.
+        // Durable writes compare-and-set the authoritative snapshot, so a concurrent Human
+        // Player action wins and this stale Agent run hydrates before it can publish anything.
+        this.submitPendingAgentActions(session),
+      )
+      .catch(() => this.retryAgentActions(sessionId))
+      .finally(() => this.pendingAgentActionSessionIds.delete(sessionId));
   }
 
   private async runIdempotentProjectionAction(
@@ -894,7 +947,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     if (result.isErr()) return result;
     if (!this.authority) {
       if (committedAction) await beforeSave?.(this.sessions.get(sessionId)!);
-      if (committedAction) await afterCommit?.(this.sessions.get(sessionId)!);
+      if (committedAction) afterCommit?.(this.sessions.get(sessionId)!);
       return result;
     }
     if (!committedAction) return result;
@@ -916,7 +969,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       );
     }
     if (!saved.value) await this.hydrateAuthoritativeSessionUnlocked(sessionId);
-    if (saved.value && committedAction) await afterCommit?.(session);
+    if (saved.value && committedAction) afterCommit?.(session);
     return saved.value ? result : err({ type: 'durability-unavailable' });
   }
 
@@ -988,9 +1041,37 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  private async submitAndCommitAgentActions(
+  private submitAndCommitAgentActions(
     session: StoredGameSessionEntity,
     hydrationLocked = false,
+  ): Promise<Result<void, GameSessionError>> {
+    const sessionId = session.gameSession.snapshot().sessionId;
+    const existing = this.agentActionSubmissions.get(sessionId);
+    if (existing) return existing;
+    let submission: Promise<Result<void, GameSessionError>>;
+    submission = this.submitCurrentAndPendingAgentActions(session, hydrationLocked).finally(() => {
+      if (this.agentActionSubmissions.get(sessionId) === submission)
+        this.agentActionSubmissions.delete(sessionId);
+    });
+    this.agentActionSubmissions.set(sessionId, submission);
+    return submission;
+  }
+
+  private async submitCurrentAndPendingAgentActions(
+    session: StoredGameSessionEntity,
+    hydrationLocked: boolean,
+  ): Promise<Result<void, GameSessionError>> {
+    const result = await this.performAndCommitAgentActions(session, hydrationLocked);
+    if (result.isErr()) return result;
+
+    const current = this.sessions.get(session.gameSession.snapshot().sessionId);
+    if (!current?.agentActionsPending) return result;
+    return this.submitCurrentAndPendingAgentActions(current, hydrationLocked);
+  }
+
+  private async performAndCommitAgentActions(
+    session: StoredGameSessionEntity,
+    hydrationLocked: boolean,
   ): Promise<Result<void, GameSessionError>> {
     if (!session.agentActionsPending) {
       session.agentActionsPending = true;
@@ -1003,16 +1084,34 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         return err({ type: 'durability-unavailable' });
       }
     }
+    const actionPhase = session.gameSession.snapshot().phase;
+    const actionPhaseDeadline = session.gameSession.snapshot().phaseDeadline;
     const beforeGame = JSON.stringify(session.gameSession.snapshot());
-    this.agentActions.submitDayActions(session);
-    session.agentActionsPending = false;
+    await this.agentActions.submitDayActions(session);
+    const current = this.sessions.get(session.gameSession.snapshot().sessionId);
+    if (!current)
+      return err({
+        type: 'session-not-found',
+        sessionId: session.gameSession.snapshot().sessionId,
+      });
+    const phaseChanged =
+      current.gameSession.snapshot().phase !== actionPhase ||
+      current.gameSession.snapshot().phaseDeadline !== actionPhaseDeadline;
+    current.agentActionsPending = phaseChanged;
     const saved =
-      beforeGame !== JSON.stringify(session.gameSession.snapshot())
-        ? await this.publishAgentProjection(session, hydrationLocked)
-        : await this.durability.saveSnapshot(session);
-    if (saved.isOk() && saved.value) return ok(undefined);
+      current !== session || phaseChanged
+        ? await this.durability.saveSnapshot(current)
+        : beforeGame !== JSON.stringify(current.gameSession.snapshot())
+          ? await this.publishAgentProjection(current, hydrationLocked)
+          : await this.durability.saveSnapshot(current);
+    if (saved.isOk() && saved.value) {
+      if (current.gameSession.snapshot().phase === 'discussion')
+        this.queuePublicSpeechReplies(current);
+      this.lifecycle.schedulePhaseTransition(current);
+      return ok(undefined);
+    }
     await this.hydrateAfterAgentSaveFailure(
-      session.gameSession.snapshot().sessionId,
+      current.gameSession.snapshot().sessionId,
       hydrationLocked,
     );
     return err({ type: 'durability-unavailable' });
@@ -1056,6 +1155,63 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     const published = await this.agentActions.publishMafiaChatReplies(session, hydrationLocked);
     if (!published || published.isOk()) return;
     this.retryMafiaChatReplies(session.gameSession.snapshot().sessionId);
+  }
+
+  private queueMafiaChatReplies(session: StoredGameSessionEntity) {
+    const sessionId = session.gameSession.snapshot().sessionId;
+    void Promise.resolve().then(() => this.prepareAndDeliverMafiaChatReplies(sessionId));
+  }
+
+  private queuePublicSpeechReplies(session: StoredGameSessionEntity) {
+    this.agentActions.cancelPublicSpeechReply(session);
+    const sessionId = session.gameSession.snapshot().sessionId;
+    void Promise.resolve().then(() => this.preparePublicSpeechReplies(sessionId));
+  }
+
+  private async preparePublicSpeechReplies(sessionId: string): Promise<void> {
+    const session = this.sessions.get(sessionId);
+    if (!session || session.status !== 'in-progress') return;
+
+    const prepared = await this.withSessionMutation(sessionId, async () => {
+      const current = this.sessions.get(sessionId);
+      if (!current || current.status !== 'in-progress')
+        return err({ type: 'session-not-found', sessionId });
+      await this.agentActions.publishPublicSpeechReplies(current, true);
+      return this.durability.saveSnapshot(current);
+    });
+    if (prepared.isErr() || !prepared.value) {
+      this.retryScheduledAgentTasks(sessionId);
+      return;
+    }
+
+    const current = this.sessions.get(sessionId);
+    if (current) this.agentActions.resumeScheduledTasks(current);
+  }
+
+  private async prepareAndDeliverMafiaChatReplies(sessionId: string): Promise<void> {
+    const session = this.sessions.get(sessionId);
+    if (!session || session.status !== 'in-progress') return;
+
+    const replies = await this.agentActions.mafiaChatRepliesFor(session);
+    if (replies.length === 0) return;
+
+    const prepared = await this.withSessionMutation(sessionId, async () => {
+      const current = this.sessions.get(sessionId);
+      if (!current || current.status !== 'in-progress')
+        return err({ type: 'session-not-found', sessionId });
+      const currentPhaseKey = mafiaNightPhaseKey(current.gameSession.snapshot());
+      for (const reply of replies) {
+        if (reply.phaseKey === currentPhaseKey) current.scheduledAgentMafiaChatReplies.push(reply);
+      }
+      return this.durability.saveSnapshot(current);
+    });
+    if (prepared.isErr() || !prepared.value) {
+      this.retryMafiaChatReplies(sessionId);
+      return;
+    }
+
+    const current = this.sessions.get(sessionId);
+    if (current) this.agentActions.resumeScheduledTasks(current);
   }
 
   private retryMafiaChatReplies(sessionId: string) {
@@ -1117,8 +1273,35 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     hydrationLocked = false,
   ): Promise<Result<void, GameSessionError>> {
     const sessionId = staleSession.gameSession.snapshot().sessionId;
+    if (!this.authority || hydrationLocked)
+      return this.commitAgentMutationUnlocked(
+        staleSession,
+        mutate,
+        attempt,
+        schedulePhaseTransition,
+        true,
+      );
+    return this.withSessionMutation(sessionId, () =>
+      this.commitAgentMutationUnlocked(
+        staleSession,
+        mutate,
+        attempt,
+        schedulePhaseTransition,
+        true,
+      ),
+    );
+  }
+
+  private async commitAgentMutationUnlocked(
+    staleSession: StoredGameSessionEntity,
+    mutate: (session: StoredGameSessionEntity) => boolean,
+    attempt: number,
+    schedulePhaseTransition: boolean,
+    hydrationLocked: boolean,
+  ): Promise<Result<void, GameSessionError>> {
+    const sessionId = staleSession.gameSession.snapshot().sessionId;
     if (this.authority) {
-      const hydrated = await this.hydrateAuthoritativeSession(sessionId, hydrationLocked);
+      const hydrated = await this.hydrateAuthoritativeSession(sessionId, true);
       if (hydrated.isErr()) {
         this.retryScheduledAgentTasks(sessionId);
         return err(hydrated.error);
@@ -1133,7 +1316,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         return ok(undefined);
       }
       if (attempt < 1)
-        return this.commitAgentMutation(
+        return this.commitAgentMutationUnlocked(
           staleSession,
           mutate,
           attempt + 1,
@@ -1146,13 +1329,14 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     const published = await this.publishAgentProjection(session, hydrationLocked);
     if (published.isOk()) {
       if (schedulePhaseTransition) this.lifecycle.schedulePhaseTransition(session);
+      if (published.value.public.phase === 'discussion') this.queuePublicSpeechReplies(session);
       return ok(undefined);
     }
     if (attempt >= 1) {
       this.retryScheduledAgentTasks(sessionId);
       return err(published.error);
     }
-    return this.commitAgentMutation(
+    return this.commitAgentMutationUnlocked(
       staleSession,
       mutate,
       attempt + 1,
@@ -1293,13 +1477,11 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         session.status === 'in-progress' &&
         session.agentActionsPending
       ) {
-        const actions = await this.submitAndCommitAgentActions(session, true);
-        if (actions.isErr()) {
-          this.retryAgentActions(sessionId);
-          return err({ type: 'durability-unavailable' });
-        }
+        // Hydration runs on the human read and action paths. Queue slow Agent decisions so a
+        // gateway response never delays the current Human Player request.
+        this.queuePendingAgentActions(session);
       }
-      if (session.status === 'in-progress') {
+      if (session.status === 'in-progress' && !session.agentActionsPending) {
         if (session.scheduledAgentMafiaChatReplies.length > 0)
           this.retryMafiaChatReplies(sessionId);
         this.agentActions.resumeScheduledTasks(session);

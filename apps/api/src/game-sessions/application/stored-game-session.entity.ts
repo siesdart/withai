@@ -3,8 +3,9 @@ import type { MafiaGameProjection } from '@repo/mafia';
 import type { Dayjs } from 'dayjs';
 import { type ReplaySubject } from 'rxjs';
 
-import type { GameSessionStatus } from './game-session-status';
-import type { IdempotencyRecord } from './idempotency/idempotency-ledger';
+import type { AgentMind } from '../agents/agent-mind.js';
+import type { GameSessionStatus } from './game-session-status.js';
+import type { IdempotencyRecord } from './idempotency/idempotency-ledger.js';
 
 export type ScheduledAgentPublicSpeech = {
   participantId: string;
@@ -37,12 +38,20 @@ export type ScheduledAgentMafiaChatReply = {
   participantId: string;
   content: string;
   dueAt: string;
+  /** Missing only on snapshots saved before Night identity was introduced; discard those replies. */
+  phaseKey?: string;
 };
+
+export const mafiaNightPhaseKey = (snapshot: ReturnType<MafiaGameSession['snapshot']>) =>
+  snapshot.phase === 'night'
+    ? JSON.stringify([snapshot.sessionId, snapshot.dayNumber, snapshot.phase])
+    : undefined;
 
 export type StoredGameSessionEntity = {
   holderId: string;
   humanParticipantId: string;
   gameSession: MafiaGameSession;
+  agentMinds: Record<string, AgentMind>;
   events: ReplaySubject<MafiaGameProjection>;
   nextEventId: number;
   nextPublicSpeechAt: Dayjs | undefined;
@@ -57,11 +66,15 @@ export type StoredGameSessionEntity = {
   phaseTimer: NodeJS.Timeout | undefined;
   agentFinalDefenceTimer: NodeJS.Timeout | undefined;
   publicSpeechAgentTimers: Map<string, NodeJS.Timeout>;
+  mafiaChatReplyTimers: Map<string, NodeJS.Timeout>;
   mafiaTargetFallbackTimer: NodeJS.Timeout | undefined;
   scheduledAgentPublicSpeeches: ScheduledAgentPublicSpeech[];
   scheduledAgentFinalDefence: ScheduledAgentFinalDefence | undefined;
   scheduledAgentMafiaChatReplies: ScheduledAgentMafiaChatReply[];
   scheduledMafiaTargetFallbackAt: string | undefined;
+  autonomousPublicSpeechTurns: number;
+  lastAutonomousPublicSpeechSnapshotKey: string | undefined;
+  autonomousPublicSpeechLimitReachedDiscussionKey: string | undefined;
   agentActionsPending: boolean;
   reconnectGraceTimer: NodeJS.Timeout | undefined;
   reconnectGraceDeadline: Dayjs | undefined;

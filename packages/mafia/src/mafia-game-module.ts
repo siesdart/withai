@@ -10,7 +10,12 @@ import {
   type MafiaProjectionError,
   type MafiaPublicInformation,
 } from './mafia-game-session';
-import { createParticipants, type MafiaPersonalInformation, type RandomInt } from './participants';
+import {
+  createParticipants,
+  type MafiaOutputLanguage,
+  type MafiaPersonalInformation,
+  type RandomInt,
+} from './participants';
 
 export type MafiaSessionInput = {
   sessionId: string;
@@ -40,6 +45,7 @@ export class MafiaGameModule implements GameModule<
     private readonly randomIntExclusive: RandomInt = randomInt,
     private readonly dayDurations: MafiaDayDurations = defaultDayDurations,
     private readonly now: () => Date = () => new Date(),
+    private readonly outputLanguage: MafiaOutputLanguage = 'ko',
   ) {}
   create({
     sessionId,
@@ -53,7 +59,7 @@ export class MafiaGameModule implements GameModule<
     return ok(
       new MafiaGameSession(
         sessionId,
-        createParticipants(participantCount, this.randomIntExclusive),
+        createParticipants(participantCount, this.randomIntExclusive, this.outputLanguage),
         this.dayDurations,
         this.now,
       ),

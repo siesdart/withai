@@ -51,6 +51,7 @@ const participantNameClassName = (role: KnownRole | undefined, isNight: boolean)
       : 'text-[#625e55]';
 
 const periodFor = (item: TimelineItem, currentPeriod: TimelinePeriod): TimelinePeriod => {
+  if (item.type === 'personal-record') return currentPeriod;
   if (item.type !== 'record') return currentPeriod;
   if (item.outcome.type === 'day-changed') return 'day';
   if (item.outcome.type !== 'phase-changed') return currentPeriod;
@@ -58,7 +59,9 @@ const periodFor = (item: TimelineItem, currentPeriod: TimelinePeriod): TimelineP
 };
 
 const dayNumberFor = (item: TimelineItem, currentDayNumber: number) =>
-  item.type === 'record' && 'dayNumber' in item.outcome ? item.outcome.dayNumber : currentDayNumber;
+  (item.type === 'record' || item.type === 'personal-record') && 'dayNumber' in item.outcome
+    ? item.outcome.dayNumber
+    : currentDayNumber;
 
 const groupTimelineByPeriod = (timeline: readonly TimelineItem[]): SegmentedTimeline[] =>
   reduce(
@@ -162,7 +165,7 @@ export function PublicDiscussionPanel({
                   >
                     <MessageGroup>
                       {map(segment.items, (item) => {
-                        if (item.type === 'record') {
+                        if (item.type === 'record' || item.type === 'personal-record') {
                           return (
                             <MessageScrollerItem key={item.id} messageId={item.id}>
                               <GameRecordMarker

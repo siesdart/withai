@@ -3,16 +3,16 @@ import dayjs, { type Dayjs } from 'dayjs';
 import { err, ok, type Result } from 'neverthrow';
 import { filter, map, pipe } from 'remeda';
 
-import type { GameSessionAgentOrchestrator } from '../agents/game-session-agent-orchestrator';
+import type { GameSessionAgentOrchestrator } from '../agents/game-session-agent-orchestrator.js';
 import {
   type DurableSessionSnapshot,
   RedisGameSessionAuthority,
-} from '../durability/redis-game-session-authority';
-import type { GameSessionClock } from './game-session-clock';
-import type { GameSessionError } from './game-session-error';
-import { gameSessionsConfig } from './game-sessions.config';
-import type { IdempotencyRecord } from './idempotency/idempotency-ledger';
-import type { StoredGameSessionEntity } from './stored-game-session.entity';
+} from '../durability/redis-game-session-authority.js';
+import type { GameSessionClock } from './game-session-clock.js';
+import type { GameSessionError } from './game-session-error.js';
+import { gameSessionsConfig } from './game-sessions.config.js';
+import type { IdempotencyRecord } from './idempotency/idempotency-ledger.js';
+import type { StoredGameSessionEntity } from './stored-game-session.entity.js';
 
 type LifecycleState = {
   sessions: Map<string, StoredGameSessionEntity>;
@@ -93,6 +93,10 @@ export class GameSessionLifecycle {
         }
         const current = this.runtime.state.sessions.get(projection.value.sessionId);
         if (!current || current.status !== 'in-progress') return;
+        // An Agent's nomination or verdict belongs to the phase that requested it, even when
+        // its decision arrives after the visible countdown. Resolving first discards that vote.
+        // The pending action commits and schedules this deadline again once every Agent has voted.
+        if (current.agentActionsPending) return;
         const advanced = current.gameSession.advanceDayPhase(phaseNow);
         if (advanced.isErr()) return;
         if (advanced.value.type === 'not-due') {
@@ -159,7 +163,7 @@ export class GameSessionLifecycle {
   recoverExpiredPhase(session: StoredGameSessionEntity): Result<void, GameSessionError> {
     return session.gameSession.advanceDayPhase(this.runtime.clock.now()).andThen((result) => {
       if (result.type === 'not-due') return ok(undefined);
-      this.runtime.agentActions.submitDayActions(session);
+      void this.runtime.agentActions.submitDayActions(session);
       return this.runtime.phaseOperations
         .publishProjection(session)
         .andTee((projection) => void this.runtime.persistence.save(session, projection))
@@ -182,6 +186,10 @@ export class GameSessionLifecycle {
     }
     const current = this.runtime.state.sessions.get(session.gameSession.snapshot().sessionId);
     if (!current || current.status !== 'in-progress') return ok(undefined);
+    // Durable reads can recover a missed deadline while the Agent request for this phase is
+    // still in flight. Keep the phase open until its required actions are persisted; otherwise
+    // a late Night response is applied after the transition to Discussion and is discarded.
+    if (current.agentActionsPending) return ok(undefined);
     const expected = current.gameSession
       .projectionFor(current.humanParticipantId, current.nextEventId)
       .map((projection) => projection.public.phaseDeadline);

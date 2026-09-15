@@ -44,7 +44,7 @@ export class MafiaPersonalInformationEntity implements MafiaPersonalInformation 
   @ApiProperty({ example: 'participant-1' })
   participantId!: string;
 
-  @ApiProperty({ enum: ['Mafia', 'Detective', 'Doctor', 'Citizen'] })
+  @ApiProperty({ enum: ['Mafia', 'Police', 'Doctor', 'Citizen'] })
   role!: MafiaPersonalInformation['role'];
 
   @ApiProperty({ enum: ['Mafia', 'Citizen'] })
@@ -62,7 +62,7 @@ export class MafiaPersonalInformationEntity implements MafiaPersonalInformation 
       type: 'object',
       properties: {
         participantId: { type: 'string', example: 'participant-2' },
-        role: { enum: ['Mafia', 'Detective', 'Doctor', 'Citizen'] },
+        role: { enum: ['Mafia', 'Police', 'Doctor', 'Citizen'] },
       },
     },
   })

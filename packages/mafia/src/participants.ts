@@ -2,8 +2,10 @@ import { map } from 'remeda';
 
 import { mafiaGameConfig } from './config';
 
-export type MafiaRole = 'Mafia' | 'Detective' | 'Doctor' | 'Citizen';
+export const mafiaRoles = ['Mafia', 'Police', 'Doctor', 'Citizen'] as const;
+export type MafiaRole = (typeof mafiaRoles)[number];
 export type MafiaAllegiance = 'Mafia' | 'Citizen';
+export type MafiaOutputLanguage = 'ko' | 'en';
 export type MafiaParticipant = { id: string; name: string; alive: boolean; role: MafiaRole };
 export type MafiaPersonalInformation = {
   participantId: string;
@@ -17,7 +19,7 @@ export type MafiaPersonalInformation = {
     | { type: 'mafia-target'; targetParticipantId: string }
     | { type: 'doctor-protection'; targetParticipantId: string }
     | {
-        type: 'detective-investigation';
+        type: 'police-investigation';
         targetParticipantId: string;
       }
     | undefined;
@@ -25,29 +27,25 @@ export type MafiaPersonalInformation = {
 };
 export type RandomInt = (maxExclusive: number) => number;
 
-const participantNames = [
-  'You',
-  'Mina',
-  'Joon',
-  'Sora',
-  'Hana',
-  'Theo',
-  'Iris',
-  'Noah',
-  'Yuna',
-  'Eli',
-] as const;
+const participantNamesByLanguage: Record<MafiaOutputLanguage, readonly string[]> = {
+  ko: ['You', '민아', '준', '소라', '하나', '태오', '아이리스', '노아', '유나', '엘리'],
+  en: ['You', 'Mina', 'Joon', 'Sora', 'Hana', 'Theo', 'Iris', 'Noah', 'Yuna', 'Eli'],
+};
 
 const allegianceFor = (role: MafiaRole): MafiaAllegiance =>
   role === 'Mafia' ? 'Mafia' : 'Citizen';
-const assignRoles = (participantCount: number): MafiaRole[] => {
+export const mafiaRoleCountsFor = (participantCount: number): Record<MafiaRole, number> => {
   const mafiaCount = participantCount <= mafiaGameConfig.mafiaRoleThreshold ? 1 : 2;
-  return [
-    ...Array<MafiaRole>(mafiaCount).fill('Mafia'),
-    'Detective',
-    'Doctor',
-    ...Array<MafiaRole>(participantCount - mafiaCount - 2).fill('Citizen'),
-  ];
+  return {
+    Mafia: mafiaCount,
+    Police: 1,
+    Doctor: 1,
+    Citizen: participantCount - mafiaCount - 2,
+  };
+};
+const assignRoles = (participantCount: number): MafiaRole[] => {
+  const counts = mafiaRoleCountsFor(participantCount);
+  return mafiaRoles.flatMap((role) => Array<MafiaRole>(counts[role]).fill(role));
 };
 function shuffleRoles(roles: MafiaRole[], randomIntExclusive: RandomInt): MafiaRole[] {
   const shuffledRoles = [...roles];
@@ -63,9 +61,11 @@ function shuffleRoles(roles: MafiaRole[], randomIntExclusive: RandomInt): MafiaR
 export function createParticipants(
   participantCount: number,
   randomIntExclusive: RandomInt,
+  outputLanguage: MafiaOutputLanguage = 'ko',
 ): MafiaParticipant[] {
   const roles = shuffleRoles(assignRoles(participantCount), randomIntExclusive);
-  return map(participantNames.slice(0, participantCount), (name, index) => ({
+  const names = participantNamesByLanguage[outputLanguage];
+  return map(names.slice(0, participantCount), (name, index) => ({
     id: `participant-${index + 1}`,
     name,
     alive: true,

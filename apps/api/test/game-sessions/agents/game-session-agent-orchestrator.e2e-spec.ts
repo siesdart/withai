@@ -17,6 +17,7 @@ import { GameSessionDurability } from '../../../src/game-sessions/application/ga
 import { GameSessionLifecycle } from '../../../src/game-sessions/application/game-session-lifecycle.js';
 import { gameSessionsConfig } from '../../../src/game-sessions/application/game-sessions.config.js';
 import {
+  mafiaNightPhaseKey,
   type StoredGameSessionEntity,
   scheduledAgentPublicSpeechKey,
 } from '../../../src/game-sessions/application/stored-game-session.entity.js';
@@ -282,6 +283,7 @@ describe('GameSessionAgentOrchestrator', () => {
         participantId: 'participant-2',
         content: 'I will commit my action.',
         dueAt: '2026-08-28T00:00:00.000Z',
+        phaseKey: mafiaNightPhaseKey(session.gameSession.snapshot()),
       },
     ];
     const commitAgentMutation = vi.fn(
@@ -850,6 +852,7 @@ describe('GameSessionAgentOrchestrator', () => {
         participantId: 'participant-2',
         content: 'I was decided before the deadline.',
         dueAt: scheduledAt,
+        phaseKey: mafiaNightPhaseKey(session.gameSession.snapshot()),
       },
     ];
     vi.setSystemTime(new Date('2026-08-28T00:00:02.000Z'));
@@ -869,6 +872,72 @@ describe('GameSessionAgentOrchestrator', () => {
     expect(session.scheduledAgentMafiaChatReplies).toEqual([]);
   });
 
+  it('discards a Mafia Chat reply from a previous Night', async () => {
+    const session = createSession();
+    const orchestrator = new GameSessionAgentOrchestrator(
+      new SequencedMafiaTargetGateway(),
+      async (_stale, mutate) => {
+        mutate(session);
+        return ok(undefined);
+      },
+    );
+    session.scheduledAgentMafiaChatReplies = [
+      {
+        id: 'reply-1',
+        participantId: 'participant-2',
+        content: 'This must not reach a later Night.',
+        dueAt: '2026-08-28T00:00:00.000Z',
+        phaseKey: mafiaNightPhaseKey(session.gameSession.snapshot()),
+      },
+    ];
+    const deadline = session.gameSession.snapshot().phaseDeadline;
+    session.gameSession.advanceDayPhase(new Date(new Date(deadline).valueOf() + 1));
+
+    await expect(orchestrator.publishMafiaChatReplies(session)).resolves.toEqual(ok(undefined));
+
+    expect(session.scheduledAgentMafiaChatReplies).toEqual([]);
+  });
+
+  it('persists a silent Agent decision’s Memory updates', async () => {
+    const session = createSession();
+    const orchestrator = new GameSessionAgentOrchestrator(
+      {
+        decidePublicSpeech: () => ({
+          type: 'remain-silent' as const,
+          allegianceEstimates: [
+            {
+              participantId: 'participant-3',
+              mafiaProbability: 70,
+              basis: 'The timing of the claim was inconsistent.',
+            },
+          ],
+          strategy: 'Wait for a direct response before naming a suspect.',
+        }),
+        decideFinalDefence: () => ({ opening: 'opening', followUp: 'follow-up' }),
+        decideMafiaChatOpening: () => 'opening',
+        decideMafiaChatReply: () => 'reply',
+        selectMafiaTarget: () => undefined,
+      },
+      async (_stale, mutate) => {
+        mutate(session);
+        return ok(undefined);
+      },
+    );
+    const deadline = session.gameSession.snapshot().phaseDeadline;
+    session.gameSession.advanceDayPhase(new Date(new Date(deadline).valueOf() + 1));
+
+    await orchestrator.publishPublicSpeechReplies(session);
+
+    expect(session.agentMinds['participant-2']?.memory).toMatchObject({
+      allegianceEstimates: [
+        {
+          participantId: 'participant-3',
+        },
+      ],
+      strategy: 'Wait for a direct response before naming a suspect.',
+    });
+  });
+
   it('retains every Mafia Chat reply when one durable commit fails', async () => {
     const session = createSession();
     session.scheduledAgentMafiaChatReplies = [
@@ -877,12 +946,14 @@ describe('GameSessionAgentOrchestrator', () => {
         participantId: 'participant-2',
         content: 'first reply',
         dueAt: '2026-08-28T00:00:00.000Z',
+        phaseKey: mafiaNightPhaseKey(session.gameSession.snapshot()),
       },
       {
         id: 'reply-2',
         participantId: 'participant-2',
         content: 'second reply',
         dueAt: '2026-08-28T00:00:00.000Z',
+        phaseKey: mafiaNightPhaseKey(session.gameSession.snapshot()),
       },
     ];
     const orchestrator = new GameSessionAgentOrchestrator(

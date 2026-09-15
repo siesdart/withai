@@ -20,6 +20,7 @@ import type {
   ScheduledAgentPublicSpeech,
 } from '../application/stored-game-session.entity.js';
 import {
+  mafiaNightPhaseKey,
   scheduledAgentPublicSpeechKey,
   sameScheduledAgentFinalDefence,
 } from '../application/stored-game-session.entity.js';
@@ -249,6 +250,8 @@ export class GameSessionAgentOrchestrator {
   }
 
   async mafiaChatRepliesFor(session: StoredGameSessionEntity) {
+    const phaseKey = mafiaNightPhaseKey(session.gameSession.snapshot());
+    if (!phaseKey) return [];
     let earliestAt = this.clock.now();
     const replies: ScheduledAgentMafiaChatReply[] = [];
     await this.forEachMafiaAgent(session, async (participantId, context) => {
@@ -257,17 +260,20 @@ export class GameSessionAgentOrchestrator {
         targetParticipantId && this.participantNameFor(context, targetParticipantId);
       if (!targetParticipantId || !targetName) return;
       const content = await this.agentDecisions.decideMafiaChatReply(context, targetName);
+      if (mafiaNightPhaseKey(session.gameSession.snapshot()) !== phaseKey) return;
       const dueAt = agentChatDueAt({ content, earliestAt });
       replies.push({
         id: randomUUID(),
         participantId,
         content,
         dueAt,
+        phaseKey,
       });
       earliestAt = dayjs(dueAt)
         .add(gameSessionsConfig.agentChatMinimumGapMs, 'millisecond')
         .toDate();
     });
+    if (mafiaNightPhaseKey(session.gameSession.snapshot()) !== phaseKey) return [];
     return replies;
   }
 
@@ -297,6 +303,7 @@ export class GameSessionAgentOrchestrator {
     session.mafiaTargetFallbackTimer = undefined;
     session.scheduledAgentPublicSpeeches = [];
     session.scheduledAgentFinalDefence = undefined;
+    session.scheduledAgentMafiaChatReplies = [];
     session.scheduledMafiaTargetFallbackAt = undefined;
     session.autonomousPublicSpeechTurns = 0;
     session.lastAutonomousPublicSpeechSnapshotKey = undefined;
@@ -749,7 +756,15 @@ export class GameSessionAgentOrchestrator {
               }),
             };
           })
-          .with({ type: 'remain-silent' }, () => undefined)
+          .with({ type: 'remain-silent' }, (silentDecision) => {
+            rememberAllegianceEstimates(
+              mind,
+              personalSnapshot,
+              silentDecision.allegianceEstimates,
+              silentDecision.strategy,
+            );
+            return undefined;
+          })
           .exhaustive();
       },
       () => undefined,
@@ -1028,6 +1043,13 @@ export class GameSessionAgentOrchestrator {
           (candidate) => candidate.id === scheduled.id,
         );
         if (!pending) return false;
+        if (pending.phaseKey !== mafiaNightPhaseKey(current.gameSession.snapshot())) {
+          current.scheduledAgentMafiaChatReplies = filter(
+            current.scheduledAgentMafiaChatReplies,
+            (candidate) => candidate.id !== pending.id,
+          );
+          return true;
+        }
         const submitted = current.gameSession.submitMafiaChat(
           pending.participantId,
           pending.content,

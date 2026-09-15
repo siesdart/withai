@@ -48,7 +48,7 @@ import {
   recordIdempotency,
 } from './idempotency/idempotency-ledger.js';
 import { KeyedRetryScheduler } from './keyed-retry-scheduler.js';
-import type { StoredGameSessionEntity } from './stored-game-session.entity.js';
+import { mafiaNightPhaseKey, type StoredGameSessionEntity } from './stored-game-session.entity.js';
 
 export type { GameSessionError } from './game-session-error.js';
 
@@ -1199,7 +1199,10 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       const current = this.sessions.get(sessionId);
       if (!current || current.status !== 'in-progress')
         return err({ type: 'session-not-found', sessionId });
-      current.scheduledAgentMafiaChatReplies.push(...replies);
+      const currentPhaseKey = mafiaNightPhaseKey(current.gameSession.snapshot());
+      for (const reply of replies) {
+        if (reply.phaseKey === currentPhaseKey) current.scheduledAgentMafiaChatReplies.push(reply);
+      }
       return this.durability.saveSnapshot(current);
     });
     if (prepared.isErr() || !prepared.value) {

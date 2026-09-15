@@ -1,9 +1,10 @@
 import type { MafiaAgentContext } from '@repo/mafia';
 import { toJsonSchema } from '@valibot/to-json-schema';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   type AgentDecisionRunner,
+  agentDecisionAttemptTimeoutMs,
   DeterministicAgentDecisionGateway,
   LLMAgentDecisionGateway,
 } from '../../../src/game-sessions/agents/agent-decision.gateway.js';
@@ -269,6 +270,79 @@ describe('LLMAgentDecisionGateway', () => {
     ).resolves.toMatchObject({
       targetParticipantId: expect.stringMatching(/^participant-[34]$/),
     });
+  });
+
+  it('retries and falls back when a provider returns a candidate outside the advertised set', async () => {
+    const gateway = new LLMAgentDecisionGateway(async () => ({
+      targetParticipantId: 'participant-999',
+    }));
+    const context = {
+      participant: { id: 'participant-2', name: 'Mina' },
+      persona: 'Mina is observant and concise.',
+      timeline: [],
+      public: {
+        dayNumber: 1,
+        phase: 'nomination' as const,
+        phaseDeadline: '2026-08-28T00:00:45.000Z',
+        participants: [],
+        nominatedParticipantId: undefined,
+        completedRecords: { voteRecords: [], nightActionRecords: [] },
+      },
+      personal: {
+        participantId: 'participant-2',
+        role: 'Citizen' as const,
+        allegiance: 'Citizen' as const,
+        vote: undefined,
+        nightAction: undefined,
+        knownRoles: [],
+      },
+    } satisfies MafiaAgentContext;
+
+    await expect(gateway.decidePhaseAction(context, ['participant-3'])).resolves.toMatchObject({
+      targetParticipantId: 'participant-3',
+    });
+  });
+
+  it('bounds a stalled provider attempt and continues with the next attempt', async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+    const gateway = new LLMAgentDecisionGateway(async (_prompt, _schema, abortController) => {
+      calls += 1;
+      if (calls > 1)
+        return { opening: 'fallback-safe opening', followUp: 'fallback-safe follow-up' };
+      return new Promise((_, reject) => {
+        abortController?.signal.addEventListener('abort', () => reject(new Error('aborted')));
+      });
+    });
+    const context = {
+      participant: { id: 'participant-2', name: 'Mina' },
+      persona: 'Mina is observant and concise.',
+      timeline: [],
+      public: {
+        dayNumber: 1,
+        phase: 'final-defence' as const,
+        phaseDeadline: '2026-08-28T00:00:45.000Z',
+        participants: [],
+        nominatedParticipantId: 'participant-2',
+        completedRecords: { voteRecords: [], nightActionRecords: [] },
+      },
+      personal: {
+        participantId: 'participant-2',
+        role: 'Citizen' as const,
+        allegiance: 'Citizen' as const,
+        vote: undefined,
+        nightAction: undefined,
+        knownRoles: [],
+      },
+    } satisfies MafiaAgentContext;
+
+    const decision = gateway.decideFinalDefence(context);
+    await vi.advanceTimersByTimeAsync(agentDecisionAttemptTimeoutMs);
+    await expect(decision).resolves.toEqual({
+      opening: 'fallback-safe opening',
+      followUp: 'fallback-safe follow-up',
+    });
+    vi.useRealTimers();
   });
 
   it('uses separate schema contracts for targets and verdicts', async () => {

@@ -38,7 +38,14 @@ export type ScheduledAgentMafiaChatReply = {
   participantId: string;
   content: string;
   dueAt: string;
+  /** Missing only on snapshots saved before Night identity was introduced; discard those replies. */
+  phaseKey?: string;
 };
+
+export const mafiaNightPhaseKey = (snapshot: ReturnType<MafiaGameSession['snapshot']>) =>
+  snapshot.phase === 'night'
+    ? JSON.stringify([snapshot.sessionId, snapshot.dayNumber, snapshot.phase])
+    : undefined;
 
 export type StoredGameSessionEntity = {
   holderId: string;

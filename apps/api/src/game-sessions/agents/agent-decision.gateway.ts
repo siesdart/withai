@@ -85,6 +85,7 @@ export type AgentDecisionRunner = (
 ) => Promise<unknown>;
 
 const maximumDecisionAttempts = 3;
+export const agentDecisionAttemptTimeoutMs = 10_000;
 
 const tanstackRunner: AgentDecisionRunner = async (
   { systemPrompts, userPrompt },
@@ -162,6 +163,11 @@ export class LLMAgentDecisionGateway implements AgentDecisionGateway {
       ),
       participantActionSchema,
       fallbackParticipantAction(context, candidateParticipantIds),
+      undefined,
+      (decision) =>
+        candidateParticipantIds.length === 0 ||
+        (decision.targetParticipantId !== undefined &&
+          candidateParticipantIds.includes(decision.targetParticipantId)),
     ).then(toPhaseActionDecision);
   }
 
@@ -224,6 +230,7 @@ export class LLMAgentDecisionGateway implements AgentDecisionGateway {
     schema: TSchema,
     fallback: v.InferOutput<TSchema>,
     abortController?: AbortController,
+    isValidOutput: (output: v.InferOutput<TSchema>) => boolean = () => true,
   ): Promise<v.InferOutput<TSchema>> {
     for (let attempt = 1; attempt <= maximumDecisionAttempts; attempt += 1) {
       if (abortController?.signal.aborted) return fallback;
@@ -237,7 +244,7 @@ export class LLMAgentDecisionGateway implements AgentDecisionGateway {
           response,
         );
         const parsed = v.safeParse(schema, response);
-        if (parsed.success) return parsed.output;
+        if (parsed.success && isValidOutput(parsed.output)) return parsed.output;
       } catch {
         if (abortController?.signal.aborted) return fallback;
         // A transient provider failure is retried within the bounded decision budget.
@@ -246,14 +253,22 @@ export class LLMAgentDecisionGateway implements AgentDecisionGateway {
     return fallback;
   }
 
-  private runDecisionForAttempt(
+  private async runDecisionForAttempt(
     prompt: AgentDecisionPrompt,
     schema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
     abortController: AbortController | undefined,
   ) {
-    return abortController
-      ? this.runDecision(prompt, schema, abortController)
-      : this.runDecision(prompt, schema);
+    const attemptAbortController = new AbortController();
+    const abortAttempt = () => attemptAbortController.abort();
+    abortController?.signal.addEventListener('abort', abortAttempt, { once: true });
+    if (abortController?.signal.aborted) abortAttempt();
+    const timeout = setTimeout(abortAttempt, agentDecisionAttemptTimeoutMs);
+    try {
+      return await this.runDecision(prompt, schema, attemptAbortController);
+    } finally {
+      clearTimeout(timeout);
+      abortController?.signal.removeEventListener('abort', abortAttempt);
+    }
   }
 }
 

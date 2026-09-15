@@ -89,6 +89,7 @@ const ScheduledAgentMafiaChatReplySchema = v.object({
   participantId: v.string(),
   content: v.string(),
   dueAt: v.string(),
+  phaseKey: v.optional(v.string()),
 });
 const AgentMemorySchema = v.object({
   revision: v.number(),

@@ -1176,7 +1176,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       const current = this.sessions.get(sessionId);
       if (!current || current.status !== 'in-progress')
         return err({ type: 'session-not-found', sessionId });
-      await this.agentActions.publishPublicSpeechReplies(current);
+      await this.agentActions.publishPublicSpeechReplies(current, true);
       return this.durability.saveSnapshot(current);
     });
     if (prepared.isErr() || !prepared.value) {

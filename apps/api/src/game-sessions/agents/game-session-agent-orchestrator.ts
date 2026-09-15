@@ -80,14 +80,14 @@ export class GameSessionAgentOrchestrator {
     private readonly currentSessionFor: CurrentSessionFor = (session) => session,
   ) {}
 
-  async publishPublicSpeechReplies(session: StoredGameSessionEntity) {
+  async publishPublicSpeechReplies(session: StoredGameSessionEntity, hydrationLocked = false) {
     const snapshot = session.gameSession.snapshot();
     if (snapshot.phase !== 'discussion') return;
     if (
       session.autonomousPublicSpeechTurns >=
       gameSessionsConfig.maximumAutonomousPublicSpeechTurnsPerDiscussion
     ) {
-      await this.recordAutonomousPublicSpeechLimitReached(session, snapshot);
+      await this.recordAutonomousPublicSpeechLimitReached(session, snapshot, hydrationLocked);
       return;
     }
 
@@ -306,26 +306,32 @@ export class GameSessionAgentOrchestrator {
   private async recordAutonomousPublicSpeechLimitReached(
     session: StoredGameSessionEntity,
     snapshot: ReturnType<StoredGameSessionEntity['gameSession']['snapshot']>,
+    hydrationLocked: boolean,
   ) {
     const discussionKey = JSON.stringify([snapshot.sessionId, snapshot.dayNumber, snapshot.phase]);
     if (session.autonomousPublicSpeechLimitReachedDiscussionKey === discussionKey) return;
-    await this.commitAgentMutation(session, (current) => {
-      const currentSnapshot = current.gameSession.snapshot();
-      if (
-        currentSnapshot.phase !== 'discussion' ||
-        current.autonomousPublicSpeechTurns <
-          gameSessionsConfig.maximumAutonomousPublicSpeechTurnsPerDiscussion ||
-        current.autonomousPublicSpeechLimitReachedDiscussionKey === discussionKey
-      ) {
-        return false;
-      }
-      const recorded = current.gameSession.recordAutonomousPublicSpeechLimitReached(
-        current.humanParticipantId,
-      );
-      if (recorded.isErr()) return false;
-      current.autonomousPublicSpeechLimitReachedDiscussionKey = discussionKey;
-      return true;
-    });
+    await this.commitAgentMutation(
+      session,
+      (current) => {
+        const currentSnapshot = current.gameSession.snapshot();
+        if (
+          currentSnapshot.phase !== 'discussion' ||
+          current.autonomousPublicSpeechTurns <
+            gameSessionsConfig.maximumAutonomousPublicSpeechTurnsPerDiscussion ||
+          current.autonomousPublicSpeechLimitReachedDiscussionKey === discussionKey
+        ) {
+          return false;
+        }
+        const recorded = current.gameSession.recordAutonomousPublicSpeechLimitReached(
+          current.humanParticipantId,
+        );
+        if (recorded.isErr()) return false;
+        current.autonomousPublicSpeechLimitReachedDiscussionKey = discussionKey;
+        return true;
+      },
+      undefined,
+      hydrationLocked,
+    );
   }
 
   private livingParticipantIds(projection: MafiaGameProjection) {

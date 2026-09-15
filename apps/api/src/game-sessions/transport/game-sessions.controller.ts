@@ -91,6 +91,9 @@ export class GameSessionsController {
           this.holderId(request.headers.cookie),
           body.participantCount,
           idempotencyKey,
+          body.humanName,
+          body.outputLanguage,
+          false,
         )
       ).map(({ holderId, projection }) => {
         response.cookie(gameSessionsConfig.guestCookieName, this.guestCookies.sign(holderId), {
@@ -100,6 +103,18 @@ export class GameSessionsController {
         });
         return projection;
       }),
+    );
+  }
+
+  @Get('mafia/active')
+  @ApiOperation({ summary: 'Get the anonymous guest active Mafia Game Session, if any' })
+  @ApiCookieAuth('withai_guest')
+  @ApiOkResponse({ description: 'The active Game Session or null when none is available.' })
+  async activeMafiaSession(@Req() request: Request) {
+    return this.resolveGameSessionResult(
+      (
+        await this.gameSessionsService.activeMafiaSession(this.holderId(request.headers.cookie))
+      ).map((session) => session ?? null),
     );
   }
 

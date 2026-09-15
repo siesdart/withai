@@ -2,7 +2,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { useCallback } from 'react';
 
-import { MafiaGameSessionClient } from '@/features/mafia-session/api/client';
 import { isUnavailableGameSession } from '@/features/mafia-session/api/error';
 import { ControlRoom } from '@/features/mafia-session/components/control-room/control-room';
 import { ControlRoomError } from '@/features/mafia-session/components/control-room/control-room-error';
@@ -11,22 +10,12 @@ import { gameSessionSnapshotOptions } from '@/features/mafia-session/hooks/optio
 import { useGameSessionStore } from '@/features/mafia-session/store/game-session';
 
 export const Route = createFileRoute('/mafia')({
-  beforeLoad: async (): Promise<{ sessionId: string }> => {
-    const { sessionId, ensureCreationKey, setSessionId } = useGameSessionStore.getState();
+  beforeLoad: (): { sessionId: string } => {
+    const { sessionId } = useGameSessionStore.getState();
     if (sessionId) {
       return { sessionId };
     }
-
-    const result = await MafiaGameSessionClient.createSession(ensureCreationKey());
-    return result.match(
-      (projection) => {
-        setSessionId(projection.sessionId);
-        return { sessionId: projection.sessionId };
-      },
-      (error) => {
-        throw error;
-      },
-    );
+    throw Route.redirect({ to: '/' });
   },
   loader: ({ context }) =>
     context.queryClient.query({
@@ -49,19 +38,10 @@ export const Route = createFileRoute('/mafia')({
       }
       void router.invalidate();
     }, [queryClient, router]);
-    const onStartNewGame = useCallback(() => {
-      useGameSessionStore.getState().clearSession();
-      void router.invalidate();
-    }, [router]);
 
     if (isUnavailableGameSession(error)) {
-      return (
-        <ControlRoomError
-          onStartNewGame={onStartNewGame}
-          title="This Game Session is no longer available."
-          description="Start a new Game Session when you are ready."
-        />
-      );
+      useGameSessionStore.getState().clearSession();
+      throw Route.redirect({ to: '/' });
     }
 
     return <ControlRoomError onRetry={onRetry} />;

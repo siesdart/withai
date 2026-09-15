@@ -100,6 +100,7 @@ export class GameSessionDurability {
       sessionId: projection.sessionId,
       holderId: session.holderId,
       humanParticipantId: session.humanParticipantId,
+      outputLanguage: session.outputLanguage,
       gameSession: session.gameSession.snapshot(),
       agentMinds: session.agentMinds,
       nextEventId: session.nextEventId,
@@ -134,6 +135,7 @@ export class GameSessionDurability {
     return {
       holderId: snapshot.holderId,
       humanParticipantId: snapshot.humanParticipantId,
+      outputLanguage: snapshot.outputLanguage ?? 'ko',
       gameSession: MafiaGameSession.restore(snapshot.gameSession, () => this.clock.now()),
       agentMinds: snapshot.agentMinds ?? {},
       events: new ReplaySubject<MafiaGameProjection>(gameSessionsConfig.eventReplayBufferSize),

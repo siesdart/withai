@@ -1,4 +1,4 @@
-import { cn } from '@repo/ui/lib/utils';
+import { cn } from 'cn';
 import { match } from 'ts-pattern';
 
 import type { PhasePanel } from '../control-room/phase-interaction';

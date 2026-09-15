@@ -1,7 +1,9 @@
+import type { MafiaOutputLanguage } from '@repo/mafia';
 import type { MafiaGameProjection } from '@repo/mafia/client';
 import ky from 'ky';
-import { ResultAsync } from 'neverthrow';
+import { err, ok, ResultAsync } from 'neverthrow';
 import { parseServerSentEvents } from 'parse-sse';
+import * as v from 'valibot';
 
 import { parseMafiaGameProjection, validateMafiaGameProjection } from './entity';
 import { type GameSessionApiError, toGameSessionApiError } from './error';
@@ -9,12 +11,21 @@ import { type GameSessionApiError, toGameSessionApiError } from './error';
 export type { MafiaGameProjection };
 
 const gameSessionsApi = ky.create({ baseUrl: '/game-sessions/', credentials: 'include' });
+const ActiveMafiaGameSessionSchema = v.object({
+  projection: v.unknown(),
+  outputLanguage: v.picklist(['ko', 'en']),
+});
 
 export type MafiaGameSessionSubscriptionOptions = {
   lastEventId: string | undefined;
   onConnected: () => void;
   onProjection: (projection: MafiaGameProjection, lastEventId: string) => void;
   signal: AbortSignal;
+};
+
+export type ActiveMafiaGameSession = {
+  projection: MafiaGameProjection;
+  outputLanguage: MafiaOutputLanguage;
 };
 
 export class MafiaGameSessionClient {
@@ -26,8 +37,28 @@ export class MafiaGameSessionClient {
 
   static createSession(
     idempotencyKey: string,
+    settings: { humanName: string; outputLanguage: MafiaOutputLanguage },
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
-    return MafiaGameSessionClient.#postProjection('mafia', { participantCount: 8 }, idempotencyKey);
+    return MafiaGameSessionClient.#postProjection(
+      'mafia',
+      { participantCount: 8, ...settings },
+      idempotencyKey,
+    );
+  }
+
+  static activeSession(): ResultAsync<ActiveMafiaGameSession | undefined, GameSessionApiError> {
+    return ResultAsync.fromPromise(
+      gameSessionsApi.get('mafia/active').json<unknown>(),
+      toGameSessionApiError,
+    ).andThen((value) => {
+      if (value === null) return ok(undefined);
+      const parsed = v.safeParse(ActiveMafiaGameSessionSchema, value);
+      if (!parsed.success) return err({ type: 'invalid-event', cause: value } as const);
+      return validateMafiaGameProjection(parsed.output.projection).map((projection) => ({
+        projection,
+        outputLanguage: parsed.output.outputLanguage,
+      }));
+    });
   }
 
   getSnapshot(): ResultAsync<MafiaGameProjection, GameSessionApiError> {

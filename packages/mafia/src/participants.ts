@@ -28,8 +28,8 @@ export type MafiaPersonalInformation = {
 export type RandomInt = (maxExclusive: number) => number;
 
 const participantNamesByLanguage: Record<MafiaOutputLanguage, readonly string[]> = {
-  ko: ['You', '민아', '준', '소라', '하나', '태오', '아이리스', '노아', '유나', '엘리'],
-  en: ['You', 'Mina', 'Joon', 'Sora', 'Hana', 'Theo', 'Iris', 'Noah', 'Yuna', 'Eli'],
+  ko: ['플레이어', '민아', '준', '소라', '하나', '태오', '아이리스', '노아', '유나', '엘리'],
+  en: ['Player', 'Mina', 'Joon', 'Sora', 'Hana', 'Theo', 'Iris', 'Noah', 'Yuna', 'Eli'],
 };
 
 const allegianceFor = (role: MafiaRole): MafiaAllegiance =>
@@ -62,12 +62,13 @@ export function createParticipants(
   participantCount: number,
   randomIntExclusive: RandomInt,
   outputLanguage: MafiaOutputLanguage = 'ko',
+  humanName?: string,
 ): MafiaParticipant[] {
   const roles = shuffleRoles(assignRoles(participantCount), randomIntExclusive);
   const names = participantNamesByLanguage[outputLanguage];
   return map(names.slice(0, participantCount), (name, index) => ({
     id: `participant-${index + 1}`,
-    name,
+    name: index === 0 && humanName ? humanName : name,
     alive: true,
     role: roles[index],
   }));

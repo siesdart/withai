@@ -16,6 +16,7 @@
     "@tanstack/react-query-devtools": "^5.102.0",
     "@tanstack/react-router": "^1.170.32",
     "@tanstack/react-router-devtools": "^1.167.1",
+    "cn": "^0.3.0",
     "dayjs": "^1.11.23",
     "ky": "^2.0.2",
     "lucide-react": "^1.33.0",

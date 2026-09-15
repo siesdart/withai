@@ -1,6 +1,6 @@
 /* oxlint-disable react-perf/jsx-no-new-function-as-prop -- each selectable participant needs a bound game action. */
 import { Button } from '@repo/ui/components/button';
-import { cn } from '@repo/ui/lib/utils';
+import { cn } from 'cn';
 import { map } from 'remeda';
 
 import type { MafiaGameProjection } from '../../api/client';

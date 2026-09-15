@@ -3,7 +3,7 @@ import {
   MafiaGameSessionSnapshotSchema,
   type MafiaGameSessionSnapshot,
 } from '@repo/mafia';
-import type { MafiaGameProjection } from '@repo/mafia';
+import type { MafiaGameProjection, MafiaOutputLanguage } from '@repo/mafia';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc.js';
 import { Redis } from 'ioredis';
@@ -28,6 +28,7 @@ export type DurableSessionSnapshot = {
   sessionId: string;
   holderId: string;
   humanParticipantId: string;
+  outputLanguage?: MafiaOutputLanguage;
   gameSession: MafiaGameSessionSnapshot;
   agentMinds?: Record<string, AgentMind>;
   nextEventId: number;
@@ -121,6 +122,7 @@ const DurableSessionSnapshotSchema: v.GenericSchema<unknown, DurableSessionSnaps
     sessionId: v.string(),
     holderId: v.string(),
     humanParticipantId: v.string(),
+    outputLanguage: v.optional(v.picklist(['ko', 'en'])),
     gameSession: MafiaGameSessionSnapshotSchema,
     agentMinds: v.optional(v.record(v.string(), AgentMindSchema)),
     nextEventId: v.number(),
@@ -192,6 +194,27 @@ export class RedisGameSessionAuthority {
     return redisUrl
       ? new RedisGameSessionAuthority(new Redis(redisUrl, { lazyConnect: true }))
       : undefined;
+  }
+
+  activeSessionIdForHolder(holderId: string): ResultAsync<string | undefined, DurableSessionError> {
+    return ResultAsync.fromPromise(
+      this.redis.get(this.holderActiveSessionKey(holderId)),
+      (cause): DurableSessionError => ({ type: 'authority-unavailable', cause }),
+    ).map((sessionId) => sessionId ?? undefined);
+  }
+
+  clearActiveSessionForHolder(
+    holderId: string,
+    sessionId: string,
+  ): ResultAsync<void, DurableSessionError> {
+    const key = this.holderActiveSessionKey(holderId);
+    return ResultAsync.fromPromise(
+      this.redis.get(key).then(async (current) => {
+        if (current === sessionId) await this.redis.del(key);
+        return undefined;
+      }),
+      (cause): DurableSessionError => ({ type: 'authority-unavailable', cause }),
+    );
   }
 
   save(

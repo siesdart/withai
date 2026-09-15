@@ -62,6 +62,7 @@ type MaybePromise<T> = T | Promise<T>;
 
 export type AgentDecisionGateway = {
   readonly outputLanguage?: AgentOutputLanguage;
+  forLanguage?(outputLanguage: AgentOutputLanguage): AgentDecisionGateway;
   decidePublicSpeech(
     context: MafiaAgentContext,
     options?: AgentPublicSpeechOptions,
@@ -113,6 +114,10 @@ export class LLMAgentDecisionGateway implements AgentDecisionGateway {
     outputLanguage: AgentOutputLanguage = 'ko',
   ) {
     this.outputLanguage = outputLanguage;
+  }
+
+  forLanguage(outputLanguage: AgentOutputLanguage): AgentDecisionGateway {
+    return new LLMAgentDecisionGateway(this.runDecision, outputLanguage);
   }
 
   decidePublicSpeech(

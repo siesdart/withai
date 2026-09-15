@@ -185,7 +185,7 @@ export class GameSessionAgentOrchestrator {
           map(agentIds, async (participantId) =>
             this.agentContextFor(session, participantId).match(
               async (context): Promise<MafiaAgentTargetSelection | undefined> => {
-                const decision = await this.phaseActionFor(context, livingParticipantIds);
+                const decision = await this.phaseActionFor(session, context, livingParticipantIds);
                 rememberAllegianceEstimates(
                   agentMindFor(session.agentMinds, participantId),
                   context,
@@ -228,7 +228,7 @@ export class GameSessionAgentOrchestrator {
       if (!nominatedParticipantId || nominatedParticipantId === session.humanParticipantId) return;
       await this.agentContextFor(session, nominatedParticipantId).match(
         async (context) => {
-          const decision = await this.agentDecisions.decideFinalDefence(context);
+          const decision = await this.decisionsFor(session).decideFinalDefence(context);
           session.gameSession.submitFinalDefence(nominatedParticipantId, decision.opening).match(
             () =>
               this.scheduleFinalDefenceFollowUp(
@@ -259,7 +259,7 @@ export class GameSessionAgentOrchestrator {
       const targetName =
         targetParticipantId && this.participantNameFor(context, targetParticipantId);
       if (!targetParticipantId || !targetName) return;
-      const content = await this.agentDecisions.decideMafiaChatReply(context, targetName);
+      const content = await this.decisionsFor(session).decideMafiaChatReply(context, targetName);
       if (mafiaNightPhaseKey(session.gameSession.snapshot()) !== phaseKey) return;
       const dueAt = agentChatDueAt({ content, earliestAt });
       replies.push({
@@ -372,7 +372,7 @@ export class GameSessionAgentOrchestrator {
           context.personal.role === 'Doctor'
             ? livingParticipantIds
             : filter(livingParticipantIds, (id) => id !== participantId);
-        const decision = await this.phaseActionFor(context, targetParticipantIds);
+        const decision = await this.phaseActionFor(session, context, targetParticipantIds);
         rememberAllegianceEstimates(
           agentMindFor(session.agentMinds, participantId),
           context,
@@ -463,7 +463,7 @@ export class GameSessionAgentOrchestrator {
   private async publishMafiaNightOpenings(session: StoredGameSessionEntity) {
     await this.submitMafiaAgentTarget(session);
     await this.publishMafiaAgentMessages(session, (context, targetName) =>
-      this.agentDecisions.decideMafiaChatOpening(context, targetName),
+      this.decisionsFor(session).decideMafiaChatOpening(context, targetName),
     );
   }
 
@@ -520,7 +520,7 @@ export class GameSessionAgentOrchestrator {
         this.agentContextFor(session, participantId).match(
           async (context) => {
             if (context.personal.vote?.phase === 'verdict') return;
-            const decision = await this.phaseActionFor(context, []);
+            const decision = await this.phaseActionFor(session, context, []);
             rememberAllegianceEstimates(
               agentMindFor(session.agentMinds, participantId),
               context,
@@ -654,7 +654,7 @@ export class GameSessionAgentOrchestrator {
       (context.personal.nightAction?.type === 'mafia-target'
         ? context.personal.nightAction.targetParticipantId
         : undefined) ??
-      (await this.agentDecisions.selectMafiaTarget(context))
+      (await this.decisionsFor(session).selectMafiaTarget(context))
     );
   }
 
@@ -723,7 +723,7 @@ export class GameSessionAgentOrchestrator {
         const personalSnapshot = withAgentMind(context, mind);
         if (hasHandledSnapshot(mind, personalSnapshot)) return undefined;
         const decisionResult = await Promise.race([
-          this.agentDecisions.decidePublicSpeech(personalSnapshot, {
+          this.decisionsFor(session).decidePublicSpeech(personalSnapshot, {
             abortController: request.abortController,
           }),
           new Promise<undefined>((resolve) => {
@@ -869,11 +869,16 @@ export class GameSessionAgentOrchestrator {
     });
   }
 
+  private decisionsFor(session: StoredGameSessionEntity) {
+    return this.agentDecisions.forLanguage?.(session.outputLanguage ?? 'ko') ?? this.agentDecisions;
+  }
+
   private async phaseActionFor(
+    session: StoredGameSessionEntity,
     context: MafiaAgentContext,
     candidateParticipantIds: readonly string[],
   ) {
-    const decision = await this.agentDecisions.decidePhaseAction?.(
+    const decision = await this.decisionsFor(session).decidePhaseAction?.(
       context,
       candidateParticipantIds,
     );

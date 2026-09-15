@@ -1,4 +1,4 @@
-import type { MafiaGameSession } from '@repo/mafia';
+import type { MafiaGameSession, MafiaOutputLanguage } from '@repo/mafia';
 import type { MafiaGameProjection } from '@repo/mafia';
 import type { Dayjs } from 'dayjs';
 import { type ReplaySubject } from 'rxjs';
@@ -50,6 +50,7 @@ export const mafiaNightPhaseKey = (snapshot: ReturnType<MafiaGameSession['snapsh
 export type StoredGameSessionEntity = {
   holderId: string;
   humanParticipantId: string;
+  outputLanguage?: MafiaOutputLanguage;
   gameSession: MafiaGameSession;
   agentMinds: Record<string, AgentMind>;
   events: ReplaySubject<MafiaGameProjection>;

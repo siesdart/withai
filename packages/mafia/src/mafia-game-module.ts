@@ -20,6 +20,8 @@ import {
 export type MafiaSessionInput = {
   sessionId: string;
   participantCount: number;
+  humanName?: string;
+  outputLanguage?: MafiaOutputLanguage;
 };
 export type MafiaSessionInputError = {
   type: 'invalid-participant-count';
@@ -45,11 +47,12 @@ export class MafiaGameModule implements GameModule<
     private readonly randomIntExclusive: RandomInt = randomInt,
     private readonly dayDurations: MafiaDayDurations = defaultDayDurations,
     private readonly now: () => Date = () => new Date(),
-    private readonly outputLanguage: MafiaOutputLanguage = 'ko',
   ) {}
   create({
     sessionId,
     participantCount,
+    humanName,
+    outputLanguage = 'ko',
   }: MafiaSessionInput): Result<MafiaGameSession, MafiaSessionInputError> {
     if (
       participantCount < mafiaGameConfig.minParticipantCount ||
@@ -59,7 +62,7 @@ export class MafiaGameModule implements GameModule<
     return ok(
       new MafiaGameSession(
         sessionId,
-        createParticipants(participantCount, this.randomIntExclusive, this.outputLanguage),
+        createParticipants(participantCount, this.randomIntExclusive, outputLanguage, humanName),
         this.dayDurations,
         this.now,
       ),

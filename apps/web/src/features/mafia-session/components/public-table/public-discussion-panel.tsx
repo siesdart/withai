@@ -8,7 +8,7 @@ import {
   MessageScrollerProvider,
   MessageScrollerViewport,
 } from '@repo/ui/components/message-scroller';
-import { cn } from '@repo/ui/lib/utils';
+import { cn } from 'cn';
 import { MoonIcon, SunIcon } from 'lucide-react';
 import { map, reduce } from 'remeda';
 

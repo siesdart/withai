@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Inject } from '@nestjs/common';
-import { MafiaGameModule, mafiaGameConfig } from '@repo/mafia';
+import { MafiaGameModule, mafiaGameConfig, type MafiaOutputLanguage } from '@repo/mafia';
 import type { MafiaGameProjection } from '@repo/mafia';
 import dayjs from 'dayjs';
 import { err, ok, type Result } from 'neverthrow';
@@ -56,6 +56,10 @@ type CreatedMafiaSession = {
   holderId: string;
   projection: MafiaGameProjection;
 };
+type ActiveMafiaSession = {
+  projection: MafiaGameProjection;
+  outputLanguage: MafiaOutputLanguage;
+};
 
 type IdempotentProjectionAction = {
   idempotencyKey: string;
@@ -101,12 +105,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     this.phaseTransitionRetries = new KeyedRetryScheduler(this.clock);
     this.scheduledAgentRetries = new KeyedRetryScheduler(this.clock);
     this.mafiaChatReplyRetries = new KeyedRetryScheduler(this.clock);
-    this.mafiaModule = new MafiaGameModule(
-      undefined,
-      undefined,
-      () => this.clock.now(),
-      agentDecisions.outputLanguage ?? 'ko',
-    );
+    this.mafiaModule = new MafiaGameModule(undefined, undefined, () => this.clock.now());
     this.agentActions = new GameSessionAgentOrchestrator(
       agentDecisions,
       (session, mutate, schedulePhaseTransition, hydrationLocked) =>
@@ -178,6 +177,9 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     holderId: string | undefined,
     participantCount: number = mafiaGameConfig.defaultParticipantCount,
     idempotencyKey: string | undefined,
+    humanName?: string,
+    outputLanguage: MafiaOutputLanguage = 'ko',
+    awaitInitialAgentActions = true,
   ): Promise<Result<CreatedMafiaSession, GameSessionError>> {
     if (!this.authority && this.requiresDurableAuthority()) {
       return err({ type: 'durability-unavailable' });
@@ -200,7 +202,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       const lookup = lookupIdempotency(
         this.idempotencyKeys,
         scopedIdempotencyKey,
-        String(participantCount),
+        JSON.stringify({ participantCount, humanName, outputLanguage }),
       );
       const idempotencyResult = match(lookup)
         .with({ type: 'conflict' }, () =>
@@ -237,6 +239,8 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     const gameSessionResult = this.mafiaModule.create({
       sessionId,
       participantCount,
+      humanName: humanName?.trim() || (outputLanguage === 'ko' ? '플레이어' : 'Player'),
+      outputLanguage,
     });
     if (gameSessionResult.isErr()) {
       return err({ type: 'invalid-mafia-session-input', cause: gameSessionResult.error });
@@ -246,6 +250,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     const session: StoredGameSessionEntity = {
       holderId: resolvedHolderId,
       humanParticipantId: 'participant-1',
+      outputLanguage,
       gameSession,
       agentMinds: createAgentMinds(gameSession, 'participant-1'),
       events: new ReplaySubject<MafiaGameProjection>(gameSessionsConfig.eventReplayBufferSize),
@@ -279,7 +284,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       recordIdempotency(
         this.idempotencyKeys,
         scopedIdempotencyKey,
-        String(participantCount),
+        JSON.stringify({ participantCount, humanName, outputLanguage }),
         sessionId,
       );
     }
@@ -292,7 +297,12 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         resolvedHolderId,
         this.utcDay(),
         gameSessionsConfig.guestAllowance,
-        idempotencyKey ? { key: idempotencyKey, fingerprint: String(participantCount) } : undefined,
+        idempotencyKey
+          ? {
+              key: idempotencyKey,
+              fingerprint: JSON.stringify({ participantCount, humanName, outputLanguage }),
+            }
+          : undefined,
       );
       if (creation.isErr()) return err({ type: 'durability-unavailable' });
       if (creation.value.type === 'unavailable-session') {
@@ -337,13 +347,46 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     }
     this.sessions.set(sessionId, session);
     this.activeSessionIdsByHolder.set(resolvedHolderId, sessionId);
-    const actions = await this.submitAndCommitAgentActions(session);
-    if (actions.isErr()) {
-      this.retryAgentActions(sessionId);
-      return ok({ holderId: resolvedHolderId, projection: projection.value });
-    }
     this.lifecycle.schedulePhaseTransition(session);
+    if (awaitInitialAgentActions) {
+      const actions = await this.submitAndCommitAgentActions(session);
+      if (actions.isErr()) this.retryAgentActions(sessionId);
+    } else {
+      this.queuePendingAgentActions(session);
+    }
     return ok({ holderId: resolvedHolderId, projection: projection.value });
+  }
+
+  async activeMafiaSession(
+    holderId: string | undefined,
+  ): Promise<Result<ActiveMafiaSession | undefined, GameSessionError>> {
+    if (!holderId) return ok(undefined);
+    if (!this.authority) {
+      const sessionId = this.activeSessionIdsByHolder.get(holderId);
+      const session = sessionId ? this.sessions.get(sessionId) : undefined;
+      if (!session || session.status !== 'in-progress') return ok(undefined);
+      return this.projectionFor(session).map((projection) => ({
+        projection,
+        outputLanguage: session.outputLanguage ?? 'ko',
+      }));
+    }
+    const activeSessionId = await this.authority.activeSessionIdForHolder(holderId);
+    if (activeSessionId.isErr()) return err({ type: 'durability-unavailable' });
+    if (!activeSessionId.value) return ok(undefined);
+    const hydrated = await this.hydrateAuthoritativeSession(activeSessionId.value, false, false);
+    if (hydrated.isErr()) {
+      await this.authority.clearActiveSessionForHolder(holderId, activeSessionId.value);
+      return ok(undefined);
+    }
+    const session = this.sessions.get(activeSessionId.value);
+    if (!session || session.status !== 'in-progress') {
+      await this.authority.clearActiveSessionForHolder(holderId, activeSessionId.value);
+      return ok(undefined);
+    }
+    return this.projectionFor(session).map((projection) => ({
+      projection,
+      outputLanguage: session.outputLanguage ?? 'ko',
+    }));
   }
 
   getProjection(

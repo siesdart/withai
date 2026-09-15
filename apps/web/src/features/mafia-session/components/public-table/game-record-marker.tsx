@@ -1,5 +1,5 @@
 import { Marker, MarkerContent, MarkerIcon } from '@repo/ui/components/marker';
-import { cn } from '@repo/ui/lib/utils';
+import { cn } from 'cn';
 import { ScrollTextIcon } from 'lucide-react';
 import { filter, map, sort, unique } from 'remeda';
 import { match } from 'ts-pattern';

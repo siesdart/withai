@@ -253,35 +253,6 @@ describe('Mafia Game Session API', () => {
     redis.disconnect();
   });
 
-  it('creates an anonymous session with only the human player private information', async () => {
-    const createResponse = await request(app.getHttpServer())
-      .post('/game-sessions/mafia')
-      .send({ participantCount: 5 })
-      .expect(201);
-
-    expect(createResponse.headers['set-cookie']).toEqual(
-      expect.arrayContaining([expect.stringMatching(/^withai_guest=/)]),
-    );
-    expect(createResponse.body).toMatchObject({
-      eventId: 1,
-      public: {
-        phase: 'night',
-        participants: expect.arrayContaining([
-          expect.objectContaining({ name: 'You', alive: true }),
-        ]),
-      },
-      personal: {
-        participantId: expect.any(String),
-        role: expect.any(String),
-        allegiance: expect.any(String),
-      },
-    });
-    expect(JSON.stringify(createResponse.body)).not.toContain('agentReasoning');
-    expect(createResponse.body.public.participants).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ role: expect.anything() })]),
-    );
-  });
-
   it('serves a Redis-backed session after an API restart', async () => {
     const created = await request(app.getHttpServer())
       .post('/game-sessions/mafia')

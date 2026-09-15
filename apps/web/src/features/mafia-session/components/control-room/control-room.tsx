@@ -1,3 +1,5 @@
+/* oxlint-disable react-perf/jsx-no-new-function-as-prop -- the completed-game link clears transient session storage at the click boundary. */
+
 import { UsersIcon } from 'lucide-react';
 import { filter } from 'remeda';
 
@@ -5,6 +7,7 @@ import { useGameAction } from '../../hooks/actions/use-game-action';
 import { useGameSessionSnapshot } from '../../hooks/sync/use-game-session-snapshot';
 import { useGameSessionSubscription } from '../../hooks/sync/use-game-session-subscription';
 import { useDeadlineCountdown } from '../../hooks/ui/use-deadline-countdown';
+import { useGameSessionStore } from '../../store/game-session';
 import { ParticipantList } from '../game-information/participant-list';
 import { PublicDiscussionPanel } from '../public-table/public-discussion-panel';
 import { createPhaseInteraction } from './phase-interaction';
@@ -32,6 +35,15 @@ export function ControlRoom({ sessionId }: { sessionId: string }) {
         >
           WithAI / Mafia
         </h1>
+        {snapshot.public.phase === 'completed' ? (
+          <a
+            href="/"
+            className="absolute right-0 bottom-3 inline-flex h-8 items-center border border-[#22221e] px-2.5 text-xs font-medium hover:bg-[#22221e] hover:text-[#f4efe7]"
+            onClick={() => useGameSessionStore.getState().clearSession()}
+          >
+            게임 목록으로
+          </a>
+        ) : null}
       </header>
 
       <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col gap-3 py-3 lg:grid lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-5 lg:py-6">

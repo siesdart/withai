@@ -1,5 +1,5 @@
 import { Badge } from '@repo/ui/components/badge';
-import { cn } from '@repo/ui/lib/utils';
+import { cn } from 'cn';
 
 import type { MafiaGameProjection } from '../../api/client';
 

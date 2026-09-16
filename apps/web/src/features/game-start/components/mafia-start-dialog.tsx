@@ -17,7 +17,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@repo/ui/components/select';
+import { cn } from 'cn';
 
+import { useGuestPlayAllowance } from '../hooks/use-guest-play-allowance';
 import { useMafiaGameCreation } from '../hooks/use-mafia-game-creation';
 
 type MafiaStartDialogProps = {
@@ -27,6 +29,7 @@ type MafiaStartDialogProps = {
 
 export function MafiaStartDialog({ open, onOpenChange }: MafiaStartDialogProps) {
   const creation = useMafiaGameCreation();
+  const guestPlayAllowance = useGuestPlayAllowance(open);
   const defaultName = creation.outputLanguage === 'ko' ? '플레이어' : 'Player';
 
   return (
@@ -101,12 +104,34 @@ export function MafiaStartDialog({ open, onOpenChange }: MafiaStartDialogProps) 
               <p className="mt-4 text-sm text-destructive">{creation.creationError}</p>
             ) : null}
 
+            <div className="mt-5 border-y border-[#22221e]/20 py-3 text-sm">
+              {guestPlayAllowance.isLoading ? (
+                <p className="text-[#625e55]">게스트 플레이 횟수를 확인하고 있어요.</p>
+              ) : guestPlayAllowance.allowance ? (
+                <div className="flex flex-col gap-1 text-[#625e55]">
+                  <p>
+                    오늘 남은 게스트 플레이 횟수:{' '}
+                    <span className={cn(guestPlayAllowance.isExhausted && 'text-[#a43b31]')}>
+                      {guestPlayAllowance.allowance.remaining}
+                    </span>{' '}
+                    / {guestPlayAllowance.allowance.limit}
+                  </p>
+                  <p>횟수 초기화까지: {guestPlayAllowance.resetCountdown} 남음</p>
+                </div>
+              ) : (
+                <p className="text-[#625e55]">게스트 플레이 횟수를 불러오지 못했어요.</p>
+              )}
+            </div>
+
             <div className="mt-6 flex justify-end gap-2">
               <Dialog.Close render={<Button variant="outline" disabled={creation.isCreating} />}>
                 닫기
               </Dialog.Close>
-              <Button onClick={() => void creation.startGame()} disabled={creation.isCreating}>
-                게임 시작
+              <Button
+                onClick={() => void creation.startGame()}
+                disabled={creation.isCreating || guestPlayAllowance.isExhausted}
+              >
+                {guestPlayAllowance.isExhausted ? '플레이 횟수 소진' : '게임 시작'}
               </Button>
             </div>
           </Dialog.Popup>

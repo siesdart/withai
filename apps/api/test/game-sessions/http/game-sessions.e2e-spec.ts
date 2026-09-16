@@ -253,6 +253,34 @@ describe('Mafia Game Session API', () => {
     redis.disconnect();
   });
 
+  it('reports a guest daily Game Session allowance and its UTC reset time', async () => {
+    const initial = await request(app.getHttpServer())
+      .get('/game-sessions/mafia/allowance')
+      .expect(200);
+    const guestCookie = firstSetCookie(initial.headers['set-cookie']);
+
+    expect(initial.body).toEqual({
+      remaining: 10,
+      limit: 10,
+      resetsAt: '2026-09-07T00:00:00.000Z',
+    });
+
+    await request(app.getHttpServer())
+      .post('/game-sessions/mafia')
+      .set('Cookie', guestCookie)
+      .send({ participantCount: 5 })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .get('/game-sessions/mafia/allowance')
+      .set('Cookie', guestCookie)
+      .expect({
+        remaining: 9,
+        limit: 10,
+        resetsAt: '2026-09-07T00:00:00.000Z',
+      });
+  });
+
   it('serves a Redis-backed session after an API restart', async () => {
     const created = await request(app.getHttpServer())
       .post('/game-sessions/mafia')

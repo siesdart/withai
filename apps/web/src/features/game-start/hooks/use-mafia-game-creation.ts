@@ -1,4 +1,5 @@
 import type { MafiaOutputLanguage } from '@repo/mafia/client';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { useCallback, useState } from 'react';
 
@@ -6,11 +7,14 @@ import { MafiaGameSessionClient } from '@/features/mafia-session/api/client';
 import { isUnavailableGameSession } from '@/features/mafia-session/api/error';
 import { useGameSessionStore } from '@/features/mafia-session/store/game-session';
 
+import { guestPlayAllowanceOptions } from './guest-play-allowance-options';
+
 const defaultNameFor = (outputLanguage: MafiaOutputLanguage) =>
   outputLanguage === 'ko' ? '플레이어' : 'Player';
 
 export function useMafiaGameCreation() {
   const navigate = useNavigate({ from: '/' });
+  const queryClient = useQueryClient();
   const [humanName, setHumanName] = useState('');
   const [outputLanguage, setOutputLanguage] = useState<MafiaOutputLanguage>('ko');
   const [creationError, setCreationError] = useState<string>();
@@ -39,11 +43,12 @@ export function useMafiaGameCreation() {
         await navigate({ to: '/mafia' });
       },
       () => {
+        void queryClient.invalidateQueries(guestPlayAllowanceOptions);
         setCreationError('게임을 준비하지 못했어요. 잠시 후 다시 시도해 주세요.');
         setIsCreating(false);
       },
     );
-  }, [humanName, navigate, outputLanguage]);
+  }, [humanName, navigate, outputLanguage, queryClient]);
 
   return {
     humanName,

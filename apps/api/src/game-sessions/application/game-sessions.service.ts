@@ -5,6 +5,7 @@ import { Inject } from '@nestjs/common';
 import { MafiaGameModule, mafiaGameConfig, type MafiaOutputLanguage } from '@repo/mafia';
 import type { MafiaGameProjection } from '@repo/mafia';
 import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc.js';
 import { err, ok, type Result } from 'neverthrow';
 import {
   concat,
@@ -50,6 +51,8 @@ import {
 import { KeyedRetryScheduler } from './keyed-retry-scheduler.js';
 import { mafiaNightPhaseKey, type StoredGameSessionEntity } from './stored-game-session.entity.js';
 
+dayjs.extend(utc);
+
 export type { GameSessionError } from './game-session-error.js';
 
 type CreatedMafiaSession = {
@@ -59,6 +62,12 @@ type CreatedMafiaSession = {
 type ActiveMafiaSession = {
   projection: MafiaGameProjection;
   outputLanguage: MafiaOutputLanguage;
+};
+export type GuestPlayAllowance = {
+  holderId: string;
+  remaining: number;
+  limit: number;
+  resetsAt: string;
 };
 
 type IdempotentProjectionAction = {
@@ -387,6 +396,28 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       projection,
       outputLanguage: session.outputLanguage ?? 'ko',
     }));
+  }
+
+  async guestPlayAllowance(
+    holderId: string | undefined,
+  ): Promise<Result<GuestPlayAllowance, GameSessionError>> {
+    if (!this.authority && this.requiresDurableAuthority()) {
+      return err({ type: 'durability-unavailable' });
+    }
+
+    const resolvedHolderId = holderId ?? randomUUID();
+    const countKey = `${this.utcDay()}:${resolvedHolderId}`;
+    const used = this.authority
+      ? await this.authority.guestAllowanceUsage(resolvedHolderId, this.utcDay())
+      : ok(this.guestSessionCounts.get(countKey) ?? 0);
+    if (used.isErr()) return err({ type: 'durability-unavailable' });
+
+    return ok({
+      holderId: resolvedHolderId,
+      remaining: Math.max(0, gameSessionsConfig.guestAllowance - used.value),
+      limit: gameSessionsConfig.guestAllowance,
+      resetsAt: this.nextUtcDay().toISOString(),
+    });
   }
 
   getProjection(
@@ -1040,6 +1071,10 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
 
   private utcDay() {
     return this.clock.now().toISOString().slice(0, 10);
+  }
+
+  private nextUtcDay() {
+    return this.now().utc().add(1, 'day').startOf('day');
   }
 
   private now() {

@@ -24,6 +24,17 @@ export type ActiveMafiaGameSession = {
   projection: MafiaGameProjection;
   outputLanguage: MafiaOutputLanguage;
 };
+export type GuestPlayAllowance = {
+  remaining: number;
+  limit: number;
+  resetsAt: string;
+};
+
+const GuestPlayAllowanceSchema = v.object({
+  remaining: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  limit: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  resetsAt: v.pipe(v.string(), v.isoTimestamp()),
+});
 
 export class MafiaGameSessionClient {
   readonly #sessionId: string;
@@ -55,6 +66,18 @@ export class MafiaGameSessionClient {
         projection,
         outputLanguage: parsed.output.outputLanguage,
       }));
+    });
+  }
+
+  static guestPlayAllowance(): ResultAsync<GuestPlayAllowance, GameSessionApiError> {
+    return ResultAsync.fromPromise(
+      gameSessionsApi.get('mafia/allowance').json<unknown>(),
+      toGameSessionApiError,
+    ).andThen((value) => {
+      const parsed = v.safeParse(GuestPlayAllowanceSchema, value);
+      return parsed.success
+        ? ok(parsed.output)
+        : err({ type: 'invalid-event', cause: value } as const);
     });
   }
 

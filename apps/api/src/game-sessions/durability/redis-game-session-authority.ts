@@ -203,6 +203,20 @@ export class RedisGameSessionAuthority {
     ).map((sessionId) => sessionId ?? undefined);
   }
 
+  guestAllowanceUsage(holderId: string, utcDay: string): ResultAsync<number, DurableSessionError> {
+    const key = this.allowanceKey(holderId, utcDay);
+    return ResultAsync.fromPromise(this.redis.get(key), (cause): DurableSessionError => ({
+      type: 'authority-unavailable',
+      cause,
+    })).andThen((value) => {
+      if (value === null) return ok(0);
+      const usage = Number(value);
+      return Number.isSafeInteger(usage) && usage >= 0
+        ? ok(usage)
+        : err<number, DurableSessionError>({ type: 'invalid-authority-data', key });
+    });
+  }
+
   clearActiveSessionForHolder(
     holderId: string,
     sessionId: string,

@@ -44,6 +44,7 @@ import { CreateNominationDto } from './dto/create-nomination.dto.js';
 import { CreatePublicSpeechDto } from './dto/create-public-speech.dto.js';
 import { CreateVerdictDto } from './dto/create-verdict.dto.js';
 import { createGuestCookieSigner, guestCookieSecret } from './guest-cookie.js';
+import { GuestPlayAllowanceEntity } from './guest-play-allowance.entity.js';
 import { OptionalIdempotencyKey, RequiredIdempotencyKey } from './idempotency-key.decorator.js';
 import { MafiaGameSessionProjectionEntity } from './mafia-game-session-projection.entity.js';
 
@@ -103,6 +104,29 @@ export class GameSessionsController {
         });
         return projection;
       }),
+    );
+  }
+
+  @Get('mafia/allowance')
+  @ApiOperation({ summary: 'Get the anonymous guest remaining daily Game Session allowance' })
+  @ApiCookieAuth('withai_guest')
+  @ApiOkResponse({ type: GuestPlayAllowanceEntity })
+  async guestPlayAllowance(
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    return this.resolveGameSessionResult(
+      (
+        await this.gameSessionsService.guestPlayAllowance(this.holderId(request.headers.cookie))
+      ).map(({ holderId, ...allowance }) => {
+        response.cookie(gameSessionsConfig.guestCookieName, this.guestCookies.sign(holderId), {
+          httpOnly: true,
+          sameSite: 'strict',
+          secure: process.env.NODE_ENV === 'production',
+        });
+        return allowance;
+      }),
+      response,
     );
   }
 

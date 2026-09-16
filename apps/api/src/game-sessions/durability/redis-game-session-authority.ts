@@ -192,7 +192,12 @@ export class RedisGameSessionAuthority {
   static fromEnvironment() {
     const redisUrl = process.env.REDIS_URL;
     return redisUrl
-      ? new RedisGameSessionAuthority(new Redis(redisUrl, { lazyConnect: true }))
+      ? new RedisGameSessionAuthority(
+          new Redis(redisUrl, { lazyConnect: true }),
+          process.env.NODE_ENV === 'production'
+            ? 'withai:game-sessions'
+            : 'withai-dev:game-sessions',
+        )
       : undefined;
   }
 

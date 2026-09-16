@@ -2,11 +2,12 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { apiReference } from '@scalar/nestjs-api-reference';
+import { Logger } from 'nestjs-pino';
 
 import { AppModule } from './app.module.js';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
@@ -14,17 +15,25 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
     }),
   );
-  app.enableCors();
-  const openApiConfig = new DocumentBuilder()
-    .setTitle('WithAI Game Sessions API')
-    .setDescription('Server-authoritative APIs for WithAI Game Sessions.')
-    .setVersion('0.1.0')
-    .addCookieAuth('withai_guest')
-    .addTag('Game Sessions')
-    .build();
-  const openApiDocument = SwaggerModule.createDocument(app, openApiConfig);
-  app.use('/docs', apiReference({ content: openApiDocument }));
-  await app.listen(process.env.PORT || 3000);
+  app.enableCors({
+    origin: process.env.ALLOWED_ORIGIN ?? 'http://localhost:5173',
+    credentials: true,
+  });
+
+  if (process.env.NODE_ENV !== 'production') {
+    const openApiConfig = new DocumentBuilder()
+      .setTitle('WithAI Game Sessions API')
+      .setDescription('Server-authoritative APIs for WithAI Game Sessions.')
+      .setVersion('0.1.0')
+      .addCookieAuth('withai_guest')
+      .addTag('Game Sessions')
+      .build();
+    const openApiDocument = SwaggerModule.createDocument(app, openApiConfig);
+    app.use('/docs', apiReference({ content: openApiDocument }));
+  }
+
+  app.useLogger(app.get(Logger));
+  await app.listen(process.env.PORT ?? 3000);
 }
 
 void bootstrap();

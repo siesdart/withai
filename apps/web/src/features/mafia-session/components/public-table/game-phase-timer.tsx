@@ -1,7 +1,7 @@
+import type { MafiaGameProjection } from '@repo/mafia/client';
 import { cn } from 'cn';
 import { TimerIcon } from 'lucide-react';
 
-import type { MafiaGameProjection } from '../../api/client';
 import type { UseDeadlineCountdownResult } from '../../hooks/ui/use-deadline-countdown';
 
 type GamePhaseTimerProps = {

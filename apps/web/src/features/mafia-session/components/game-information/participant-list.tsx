@@ -1,25 +1,25 @@
+import type { MafiaGameProjection } from '@repo/mafia/client';
 /* oxlint-disable react-perf/jsx-no-new-function-as-prop -- each selectable participant needs a bound game action. */
 import { Button } from '@repo/ui/components/button';
 import { cn } from 'cn';
 import { map } from 'remeda';
 
-import type { MafiaGameProjection } from '../../api/client';
 import type { ParticipantSelection } from '../control-room/phase-interaction';
 import { ParticipantItem } from './participant-item';
-
-const participantItemLayoutClassName =
-  'h-full min-h-0 w-full flex-col items-start justify-start gap-1 border border-transparent bg-clip-padding bg-[#ded6c8] px-2 py-2.5 text-left text-xs font-medium whitespace-nowrap lg:min-h-12 lg:flex-row lg:items-center lg:justify-between lg:gap-3';
+import { ParticipantRoleSelect } from './participant-role-select';
 
 export function ParticipantList({
   participants,
   currentParticipantId,
   knownRoles,
   selection,
+  isCompleted,
 }: {
   participants: MafiaGameProjection['public']['participants'];
   currentParticipantId: string;
   knownRoles: MafiaGameProjection['personal']['knownRoles'];
   selection: ParticipantSelection | undefined;
+  isCompleted: boolean;
 }) {
   const knownRolesMap = new Map(
     map(knownRoles, ({ participantId, role }) => [participantId, role] as const),
@@ -33,37 +33,41 @@ export function ParticipantList({
         const isSelected = selection?.selectedParticipantId === participant.id;
 
         return (
-          <li className="aspect-square min-w-0 lg:aspect-auto" key={participant.id}>
+          <li
+            className="flex aspect-square h-full min-h-0 w-full min-w-0 shrink-0 flex-col justify-start gap-1 border border-transparent bg-[#ded6c8] bg-clip-padding px-2 py-2.5 text-left text-xs font-medium whitespace-nowrap text-[#22221e] lg:aspect-auto lg:min-h-12 lg:flex-row lg:items-center lg:justify-between lg:gap-3"
+            key={participant.id}
+          >
             {canSelect ? (
               <Button
                 aria-label={`${selection.actionLabel}: ${participant.name}`}
                 aria-pressed={isSelected}
                 className={cn(
-                  participantItemLayoutClassName,
-                  'text-[#22221e] hover:bg-[#d1c8b8] active:translate-y-px',
+                  'h-6.5 w-full flex-1 px-0 text-[#22221e] hover:bg-[#d1c8b8] active:translate-y-px lg:-mx-2 lg:px-2',
                   isSelected &&
                     'border-[#746956] bg-[#c9bba7] text-[#22221e] shadow-[inset_0_0_0_1px_rgb(34_34_30/0.12)] hover:bg-[#bfb09b]',
                 )}
                 disabled={selection.disabled}
                 onClick={() => selection.onSelect(participant.id)}
                 type="button"
-                variant="outline"
+                variant="ghost"
               >
                 <ParticipantItem
                   currentParticipantId={currentParticipantId}
                   participant={participant}
-                  role={role}
                 />
               </Button>
             ) : (
-              <div className={cn('flex shrink-0 text-[#22221e]', participantItemLayoutClassName)}>
-                <ParticipantItem
-                  currentParticipantId={currentParticipantId}
-                  participant={participant}
-                  role={role}
-                />
-              </div>
+              <ParticipantItem
+                currentParticipantId={currentParticipantId}
+                participant={participant}
+              />
             )}
+            <ParticipantRoleSelect
+              currentParticipantId={currentParticipantId}
+              participant={participant}
+              role={role}
+              isCompleted={isCompleted}
+            />
           </li>
         );
       })}

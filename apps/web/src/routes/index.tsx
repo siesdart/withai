@@ -12,12 +12,15 @@ import { useGameSessionStore } from '@/features/mafia-session/store/game-session
 export const Route = createFileRoute('/')({
   component: Index,
   loader: async () => {
-    const { sessionId } = useGameSessionStore.getState();
-    if (sessionId) {
+    const { clearSession, setSessionId } = useGameSessionStore.getState();
+
+    const result = await MafiaGameSessionClient.activeSession();
+    if (result.isErr() || !result.value) {
+      clearSession();
       return undefined;
     }
-    const result = await MafiaGameSessionClient.activeSession();
-    if (result.isErr()) return undefined;
+
+    setSessionId(result.value.projection.sessionId, result.value.outputLanguage);
     return result.value;
   },
 });
@@ -25,16 +28,7 @@ export const Route = createFileRoute('/')({
 function Index() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const navigate = useNavigate({ from: '/' });
-  const sessionId = useGameSessionStore((state) => state.sessionId);
-  const recoveredSession = Route.useLoaderData();
-  const hasActiveGame = Boolean(sessionId || recoveredSession);
-  const continueGame = () => {
-    if (!sessionId && recoveredSession)
-      useGameSessionStore
-        .getState()
-        .setSessionId(recoveredSession.projection.sessionId, recoveredSession.outputLanguage);
-    void navigate({ to: '/mafia' });
-  };
+  const session = Route.useLoaderData();
 
   return (
     <main className="min-h-dvh overflow-x-hidden bg-[#e9e3d6] px-4 py-4 text-[#22221e] sm:px-8 sm:py-6">
@@ -90,8 +84,8 @@ function Index() {
                 </p>
               </div>
               <div className="mt-8 flex flex-wrap gap-2">
-                {hasActiveGame ? (
-                  <Button onClick={continueGame}>
+                {session ? (
+                  <Button onClick={() => navigate({ to: '/mafia' })}>
                     <ChevronRight data-icon="inline-end" />
                     게임 계속하기
                   </Button>
@@ -101,7 +95,7 @@ function Index() {
                     게임 시작
                   </Button>
                 )}
-                {hasActiveGame ? (
+                {session ? (
                   <Button variant="outline" disabled>
                     진행 중인 게임을 마친 뒤 새 게임을 시작할 수 있어요.
                   </Button>

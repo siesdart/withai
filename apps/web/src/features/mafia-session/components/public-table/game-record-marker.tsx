@@ -1,10 +1,9 @@
+import type { MafiaGameProjection } from '@repo/mafia/client';
 import { Marker, MarkerContent, MarkerIcon } from '@repo/ui/components/marker';
 import { cn } from 'cn';
 import { ScrollTextIcon } from 'lucide-react';
 import { filter, map, sort, unique } from 'remeda';
 import { match } from 'ts-pattern';
-
-import type { MafiaGameProjection } from '../../api/client';
 
 type GameRecordMarkerProps = {
   outcome: Extract<

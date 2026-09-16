@@ -1,3 +1,4 @@
+import type { MafiaGameProjection } from '@repo/mafia/client';
 import { Bubble, BubbleContent } from '@repo/ui/components/bubble';
 import { Message, MessageContent, MessageGroup, MessageHeader } from '@repo/ui/components/message';
 import {
@@ -12,7 +13,6 @@ import { cn } from 'cn';
 import { MoonIcon, SunIcon } from 'lucide-react';
 import { map, reduce } from 'remeda';
 
-import type { MafiaGameProjection } from '../../api/client';
 import type { UseDeadlineCountdownResult } from '../../hooks/ui/use-deadline-countdown';
 import { useResumeAutoScrollAtEnd } from '../../hooks/ui/use-public-discussion-scroll';
 import type { PhasePanel } from '../control-room/phase-interaction';

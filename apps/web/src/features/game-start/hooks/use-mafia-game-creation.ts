@@ -1,4 +1,4 @@
-import type { MafiaOutputLanguage } from '@repo/mafia';
+import type { MafiaOutputLanguage } from '@repo/mafia/client';
 import { useNavigate } from '@tanstack/react-router';
 import { useCallback, useState } from 'react';
 

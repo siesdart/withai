@@ -1,7 +1,7 @@
+import type { MafiaGameProjection } from '@repo/mafia/client';
 import { find } from 'remeda';
 import { match } from 'ts-pattern';
 
-import type { MafiaGameProjection } from '../../api/client';
 import type { UseGameActionResult } from '../../hooks/actions/use-game-action';
 
 export type PhasePanel =

@@ -1,5 +1,4 @@
-import type { MafiaOutputLanguage } from '@repo/mafia';
-import type { MafiaGameProjection } from '@repo/mafia/client';
+import type { MafiaGameProjection, MafiaOutputLanguage } from '@repo/mafia/client';
 import ky from 'ky';
 import { err, ok, ResultAsync } from 'neverthrow';
 import { parseServerSentEvents } from 'parse-sse';
@@ -7,8 +6,6 @@ import * as v from 'valibot';
 
 import { parseMafiaGameProjection, validateMafiaGameProjection } from './entity';
 import { type GameSessionApiError, toGameSessionApiError } from './error';
-
-export type { MafiaGameProjection };
 
 const gameSessionsApi = ky.create({ baseUrl: '/game-sessions/', credentials: 'include' });
 const ActiveMafiaGameSessionSchema = v.object({

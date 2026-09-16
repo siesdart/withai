@@ -1,7 +1,7 @@
+import type { MafiaGameProjection } from '@repo/mafia/client';
 import { Button } from '@repo/ui/components/button';
 import { useCallback } from 'react';
 
-import type { MafiaGameProjection } from '../../api/client';
 import type { UseGameActionResult } from '../../hooks/actions/use-game-action';
 
 type VerdictControlsProps = {

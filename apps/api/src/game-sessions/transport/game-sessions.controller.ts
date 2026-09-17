@@ -100,7 +100,7 @@ export class GameSessionsController {
       ).map(({ holderId, projection }) => {
         response.cookie(gameSessionsConfig.guestCookieName, this.guestCookies.sign(holderId), {
           httpOnly: true,
-          sameSite: 'strict',
+          sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
           secure: process.env.NODE_ENV === 'production',
         });
         return projection;
@@ -125,7 +125,7 @@ export class GameSessionsController {
       ).map(({ holderId, ...allowance }) => {
         response.cookie(gameSessionsConfig.guestCookieName, this.guestCookies.sign(holderId), {
           httpOnly: true,
-          sameSite: 'strict',
+          sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
           secure: process.env.NODE_ENV === 'production',
         });
         return allowance;

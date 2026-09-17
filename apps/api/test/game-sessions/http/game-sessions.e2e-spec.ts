@@ -3,12 +3,24 @@ import { randomUUID } from 'node:crypto';
 import { get } from 'node:http';
 
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { MafiaGameModule, type MafiaDayDurations } from '@repo/mafia';
+import type { NextFunction, Request, Response } from 'express';
 import type { Redis } from 'ioredis';
 import RedisMock from 'ioredis-mock';
 import request from 'supertest';
-import { afterAll, afterEach, beforeAll, describe, expect, it, type Mocked, vi } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type Mocked,
+  vi,
+} from 'vitest';
 
 import { AppModule } from '../../../src/app.module.js';
 import {
@@ -217,7 +229,8 @@ const openSse = async (
 };
 
 describe('Mafia Game Session API', () => {
-  let app: INestApplication;
+  let app: NestExpressApplication;
+  let testClientIp = '198.51.100.1';
   const redis = new RedisMock();
   const clock = new ControlledGameSessionClock();
 
@@ -232,7 +245,7 @@ describe('Mafia Game Session API', () => {
       authority: new RedisGameSessionAuthority(redis, 'withai:game-sessions', () => clock.now()),
     });
 
-    app = moduleRef.createNestApplication();
+    app = moduleRef.createNestApplication<NestExpressApplication>();
     app.useGlobalPipes(
       new ValidationPipe({
         transform: true,
@@ -240,7 +253,17 @@ describe('Mafia Game Session API', () => {
         forbidNonWhitelisted: true,
       }),
     );
+    app.set('trust proxy', 'loopback');
+    app.use((incomingRequest: Request, _response: Response, next: NextFunction) => {
+      incomingRequest.headers['x-forwarded-for'] ??= testClientIp;
+      next();
+    });
     await app.listen(0, '127.0.0.1');
+  });
+
+  beforeEach(() => {
+    const lastOctet = Number.parseInt(testClientIp.split('.').at(-1) ?? '0', 10) + 1;
+    testClientIp = `198.51.100.${lastOctet}`;
   });
 
   afterEach(() => {
@@ -276,6 +299,34 @@ describe('Mafia Game Session API', () => {
       .set('Cookie', guestCookie)
       .expect({
         remaining: 9,
+        limit: 10,
+        resetsAt: '2026-09-07T00:00:00.000Z',
+      });
+  });
+
+  it('does not restore Guest Play Allowance when the guest cookie is removed', async () => {
+    const clientIp = '203.0.113.42';
+
+    for (let index = 0; index < 10; index += 1) {
+      // oxlint-disable-next-line no-await-in-loop -- each creation must debit the same IP allowance.
+      await request(app.getHttpServer())
+        .post('/game-sessions/mafia')
+        .set('X-Forwarded-For', clientIp)
+        .send({ participantCount: 5 })
+        .expect(201);
+    }
+
+    await request(app.getHttpServer())
+      .post('/game-sessions/mafia')
+      .set('X-Forwarded-For', clientIp)
+      .send({ participantCount: 5 })
+      .expect(429);
+
+    await request(app.getHttpServer())
+      .get('/game-sessions/mafia/allowance')
+      .set('X-Forwarded-For', clientIp)
+      .expect({
+        remaining: 0,
         limit: 10,
         resetsAt: '2026-09-07T00:00:00.000Z',
       });

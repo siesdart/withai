@@ -464,6 +464,7 @@ export class RedisGameSessionAuthority {
     utcDay: string,
     allowance: number,
     idempotency: { key: string; fingerprint: string } | undefined,
+    allowanceHolderId = holderId,
   ): ResultAsync<DurableCreationResult, DurableSessionError> {
     const idempotencyKey = idempotency
       ? this.creationIdempotencyKey(holderId, idempotency.key)
@@ -585,7 +586,7 @@ export class RedisGameSessionAuthority {
         this.snapshotKey(snapshot.sessionId),
         this.snapshotVersionKey(snapshot.sessionId),
         this.eventsKey(snapshot.sessionId),
-        this.allowanceKey(holderId, utcDay),
+        this.allowanceKey(allowanceHolderId, utcDay),
         idempotencyKey,
         this.activeSessionsKey(),
         this.lastActivityKey(snapshot.sessionId),

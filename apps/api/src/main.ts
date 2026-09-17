@@ -1,5 +1,6 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { apiReference } from '@scalar/nestjs-api-reference';
 import { Logger } from 'nestjs-pino';
@@ -7,7 +8,7 @@ import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module.js';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
@@ -19,6 +20,7 @@ async function bootstrap() {
     origin: process.env.ALLOWED_ORIGIN ?? 'http://localhost:5173',
     credentials: true,
   });
+  app.set('trust proxy', true);
 
   if (process.env.NODE_ENV !== 'production') {
     const openApiConfig = new DocumentBuilder()

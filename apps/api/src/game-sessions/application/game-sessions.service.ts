@@ -189,12 +189,14 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     humanName?: string,
     outputLanguage: MafiaOutputLanguage = 'ko',
     awaitInitialAgentActions = true,
+    allowanceHolderId?: string,
   ): Promise<Result<CreatedMafiaSession, GameSessionError>> {
     if (!this.authority && this.requiresDurableAuthority()) {
       return err({ type: 'durability-unavailable' });
     }
     void this.lifecycle.cleanupExpiredSessions();
     const resolvedHolderId = holderId ?? randomUUID();
+    const resolvedAllowanceHolderId = allowanceHolderId ?? resolvedHolderId;
     const activeSessionId = this.activeSessionIdsByHolder.get(resolvedHolderId);
     if (!this.authority && activeSessionId) {
       const activeSession = this.sessions.get(activeSessionId);
@@ -235,7 +237,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       if (idempotencyResult) return idempotencyResult;
     }
 
-    const countKey = `${this.utcDay()}:${resolvedHolderId}`;
+    const countKey = `${this.utcDay()}:${resolvedAllowanceHolderId}`;
     if (!this.authority) {
       const count = this.guestSessionCounts.get(countKey) ?? 0;
       if (count >= gameSessionsConfig.guestAllowance) {
@@ -312,6 +314,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
               fingerprint: JSON.stringify({ participantCount, humanName, outputLanguage }),
             }
           : undefined,
+        resolvedAllowanceHolderId,
       );
       if (creation.isErr()) return err({ type: 'durability-unavailable' });
       if (creation.value.type === 'unavailable-session') {
@@ -399,21 +402,21 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
   }
 
   async guestPlayAllowance(
+    allowanceHolderId: string,
     holderId: string | undefined,
   ): Promise<Result<GuestPlayAllowance, GameSessionError>> {
     if (!this.authority && this.requiresDurableAuthority()) {
       return err({ type: 'durability-unavailable' });
     }
 
-    const resolvedHolderId = holderId ?? randomUUID();
-    const countKey = `${this.utcDay()}:${resolvedHolderId}`;
+    const countKey = `${this.utcDay()}:${allowanceHolderId}`;
     const used = this.authority
-      ? await this.authority.guestAllowanceUsage(resolvedHolderId, this.utcDay())
+      ? await this.authority.guestAllowanceUsage(allowanceHolderId, this.utcDay())
       : ok(this.guestSessionCounts.get(countKey) ?? 0);
     if (used.isErr()) return err({ type: 'durability-unavailable' });
 
     return ok({
-      holderId: resolvedHolderId,
+      holderId: holderId ?? randomUUID(),
       remaining: Math.max(0, gameSessionsConfig.guestAllowance - used.value),
       limit: gameSessionsConfig.guestAllowance,
       resetsAt: this.nextUtcDay().toISOString(),

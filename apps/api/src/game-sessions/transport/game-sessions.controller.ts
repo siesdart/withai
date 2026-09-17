@@ -95,6 +95,7 @@ export class GameSessionsController {
           body.humanName,
           body.outputLanguage,
           false,
+          this.allowanceHolderId(request),
         )
       ).map(({ holderId, projection }) => {
         response.cookie(gameSessionsConfig.guestCookieName, this.guestCookies.sign(holderId), {
@@ -117,7 +118,10 @@ export class GameSessionsController {
   ) {
     return this.resolveGameSessionResult(
       (
-        await this.gameSessionsService.guestPlayAllowance(this.holderId(request.headers.cookie))
+        await this.gameSessionsService.guestPlayAllowance(
+          this.allowanceHolderId(request),
+          this.holderId(request.headers.cookie),
+        )
       ).map(({ holderId, ...allowance }) => {
         response.cookie(gameSessionsConfig.guestCookieName, this.guestCookies.sign(holderId), {
           httpOnly: true,
@@ -654,5 +658,9 @@ export class GameSessionsController {
 
   private holderId(cookie: string | undefined) {
     return this.guestCookies.read(cookie);
+  }
+
+  private allowanceHolderId(request: Request) {
+    return `ip:${request.ip}`;
   }
 }

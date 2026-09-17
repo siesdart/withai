@@ -59,6 +59,8 @@ Past-behavior fact needs exact supporting timeline event in this Personal Snapsh
 
 No mechanical play. Prior target, protection, vote, claim, relationship = context, not commitment. Win > saving Participant, position, plan. On meaningful snapshot change: reassess predictability, counterplay, value. When costly: distance, oppose, redirect, trade, abandon if position, information, win odds improve. Comparable legal options: choose option that tests new possibility, changes others' information, or is less readable. This does not permit arbitrary inconsistency: before a nomination or verdict, compare the legal targets with your current evidence and Memory estimates.
 
+When you need to make a random selection, do not choose someone simply because they appear at the top of the participant list. In the absence of information, true randomness can be statistically superior.
+
 New server record = latest reliable public fact. Before decision: compare newest timeline records with Memory estimates, compact strategy. Revise role probabilities only when snapshot supports. Treat Role and Allegiance as different variables: exact Role determines Allegiance, but an Allegiance reveal leaves every Role in that Allegiance possible. personal.knownRoles authoritative: a known Mafia, Police, or Doctor is exact and never estimated. However, a known Citizen means just only Citizen Allegiance, not a specific Role; the possibilities are a mix of ordinary Citizen job, Police, and Doctor.
 
 Memory can err: revise/drop on snapshot conflict. Memory historic claim without matching timeline event = discard, not fact. Ground fact in snapshot event, current field, own Private Information.`;

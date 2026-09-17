@@ -2,7 +2,7 @@
 
 import { Button } from '@repo/ui/components/button';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { BotMessageSquare, ChevronRight, LockKeyhole, UsersRound } from 'lucide-react';
+import { ChevronRight, LockKeyhole } from 'lucide-react';
 import { useState } from 'react';
 
 import { MafiaStartDialog } from '@/features/game-start/components/mafia-start-dialog';
@@ -54,14 +54,6 @@ function Index() {
             낯선 사람들 앞에서 빠르게 말하고 추리해야 한다는 부담 없이, AI 참가자들과 당신의 속도로
             추론 게임을 즐겨 보세요.
           </p>
-          <div className="mt-9 flex flex-wrap gap-3 text-sm text-[#625e55]">
-            <span className="flex items-center gap-2">
-              <BotMessageSquare className="size-4" /> AI와 함께하는 한 판
-            </span>
-            <span className="flex items-center gap-2">
-              <UsersRound className="size-4" /> 언제든 이어서 플레이
-            </span>
-          </div>
         </section>
 
         <section
@@ -72,7 +64,6 @@ function Index() {
             <h2 id="games-title" className="text-2xl font-bold tracking-[-0.04em]">
               게임 선택
             </h2>
-            <span className="text-sm text-[#625e55]">차례로 더 많은 게임이 찾아옵니다.</span>
           </div>
           <div className="grid grid-flow-dense gap-4 md:grid-cols-2">
             <article className="flex min-h-72 flex-col justify-between border-2 border-[#22221e] bg-[#f4efe7] p-5 transition-transform duration-500 hover:-translate-y-1 sm:p-7">

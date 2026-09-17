@@ -65,7 +65,7 @@ export function MafiaStartDialog({ open, onOpenChange }: MafiaStartDialogProps) 
 
             <div className="mt-5 flex flex-col gap-4">
               <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="human-name">
-                플레이어 이름 <span className="font-normal text-[#625e55]">선택</span>
+                플레이어 이름
                 <Input
                   id="human-name"
                   value={creation.humanName}

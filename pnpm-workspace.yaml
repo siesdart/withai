@@ -4,8 +4,9 @@ packages:
 allowBuilds:
   '@google/genai': false
   '@openrouter/sdk': false
-  '@parcel/watcher': false
+  '@parcel/watcher': true
   '@scarf/scarf': false
   esbuild: true
   protobufjs: false
   unrs-resolver: false
+  workerd: true

@@ -7,7 +7,10 @@ import * as v from 'valibot';
 import { parseMafiaGameProjection, validateMafiaGameProjection } from './entity';
 import { type GameSessionApiError, toGameSessionApiError } from './error';
 
-const gameSessionsApi = ky.create({ baseUrl: '/game-sessions/', credentials: 'include' });
+const gameSessionsApi = ky.create({
+  baseUrl: import.meta.env.VITE_API_BASE_URL,
+  credentials: 'include',
+});
 const ActiveMafiaGameSessionSchema = v.object({
   projection: v.unknown(),
   outputLanguage: v.picklist(['ko', 'en']),

@@ -30,6 +30,7 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.54.10",
     "@repo/oxlint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "@rolldown/plugin-babel": "^0.2.3",
@@ -43,6 +44,7 @@
     "globals": "^17",
     "typescript": "~6",
     "vite": "^8",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "wrangler": "^4.132.0"
   }
 }

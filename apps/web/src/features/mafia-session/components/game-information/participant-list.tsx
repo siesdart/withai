@@ -26,7 +26,7 @@ export function ParticipantList({
   );
 
   return (
-    <ul className="mt-4 grid grid-cols-[repeat(auto-fit,5rem)] justify-center gap-1 lg:grid-cols-1 lg:justify-normal">
+    <ul className="grid grid-cols-4 justify-center gap-1 lg:grid-cols-1 lg:justify-normal">
       {map(participants, (participant) => {
         const role = knownRolesMap.get(participant.id);
         const canSelect = selection !== undefined && participant.alive;
@@ -42,7 +42,7 @@ export function ParticipantList({
                 aria-label={`${selection.actionLabel}: ${participant.name}`}
                 aria-pressed={isSelected}
                 className={cn(
-                  'h-6.5 w-full flex-1 px-0 text-[#22221e] hover:bg-[#d1c8b8] active:translate-y-px lg:-mx-2 lg:px-2',
+                  'h-5 w-full flex-1 border-0 px-0 text-[#22221e] hover:bg-[#d1c8b8] active:translate-y-px lg:-mx-2 lg:px-2',
                   isSelected &&
                     'border-[#746956] bg-[#c9bba7] text-[#22221e] shadow-[inset_0_0_0_1px_rgb(34_34_30/0.12)] hover:bg-[#bfb09b]',
                 )}

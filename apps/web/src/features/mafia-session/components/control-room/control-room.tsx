@@ -64,7 +64,7 @@ export function ControlRoom({ sessionId }: { sessionId: string }) {
         />
 
         <aside
-          className="border border-[#22221e]/45 bg-[#f4efe7] p-4 lg:min-h-0 lg:overflow-y-auto"
+          className="flex flex-col gap-2 border border-[#22221e]/45 bg-[#f4efe7] px-3 pt-3 pb-2 lg:min-h-0 lg:overflow-y-auto"
           aria-labelledby="participants-heading"
         >
           <div className="flex shrink-0">
@@ -79,7 +79,7 @@ export function ControlRoom({ sessionId }: { sessionId: string }) {
               alive
             </span>
           </div>
-          <span className="mt-2 block text-center text-sm text-[#625e55]">
+          <span className="block text-center text-sm text-[#625e55]">
             Mafia {aliveParticipantCounts.mafia} : Citizen {aliveParticipantCounts.citizen}
           </span>
           <ParticipantList

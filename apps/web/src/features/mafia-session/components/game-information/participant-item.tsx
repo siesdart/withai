@@ -9,7 +9,7 @@ export function ParticipantItem({
   participant: MafiaGameProjection['public']['participants'][number];
 }) {
   return (
-    <div className="flex h-6.5 w-full min-w-0 items-center">
+    <div className="flex h-5 w-full min-w-0 items-center">
       <span
         className={cn(
           'min-w-0 truncate text-sm',

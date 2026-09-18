@@ -5,6 +5,7 @@ import babel from '@rolldown/plugin-babel';
 import tailwindcss from '@tailwindcss/vite';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import react, { reactCompilerPreset } from '@vitejs/plugin-react';
+import { visualizer } from 'rollup-plugin-visualizer';
 import { defineConfig } from 'vite';
 
 // https://vite.dev/config/
@@ -20,6 +21,7 @@ export default defineConfig({
       presets: [reactCompilerPreset()],
     }),
     tailwindcss(),
+    visualizer(),
   ],
   build: {
     rollupOptions: {
@@ -33,6 +35,26 @@ export default defineConfig({
             {
               test: /node_modules\/react-dom/,
               name: 'react-dom',
+            },
+            {
+              test: /node_modules\/@base-ui/,
+              name: 'base-ui',
+            },
+            {
+              test: /packages\/ui/,
+              name: 'ui',
+            },
+            {
+              test: /packages\/mafia/,
+              name: 'mafia',
+            },
+            {
+              test: /node_modules\/@tanstack\/(react-router|react-router-devtools|router-plugin)/,
+              name: 'tanstack-router',
+            },
+            {
+              test: /node_modules\/@tanstack\/(react-query|react-query-devtools)/,
+              name: 'tanstack-query',
             },
           ],
         },

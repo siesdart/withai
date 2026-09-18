@@ -32,5 +32,5 @@ export type {
   MafiaRole,
   RandomInt,
 } from './participants';
-export { mafiaRoleCountsFor, mafiaRoles } from './participants';
+export { mafiaRoleCountsFor, mafiaRoles, getAliveParticipantCounts } from './participants';
 export type { MafiaChatMessage, MafiaPersonalRecord, MafiaPersonalTimelineItem } from './timeline';

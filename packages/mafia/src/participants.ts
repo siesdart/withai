@@ -1,6 +1,7 @@
-import { map } from 'remeda';
+import { filter, map } from 'remeda';
 
 import { mafiaGameConfig } from './config';
+import type { MafiaPublicInformation } from './mafia-game-session';
 
 export const mafiaRoles = ['Mafia', 'Police', 'Doctor', 'Citizen'] as const;
 export type MafiaRole = (typeof mafiaRoles)[number];
@@ -72,6 +73,26 @@ export function createParticipants(
     alive: true,
     role: roles[index],
   }));
+}
+export function getAliveParticipantCounts(
+  participants: MafiaPublicInformation['participants'],
+  knownRoles: MafiaPersonalInformation['knownRoles'],
+) {
+  const knownRolesMap = new Map(
+    map(knownRoles, ({ participantId, role }) => [participantId, role] as const),
+  );
+  const aliveParticipantCount = filter(participants, ({ alive }) => alive).length;
+  const initialMafiaCount = mafiaRoleCountsFor(participants.length).Mafia;
+  const deadMafiaCount = filter(
+    participants,
+    (participant) => !participant.alive && knownRolesMap.get(participant.id) === 'Mafia',
+  ).length;
+  const mafia = Math.max(initialMafiaCount - deadMafiaCount, 0);
+
+  return {
+    mafia,
+    citizen: Math.max(aliveParticipantCount - mafia, 0),
+  };
 }
 export const toPersonalInformation = (participant: MafiaParticipant): MafiaPersonalInformation => ({
   participantId: participant.id,

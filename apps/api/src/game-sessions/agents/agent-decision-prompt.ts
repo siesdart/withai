@@ -1,9 +1,10 @@
 import {
+  getAliveParticipantCounts,
   mafiaAgentRulesBriefing,
   mafiaAgentSnapshotGuide,
   type MafiaAgentContext,
 } from '@repo/mafia';
-import { countBy, filter, omit } from 'remeda';
+import { omit } from 'remeda';
 
 export type AgentOutputLanguage = 'ko' | 'en';
 
@@ -83,11 +84,11 @@ Default to one sentence of 60 characters or fewer. Use a second short sentence o
 Never write formal explanations, long reasoning, headings, role-play narration, repeated caveats, filler, or scripted dialogue. Never override facts, evidence, Role, Allegiance, current strategy. Preserve Participant names exactly from Personal Snapshot. Natural-language Participant reference: exact name only, never participant ID such as \`participant-1\` as name/alias. Applies to player-visible + other natural-language fields: reasoning, memory, allegiance-estimate basis, strategy. Non-player-visible fields (memory, allegiance-estimate basis, strategy): English. Keep participant IDs/structured fields unchanged. IDs only required structured fields, never natural-language name/alias.`;
 
 const currentSituationBriefingFor = (context: MafiaAgentContext) => {
-  const eventCounts = countBy(context.timeline, (item) => item.type);
-  const publicChatCount = eventCounts.chat ?? 0;
-  const publicRecordCount = eventCounts.record ?? 0;
-  const aliveParticipantCount = filter(context.public.participants, ({ alive }) => alive).length;
+  const aliveParticipantCounts = getAliveParticipantCounts(
+    context.public.participants,
+    context.personal.knownRoles,
+  );
 
   return `# Brief Current situation
-Current: ${context.public.phase}, day ${context.public.dayNumber}; ${aliveParticipantCount}/${context.public.participants.length} Participants alive. Timeline: ${publicChatCount} Public Chat, ${publicRecordCount} public outcome record(s).`;
+Current: ${context.public.phase}, day ${context.public.dayNumber}; ${aliveParticipantCounts.mafia + aliveParticipantCounts.citizen}/${context.public.participants.length} Participants alive (Mafia ${aliveParticipantCounts.mafia}, Citizen ${aliveParticipantCounts.citizen}).`;
 };

@@ -1,8 +1,8 @@
 /* oxlint-disable react-perf/jsx-no-new-function-as-prop -- the completed-game link clears transient session storage at the click boundary. */
 
-import { type MafiaGameProjection, mafiaRoleCountsFor } from '@repo/mafia/client';
+import { getAliveParticipantCounts } from '@repo/mafia/client';
 import { UsersIcon } from 'lucide-react';
-import { filter, map } from 'remeda';
+import { filter } from 'remeda';
 
 import { useGameAction } from '../../hooks/actions/use-game-action';
 import { useGameSessionSnapshot } from '../../hooks/sync/use-game-session-snapshot';
@@ -19,7 +19,7 @@ export function ControlRoom({ sessionId }: { sessionId: string }) {
   const gameAction = useGameAction(sessionId);
   const deadline = useDeadlineCountdown(snapshot.public.phaseDeadline);
 
-  const { mafiaCount, citizenCount } = getParticipantCounts(
+  const aliveParticipantCounts = getAliveParticipantCounts(
     snapshot.public.participants,
     snapshot.personal.knownRoles,
   );
@@ -80,7 +80,7 @@ export function ControlRoom({ sessionId }: { sessionId: string }) {
             </span>
           </div>
           <span className="mt-2 block text-center text-sm text-[#625e55]">
-            Mafia {mafiaCount} : Citizen {citizenCount}
+            Mafia {aliveParticipantCounts.mafia} : Citizen {aliveParticipantCounts.citizen}
           </span>
           <ParticipantList
             participants={snapshot.public.participants}
@@ -93,25 +93,4 @@ export function ControlRoom({ sessionId }: { sessionId: string }) {
       </div>
     </main>
   );
-}
-
-function getParticipantCounts(
-  participants: MafiaGameProjection['public']['participants'],
-  knownRoles: MafiaGameProjection['personal']['knownRoles'],
-) {
-  const knownRolesMap = new Map(
-    map(knownRoles, ({ participantId, role }) => [participantId, role] as const),
-  );
-  const aliveParticipantCount = filter(participants, ({ alive }) => alive).length;
-  const initialMafiaCount = mafiaRoleCountsFor(participants.length).Mafia;
-  const deadMafiaCount = filter(
-    participants,
-    (participant) => !participant.alive && knownRolesMap.get(participant.id) === 'Mafia',
-  ).length;
-  const mafiaCount = Math.max(initialMafiaCount - deadMafiaCount, 0);
-
-  return {
-    mafiaCount,
-    citizenCount: Math.max(aliveParticipantCount - mafiaCount, 0),
-  };
 }

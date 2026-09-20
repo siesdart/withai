@@ -1,7 +1,7 @@
 /* oxlint-disable typescript/no-unsafe-type-assertion -- The controller is exercised with the narrow HTTP surface it uses. */
 import { EventEmitter } from 'node:events';
 
-import { MafiaGameModule, MafiaGameSession } from '@repo/mafia';
+import { MafiaGameModule, MafiaGameSession, mafiaGameConfig } from '@repo/mafia';
 import type { Request, Response } from 'express';
 import RedisMock from 'ioredis-mock';
 import { errAsync, ok, okAsync, type Result } from 'neverthrow';
@@ -398,7 +398,7 @@ describe('GameSessionsService', () => {
     const created = await service.createMafiaSession(undefined, 5, 'public-speech-hydration-key');
     if (created.isErr()) throw new Error('Expected a durable session.');
 
-    await vi.advanceTimersByTimeAsync(30_001);
+    await vi.advanceTimersByTimeAsync(mafiaGameConfig.nightDurationMs + 1);
     await flushMicrotasks();
     await service.submitPublicSpeech(
       created.value.projection.sessionId,
@@ -584,7 +584,9 @@ describe('GameSessionsService', () => {
       }
     ).lifecycle;
     lifecycle.schedulePhaseTransition(session);
-    await vi.advanceTimersByTimeAsync(120_001);
+    const discussionDeadlineMs =
+      Date.parse(session.gameSession.snapshot().phaseDeadline) - Date.now();
+    await vi.advanceTimersByTimeAsync(discussionDeadlineMs + 1);
     await flushMicrotasks();
     expect(session.gameSession.snapshot().phase).toBe('nomination');
     expect(abortController?.signal.aborted).toBe(true);
@@ -1070,7 +1072,9 @@ describe('GameSessionsService', () => {
       created.value.holderId,
     );
     if (discussion.isErr()) throw new Error('Expected the initial Night to resolve.');
-    for (let index = 0; index < 11; index += 1) {
+    const adjustmentsBeforeTransition =
+      Math.ceil(mafiaGameConfig.discussionDurationMs / 10_000) - 1;
+    for (let index = 0; index < adjustmentsBeforeTransition; index += 1) {
       session.gameSession.adjustDiscussionTime('participant-1', -10, new Date());
     }
     const expectedDeadline = session.gameSession.snapshot().phaseDeadline;
@@ -1126,7 +1130,9 @@ describe('GameSessionsService', () => {
       created.value.holderId,
     );
     if (discussion.isErr()) throw new Error('Expected the initial Night to resolve.');
-    for (let index = 0; index < 11; index += 1) {
+    const adjustmentsBeforeTransition =
+      Math.ceil(mafiaGameConfig.discussionDurationMs / 10_000) - 1;
+    for (let index = 0; index < adjustmentsBeforeTransition; index += 1) {
       session.gameSession.adjustDiscussionTime('participant-1', -10, new Date());
     }
     const expectedDeadline = session.gameSession.snapshot().phaseDeadline;
@@ -1144,7 +1150,9 @@ describe('GameSessionsService', () => {
       'participant-3',
       'human-nomination-during-agent-thinking-key',
     );
-    vi.advanceTimersByTime(15_000);
+    const nominationDeadlineMs =
+      Date.parse(session.gameSession.snapshot().phaseDeadline) - Date.now();
+    await vi.advanceTimersByTimeAsync(Math.max(0, nominationDeadlineMs - 1));
     await flushMicrotasks();
 
     expect(session.gameSession.snapshot().phase).toBe('nomination');

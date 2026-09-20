@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@repo/ui/components/select';
+import { Link } from '@tanstack/react-router';
 import { cn } from 'cn';
 
 import { useGuestPlayAllowance } from '../hooks/use-guest-play-allowance';
@@ -123,7 +124,20 @@ export function MafiaStartDialog({ open, onOpenChange }: MafiaStartDialogProps) 
               )}
             </div>
 
-            <div className="mt-6 flex justify-end gap-2">
+            <p className="mt-3 text-xs leading-5 text-[#625e55]">
+              게임 시작 시 실시간 AI 참가자 구동을 위한 대화 데이터의 외부 전송(Google Gemini API)
+              및{' '}
+              <Link
+                to="/privacy"
+                target="_blank"
+                className="font-medium text-[#22221e] underline underline-offset-2 hover:text-[#a43b31]"
+              >
+                개인정보·AI 이용약관
+              </Link>
+              에 동의하는 것으로 간주됩니다.
+            </p>
+
+            <div className="mt-5 flex justify-end gap-2">
               <Dialog.Close render={<Button variant="outline" disabled={creation.isCreating} />}>
                 닫기
               </Dialog.Close>

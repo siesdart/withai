@@ -1,7 +1,7 @@
 /* oxlint-disable react-perf/jsx-no-jsx-as-prop, react-perf/jsx-no-new-function-as-prop -- Base UI's render contract composes the typed route link and the card owns its dialog-opening intent. */
 
 import { Button } from '@repo/ui/components/button';
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { ChevronRight, LockKeyhole } from 'lucide-react';
 import { useState } from 'react';
 
@@ -108,6 +108,37 @@ function Index() {
             </article>
           </div>
         </section>
+
+        <footer className="mt-16 border-t-2 border-[#22221e] pt-8 pb-12 text-xs text-[#625e55]">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-1">
+              <span className="font-bold tracking-tight text-[#22221e]">WithAI</span>
+              <p>
+                본 서비스의 모든 AI 참가자는 Google Gemini 대형 언어 모델을 기반으로 구동되며,
+                <br className="hidden sm:inline" />
+                모든 발언과 추리는 인공지능에 의해 실시간으로 자동 생성됩니다.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-4 text-[#22221e]">
+              <Link
+                to="/privacy"
+                className="underline underline-offset-4 transition-colors hover:text-[#a43b31]"
+              >
+                개인정보 처리방침 및 AI 고지
+              </Link>
+              <span className="text-[#22221e]/30">|</span>
+              <Link
+                to="/licenses"
+                className="underline underline-offset-4 transition-colors hover:text-[#a43b31]"
+              >
+                오픈소스 라이선스
+              </Link>
+            </div>
+          </div>
+          <p className="mt-6 text-[#625e55]/80">
+            &copy; {new Date().getFullYear()} WithAI. All rights reserved.
+          </p>
+        </footer>
       </div>
       <MafiaStartDialog open={isDialogOpen} onOpenChange={setIsDialogOpen} />
     </main>

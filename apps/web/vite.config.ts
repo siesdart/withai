@@ -8,9 +8,14 @@ import react, { reactCompilerPreset } from '@vitejs/plugin-react';
 import { visualizer } from 'rollup-plugin-visualizer';
 import { defineConfig } from 'vite';
 
+import { generateLicensesPlugin } from './plugins/licenses-generator.ts';
+
+const workspaceRoot = path.resolve(import.meta.dirname, '../../');
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
+    generateLicensesPlugin(workspaceRoot),
     tanstackRouter({
       target: 'react',
       autoCodeSplitting: true,

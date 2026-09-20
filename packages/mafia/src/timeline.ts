@@ -43,10 +43,17 @@ export type MafiaPublicOutcome =
 export type MafiaPublicTimelineItem =
   | { id: string; type: 'chat'; message: MafiaPublicChatMessage }
   | { id: string; type: 'record'; outcome: MafiaPublicOutcome };
-export type MafiaPersonalRecord = {
-  type: 'autonomous-public-speech-limit-reached';
-  dayNumber: number;
-};
+export type MafiaPersonalRecord =
+  | {
+      type: 'autonomous-public-speech-limit-reached';
+      dayNumber: number;
+    }
+  | {
+      type: 'police-investigation-result';
+      dayNumber: number;
+      participantId: string;
+      allegiance: MafiaAllegiance;
+    };
 export type MafiaChatMessage = {
   dayNumber: number;
   participantId: string;

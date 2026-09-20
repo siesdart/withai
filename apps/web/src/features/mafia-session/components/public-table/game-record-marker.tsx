@@ -97,6 +97,11 @@ const outcomeCopy = (
       (value) =>
         `Day ${value.dayNumber}: Agents have reached their discussion turn limit. Move to the next phase when you are ready.`,
     )
+    .with(
+      { type: 'police-investigation-result' },
+      (value) =>
+        `Day ${value.dayNumber}: Police investigation — ${participantNames.get(value.participantId) ?? 'Participant'} has ${value.allegiance} Allegiance.`,
+    )
     .exhaustive();
 
 const nominationVoteTotals = (

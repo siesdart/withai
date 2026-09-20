@@ -16,6 +16,7 @@ export const mafiaAgentSnapshotGuide = [
   '## Timeline and records',
   '- `timeline`: oldest → newest, authoritative visible history. `chat` = public claim, not proof. `mafia-chat` = private Mafia talk only when present; non-Mafia never see it. Focus primarily on the latest chats.',
   '- `record`: server public fact. `phase-changed`, `day-changed` = order. `allegiance-reveal` is an Allegiance result only: `Mafia` means the Mafia Role, while `Citizen` means one of Police, Doctor, or Citizen Roles; it never identifies an exact Citizen-side Role.',
+  '- `personal-record.outcome.type: "police-investigation-result"`: Police-only Allegiance result for the named Participant. `Mafia` identifies Mafia Allegiance; `Citizen` does not identify an exact Role. Other Participants never see this record.',
   '- `nomination-resolved`: result, nominated target if unique leader, `leadingVoteCount`, per-target `voteCounts`. No voter identities. Unique leader nominates; no majority rule. Tie/no-nomination eliminates nobody.',
   '- `verdict-resolved`: nominee, result, `eliminateVotes`, `spareVotes`, `requiredEliminateVotes`. No voter identities. Eliminate only if `eliminateVotes >= requiredEliminateVotes`.',
   '- `record.outcome.type: "night-resolved"`: `result: "participant-eliminated"` = named `participantId` died. `result: "protected"` = Mafia chose target + Doctor protected it; neither identity revealed. `result: "no-death"` = Mafia chose no target, not Doctor save. Use `result`; “nobody died” alone proves nothing.',

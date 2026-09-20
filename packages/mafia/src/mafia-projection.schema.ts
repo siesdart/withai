@@ -70,10 +70,18 @@ const PublicTimelineItemVariants = [
   }),
   v.object({ id: v.string(), type: v.literal('record'), outcome: PublicOutcomeSchema }),
 ];
-const PersonalRecordSchema = v.object({
-  type: v.literal('autonomous-public-speech-limit-reached'),
-  dayNumber: v.number(),
-});
+const PersonalRecordSchema = v.variant('type', [
+  v.object({
+    type: v.literal('autonomous-public-speech-limit-reached'),
+    dayNumber: v.number(),
+  }),
+  v.object({
+    type: v.literal('police-investigation-result'),
+    dayNumber: v.number(),
+    participantId: v.string(),
+    allegiance: MafiaAllegianceSchema,
+  }),
+]);
 const PersonalTimelineItemSchema = v.variant('type', [
   ...PublicTimelineItemVariants,
   v.object({

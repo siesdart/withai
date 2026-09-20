@@ -345,6 +345,17 @@ export class MafiaGameSession implements GameModuleSession<
       const investigations = this.policeInvestigationHistory.get(participantId) ?? new Map();
       investigations.set(targetParticipantId, allegianceFor(target.role));
       this.policeInvestigationHistory.set(participantId, investigations);
+      this.timeline.push({
+        id: this.nextTimelineItemId('personal-record'),
+        type: 'personal-record',
+        recipientParticipantId: participantId,
+        outcome: {
+          type: 'police-investigation-result',
+          dayNumber: this.dayNumber,
+          participantId: target.id,
+          allegiance: allegianceFor(target.role),
+        },
+      });
     });
   }
   advanceDayPhase(now = new Date()): Result<MafiaDayPhaseResult, never> {

@@ -6,6 +6,7 @@ import {
   Get,
   HttpException,
   HttpStatus,
+  Optional,
   Post,
   Req,
   Res,
@@ -27,10 +28,12 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { Result } from 'neverthrow';
 import type { Subscription } from 'rxjs';
 import { match } from 'ts-pattern';
 
+import { createStructuredLogger, type StructuredLogger } from '../../logging/structured-logger.js';
 import { retryAfterSeconds } from '../application/cooldown/cooldown.js';
 import {
   type GameSessionError,
@@ -57,8 +60,16 @@ import { MafiaGameSessionProjectionEntity } from './mafia-game-session-projectio
 @Controller('game-sessions')
 export class GameSessionsController {
   private readonly holderTokens = createHolderTokenSigner(holderTokenSecret());
+  private readonly logger: StructuredLogger;
 
-  constructor(private readonly gameSessionsService: GameSessionsService) {}
+  constructor(
+    private readonly gameSessionsService: GameSessionsService,
+    @Optional()
+    @InjectPinoLogger(GameSessionsController.name)
+    logger?: PinoLogger,
+  ) {
+    this.logger = createStructuredLogger(logger);
+  }
 
   @Post('mafia')
   @ApiOperation({ summary: 'Create an anonymous Mafia Game Session' })
@@ -524,10 +535,33 @@ export class GameSessionsController {
     return result.match(
       (value) => value,
       (error) => {
+        this.logGameSessionError(error);
         this.setRetryAfterHeader(response, error);
         throw this.toHttpException(error);
       },
     );
+  }
+
+  private logGameSessionError(error: GameSessionError) {
+    const fields = {
+      errorType: error.type,
+      ...(error.type === 'unavailable-to-guest' || error.type === 'session-not-found'
+        ? { sessionId: error.sessionId }
+        : {}),
+      ...(error.type === 'speech-rate-limited' ||
+      error.type === 'day-action-rate-limited' ||
+      error.type === 'discussion-time-adjustment-rate-limited'
+        ? { retryAfterMs: error.retryAfterMs }
+        : {}),
+      ...(error.type === 'expired-phase' ? { phaseDeadline: error.phaseDeadline } : {}),
+      ...(error.type === 'dead-participant' ? { participantId: error.participantId } : {}),
+      ...(error.type === 'invalid-mafia-projection' ? { err: error.cause } : {}),
+    };
+    if (error.type === 'durability-unavailable' || error.type === 'invalid-mafia-projection') {
+      this.logger.error(fields, 'Game Session request failed');
+      return;
+    }
+    this.logger.warn(fields, 'Game Session request rejected');
   }
 
   private setRetryAfterHeader(response: Response | undefined, error: GameSessionError) {

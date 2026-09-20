@@ -3,12 +3,13 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { apiReference } from '@scalar/nestjs-api-reference';
-import { Logger } from 'nestjs-pino';
+import { Logger, PinoLogger } from 'nestjs-pino';
 
 import { AppModule } from './app.module.js';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
+  app.useLogger(app.get(Logger));
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
@@ -18,8 +19,14 @@ async function bootstrap() {
   );
   app.enableCors({
     origin: process.env.ALLOWED_ORIGIN ?? 'http://localhost:5173',
-    allowedHeaders: ['Content-Type', 'Idempotency-Key', 'Last-Event-ID', 'X-Holder-Token'],
-    exposedHeaders: ['Retry-After', 'X-Holder-Token'],
+    allowedHeaders: [
+      'Content-Type',
+      'Idempotency-Key',
+      'Last-Event-ID',
+      'X-Holder-Token',
+      'X-Request-Id',
+    ],
+    exposedHeaders: ['Retry-After', 'X-Holder-Token', 'X-Request-Id'],
   });
   app.set('trust proxy', true);
 
@@ -35,8 +42,16 @@ async function bootstrap() {
     app.use('/docs', apiReference({ content: openApiDocument }));
   }
 
-  app.useLogger(app.get(Logger));
-  await app.listen(process.env.PORT ?? 3000);
+  await app.init();
+  const logger = PinoLogger.root;
+  const port = process.env.PORT ?? 3000;
+  try {
+    await app.listen(port);
+  } catch (cause) {
+    logger.fatal({ err: cause, port }, 'API server failed to start listening');
+    throw cause;
+  }
+  logger.info({ port, environment: process.env.NODE_ENV ?? 'development' }, 'API server started');
 }
 
 void bootstrap();

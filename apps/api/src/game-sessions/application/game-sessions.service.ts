@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto';
 
-import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { Inject } from '@nestjs/common';
 import { MafiaGameModule, mafiaGameConfig, type MafiaOutputLanguage } from '@repo/mafia';
 import type { MafiaGameProjection } from '@repo/mafia';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc.js';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { err, ok, type Result } from 'neverthrow';
 import {
   concat,
@@ -23,6 +24,7 @@ import {
 } from 'rxjs';
 import { match, P } from 'ts-pattern';
 
+import { createStructuredLogger, type StructuredLogger } from '../../logging/structured-logger.js';
 import {
   agentDecisionGateway,
   type AgentDecisionGateway,
@@ -106,13 +108,19 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
   private readonly agentActions: GameSessionAgentOrchestrator;
   private readonly durability: GameSessionDurability;
   private readonly lifecycle: GameSessionLifecycle;
-  private readonly authority = RedisGameSessionAuthority.fromEnvironment();
+  private readonly authority: RedisGameSessionAuthority | undefined;
+  private readonly logger: StructuredLogger;
   private cleanupTimer: NodeJS.Timeout | undefined;
 
   constructor(
     @Inject(agentDecisionGateway) agentDecisions: AgentDecisionGateway,
     @Inject(gameSessionClock) private readonly clock: GameSessionClock = nativeGameSessionClock,
+    @Optional()
+    @InjectPinoLogger(GameSessionsService.name)
+    logger?: PinoLogger,
   ) {
+    this.logger = createStructuredLogger(logger);
+    this.authority = RedisGameSessionAuthority.fromEnvironment(this.logger);
     this.agentActionRetries = new KeyedRetryScheduler(this.clock);
     this.phaseTransitionRetries = new KeyedRetryScheduler(this.clock);
     this.scheduledAgentRetries = new KeyedRetryScheduler(this.clock);
@@ -139,12 +147,14 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         ),
       this.clock,
       (session) => this.sessions.get(session.gameSession.snapshot().sessionId),
+      this.logger,
     );
     this.durability = new GameSessionDurability(
       () => this.authority,
       this.clock,
       this.sessions,
       this.disposeSession.bind(this),
+      this.logger,
     );
     this.lifecycle = new GameSessionLifecycle({
       state: {
@@ -174,16 +184,37 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       disposeSession: this.disposeSession.bind(this),
       now: this.now.bind(this),
       utcDay: this.utcDay.bind(this),
+      logger: this.logger,
     });
   }
 
   async onModuleInit() {
     if (!this.authority && this.requiresDurableAuthority()) {
+      this.logger.error(
+        { durableAuthorityConfigured: false },
+        'Game Session startup requires REDIS_URL but no durable authority is configured',
+      );
       throw new Error('REDIS_URL is required for durable Game Sessions.');
     }
-    await this.lifecycle.recoverDurableSessions();
+    this.logger.info(
+      { durableAuthorityEnabled: Boolean(this.authority) },
+      'Initializing Game Session service',
+    );
+    try {
+      await this.lifecycle.recoverDurableSessions();
+    } catch (cause) {
+      this.logger.error({ err: cause }, 'Game Session recovery failed during startup');
+      throw cause;
+    }
+    this.logger.info(
+      { recoveredSessionCount: this.sessions.size },
+      'Game Session recovery finished',
+    );
     this.cleanupTimer = this.clock.setInterval(
-      () => void this.lifecycle.cleanupExpiredSessions(),
+      () =>
+        void this.lifecycle.cleanupExpiredSessions().catch((cause: unknown) => {
+          this.logger.error({ err: cause }, 'Scheduled Game Session cleanup failed');
+        }),
       gameSessionsConfig.cleanupIntervalMs,
     );
     this.cleanupTimer.unref?.();
@@ -197,7 +228,10 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     this.phaseTransitionRetries.clearAll();
     this.scheduledAgentRetries.clearAll();
     this.mafiaChatReplyRetries.clearAll();
-    void this.authority?.close();
+    this.logger.info({ activeSessionCount: this.sessions.size }, 'Stopping Game Session service');
+    void this.authority?.close().catch((cause: unknown) => {
+      this.logger.error({ err: cause }, 'Could not close the Redis Game Session authority');
+    });
   }
 
   async createMafiaSession(
@@ -212,7 +246,9 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     if (!this.authority && this.requiresDurableAuthority()) {
       return err({ type: 'durability-unavailable' });
     }
-    void this.lifecycle.cleanupExpiredSessions();
+    void this.lifecycle.cleanupExpiredSessions().catch((cause: unknown) => {
+      this.logger.error({ err: cause }, 'Background Game Session cleanup failed');
+    });
     const resolvedHolderId = holderId ?? randomUUID();
     const resolvedAllowanceHolderId = allowanceHolderId ?? resolvedHolderId;
     const activeSessionId = this.activeSessionIdsByHolder.get(resolvedHolderId);
@@ -335,7 +371,13 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
           : undefined,
         resolvedAllowanceHolderId,
       );
-      if (creation.isErr()) return err({ type: 'durability-unavailable' });
+      if (creation.isErr()) {
+        this.logger.error(
+          { err: creation.error, operation: 'create', sessionId },
+          'Could not create the durable Game Session',
+        );
+        return err({ type: 'durability-unavailable' });
+      }
       if (creation.value.type === 'unavailable-session') {
         return err({ type: 'session-not-found', sessionId: creation.value.sessionId });
       }
@@ -382,10 +424,25 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     this.lifecycle.schedulePhaseTransition(session);
     if (awaitInitialAgentActions) {
       const actions = await this.submitAndCommitAgentActions(session);
-      if (actions.isErr()) this.retryAgentActions(sessionId);
+      if (actions.isErr()) {
+        this.logger.warn(
+          { error: actions.error, operation: 'initial-agent-actions', sessionId },
+          'Initial Agent actions failed; scheduling a retry',
+        );
+        this.retryAgentActions(sessionId);
+      }
     } else {
       this.queuePendingAgentActions(session);
     }
+    this.logger.info(
+      {
+        sessionId,
+        participantCount,
+        outputLanguage,
+        durableAuthorityEnabled: Boolean(this.authority),
+      },
+      'Mafia Game Session created',
+    );
     return ok({ holderId: resolvedHolderId, projection: projection.value });
   }
 
@@ -542,7 +599,9 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     sessionId: string,
     holderId: string | undefined,
   ): Result<MafiaGameProjection, GameSessionError> {
-    void this.lifecycle.cleanupExpiredSessions();
+    void this.lifecycle.cleanupExpiredSessions().catch((cause: unknown) => {
+      this.logger.error({ err: cause }, 'Background Game Session cleanup failed');
+    });
     return this.sessionForHolder(sessionId, holderId).andThen((session) => {
       if (session.status === 'completed') return this.projectionFor(session);
       return this.activeSessionForHolder(sessionId, holderId).andThen((activeSession) =>
@@ -638,7 +697,9 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     holderId: string | undefined,
     lastEventId: number | undefined,
   ): Result<Observable<MafiaGameProjection>, GameSessionError> {
-    void this.lifecycle.cleanupExpiredSessions();
+    void this.lifecycle.cleanupExpiredSessions().catch((cause: unknown) => {
+      this.logger.error({ err: cause }, 'Background Game Session cleanup failed');
+    });
     const readableSession = this.sessionForHolder(sessionId, holderId);
     if (readableSession.isErr()) return err(readableSession.error);
     if (readableSession.value.status === 'completed')
@@ -1037,7 +1098,10 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         // Player action wins and this stale Agent run hydrates before it can publish anything.
         this.submitPendingAgentActions(session),
       )
-      .catch(() => this.retryAgentActions(sessionId))
+      .catch((cause: unknown) => {
+        this.logger.error({ err: cause, sessionId }, 'Pending Agent action processing failed');
+        this.retryAgentActions(sessionId);
+      })
       .finally(() => this.pendingAgentActionSessionIds.delete(sessionId));
   }
 

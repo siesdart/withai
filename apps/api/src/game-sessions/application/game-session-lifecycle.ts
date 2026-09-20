@@ -1,8 +1,9 @@
 import type { MafiaGameProjection } from '@repo/mafia';
 import dayjs, { type Dayjs } from 'dayjs';
 import { err, ok, type Result } from 'neverthrow';
-import { filter, map, pipe } from 'remeda';
+import { filter, map } from 'remeda';
 
+import { createStructuredLogger, type StructuredLogger } from '../../logging/structured-logger.js';
 import type { GameSessionAgentOrchestrator } from '../agents/game-session-agent-orchestrator.js';
 import {
   type DurableSessionSnapshot,
@@ -59,12 +60,16 @@ type LifecycleRuntime = {
   disposeSession(session: StoredGameSessionEntity): void;
   now(): Dayjs;
   utcDay(): string;
+  logger?: StructuredLogger;
 };
 
 export class GameSessionLifecycle {
   private recoveringDurableSessions = false;
+  private readonly logger: StructuredLogger;
 
-  constructor(private readonly runtime: LifecycleRuntime) {}
+  constructor(private readonly runtime: LifecycleRuntime) {
+    this.logger = runtime.logger ?? createStructuredLogger();
+  }
 
   schedulePhaseTransition(session: StoredGameSessionEntity) {
     const clock = this.runtime.clock;
@@ -89,7 +94,13 @@ export class GameSessionLifecycle {
         const phaseNow = clock.now();
         if (this.runtime.agentActions.hasDueScheduledTasks(session)) {
           const drained = await this.runtime.agentActions.drainDueScheduledTasks(session);
-          if (drained.isErr()) return;
+          if (drained.isErr()) {
+            this.logger.error(
+              { error: drained.error, sessionId: projection.value.sessionId },
+              'Could not finish scheduled Agent tasks before a phase transition',
+            );
+            return;
+          }
         }
         const current = this.runtime.state.sessions.get(projection.value.sessionId);
         if (!current || current.status !== 'in-progress') return;
@@ -98,7 +109,13 @@ export class GameSessionLifecycle {
         // The pending action commits and schedules this deadline again once every Agent has voted.
         if (current.agentActionsPending) return;
         const advanced = current.gameSession.advanceDayPhase(phaseNow);
-        if (advanced.isErr()) return;
+        if (advanced.isErr()) {
+          this.logger.error(
+            { error: advanced.error, sessionId: projection.value.sessionId },
+            'Could not advance the Game Session phase at its deadline',
+          );
+          return;
+        }
         if (advanced.value.type === 'not-due') {
           const authority = this.runtime.persistence.authorityFor();
           if (authority)
@@ -112,11 +129,30 @@ export class GameSessionLifecycle {
         this.runtime.agentActions.clearTimers(current);
         current.agentActionsPending = true;
         const nextProjection = this.runtime.phaseOperations.publishProjection(current);
-        if (nextProjection.isErr()) return;
+        if (nextProjection.isErr()) {
+          this.logger.error(
+            { error: nextProjection.error, sessionId: projection.value.sessionId },
+            'Could not publish the Game Session phase transition',
+          );
+          return;
+        }
         const saved = await this.runtime.persistence.save(current, nextProjection.value);
         if (saved.isOk() && saved.value) {
+          this.logger.info(
+            {
+              sessionId: nextProjection.value.sessionId,
+              eventId: nextProjection.value.eventId,
+              previousPhase: projection.value.public.phase,
+              phase: nextProjection.value.public.phase,
+            },
+            'Game Session phase transition persisted',
+          );
           const actions = await this.runtime.phaseOperations.submitAgentActions(current);
           if (actions.isErr()) {
+            this.logger.error(
+              { error: actions.error, sessionId: nextProjection.value.sessionId },
+              'Agent actions failed after a Game Session phase transition',
+            );
             this.runtime.phaseOperations.retryAgentActions(nextProjection.value.sessionId);
             return;
           }
@@ -131,6 +167,10 @@ export class GameSessionLifecycle {
         );
         const hydrated = await this.runtime.persistence.hydrate(nextProjection.value.sessionId);
         if (hydrated.isErr()) {
+          this.logger.error(
+            { error: hydrated.error, sessionId: nextProjection.value.sessionId },
+            'Could not reload the authoritative Game Session after a phase transition conflict',
+          );
           this.runtime.phaseOperations.retryPhaseTransition(nextProjection.value.sessionId);
           return;
         }
@@ -139,7 +179,12 @@ export class GameSessionLifecycle {
       };
       const authority = this.runtime.persistence.authorityFor();
       if (!authority) {
-        void resolve();
+        void resolve().catch((cause: unknown) => {
+          this.logger.error(
+            { err: cause, sessionId: projection.value.sessionId },
+            'Scheduled Game Session phase transition failed unexpectedly',
+          );
+        });
         return;
       }
       void authority
@@ -147,14 +192,25 @@ export class GameSessionLifecycle {
         .match(
           (claimed) => {
             if (claimed) {
-              void resolve();
+              void resolve().catch((cause: unknown) => {
+                this.logger.error(
+                  { err: cause, sessionId: projection.value.sessionId },
+                  'Claimed Game Session phase transition failed unexpectedly',
+                );
+              });
               return;
             }
             this.runtime.phaseOperations.retryPhaseTransitionAfterClaimLease(
               projection.value.sessionId,
             );
           },
-          () => this.runtime.phaseOperations.retryPhaseTransition(projection.value.sessionId),
+          (error) => {
+            this.logger.error(
+              { error, sessionId: projection.value.sessionId, operation: 'claim-phase-deadline' },
+              'Could not claim the Game Session phase deadline',
+            );
+            this.runtime.phaseOperations.retryPhaseTransition(projection.value.sessionId);
+          },
         );
     }, delayMs);
     session.phaseTimer.unref?.();
@@ -208,7 +264,13 @@ export class GameSessionLifecycle {
       this.runtime.persistence.snapshotFor(current, projection.value),
       { eventId: projection.value.eventId, projection: projection.value },
     );
-    if (saved.isErr()) return err({ type: 'durability-unavailable' });
+    if (saved.isErr()) {
+      this.logger.error(
+        { error: saved.error, sessionId: current.gameSession.snapshot().sessionId },
+        'Could not persist an expired Game Session phase transition',
+      );
+      return err({ type: 'durability-unavailable' });
+    }
     if (!saved.value) {
       const hydrated = await this.runtime.persistence.hydrate(
         current.gameSession.snapshot().sessionId,
@@ -266,7 +328,14 @@ export class GameSessionLifecycle {
 
   async cleanupExpiredSessions() {
     const authority = this.runtime.persistence.authorityFor();
-    if (authority) await authority.expireInactiveSessions();
+    if (authority) {
+      const expired = await authority.expireInactiveSessions();
+      if (expired.isErr())
+        this.logger.error(
+          { error: expired.error, operation: 'expire-inactive-sessions' },
+          'Could not expire inactive durable Game Sessions',
+        );
+    }
     await this.recoverDurableSessions();
     await this.sweepReconnectGraceDeadlines();
     const now = this.runtime.now();
@@ -307,57 +376,80 @@ export class GameSessionLifecycle {
     this.recoveringDurableSessions = true;
     try {
       const snapshots = await authority.activeSnapshots();
-      if (snapshots.isErr()) return;
+      if (snapshots.isErr()) {
+        this.logger.error(
+          { error: snapshots.error, operation: 'recover-active-sessions' },
+          'Could not load durable Game Sessions during recovery',
+        );
+        return;
+      }
+      const recoverableSnapshots = filter(
+        snapshots.value,
+        (snapshot) =>
+          snapshot.status === 'in-progress' && !this.runtime.state.sessions.has(snapshot.sessionId),
+      );
+      if (recoverableSnapshots.length > 0) {
+        this.logger.info(
+          { recoverableSessionCount: recoverableSnapshots.length },
+          'Recovering durable Game Sessions',
+        );
+      }
       await Promise.all(
-        pipe(
-          snapshots.value,
-          filter(
-            (snapshot) =>
-              snapshot.status === 'in-progress' &&
-              !this.runtime.state.sessions.has(snapshot.sessionId),
-          ),
-          map(async (snapshot) => {
-            const session = this.runtime.persistence.restore(snapshot);
-            this.runtime.state.sessions.set(snapshot.sessionId, session);
-            if (session.reconnectGraceDeadline) {
-              const remaining = session.reconnectGraceDeadline.diff(
-                this.runtime.now(),
-                'millisecond',
+        map(recoverableSnapshots, async (snapshot) => {
+          const session = this.runtime.persistence.restore(snapshot);
+          this.runtime.state.sessions.set(snapshot.sessionId, session);
+          if (session.reconnectGraceDeadline) {
+            const remaining = session.reconnectGraceDeadline.diff(
+              this.runtime.now(),
+              'millisecond',
+            );
+            if (remaining <= 0) {
+              await authority.abandonIfReconnectExpired(
+                snapshot.sessionId,
+                session.reconnectGraceDeadline.toISOString(),
+                snapshot.holderId,
               );
-              if (remaining <= 0) {
-                await authority.abandonIfReconnectExpired(
-                  snapshot.sessionId,
-                  session.reconnectGraceDeadline.toISOString(),
-                  snapshot.holderId,
-                );
-                return;
-              }
-              this.scheduleReconnectGrace(session, remaining);
-            }
-            const events = await authority.eventsAfter(snapshot.sessionId, 0);
-            if (events.isOk())
-              for (const event of events.value) session.events.next(event.projection);
-            if (session.agentActionsPending) {
-              const actions = await this.runtime.phaseOperations.submitAgentActions(session);
-              if (actions.isErr()) {
-                this.runtime.phaseOperations.retryAgentActions(snapshot.sessionId);
-                return;
-              }
-            }
-            if (session.scheduledAgentMafiaChatReplies.length > 0) {
-              this.runtime.phaseOperations.retryMafiaChatReplies(snapshot.sessionId);
-            }
-            const recovered = await this.recoverExpiredPhaseDurably(session);
-            if (recovered.isErr()) {
-              this.runtime.phaseOperations.retryPhaseTransition(snapshot.sessionId);
               return;
             }
-            const current = this.runtime.state.sessions.get(snapshot.sessionId);
-            if (!current || current.status !== 'in-progress') return;
-            this.runtime.agentActions.resumeScheduledTasks(current);
-            this.schedulePhaseTransition(current);
-          }),
-        ),
+            this.scheduleReconnectGrace(session, remaining);
+          }
+          const events = await authority.eventsAfter(snapshot.sessionId, 0);
+          if (events.isOk()) {
+            for (const event of events.value) session.events.next(event.projection);
+          } else {
+            this.logger.error(
+              { error: events.error, sessionId: snapshot.sessionId, operation: 'load-events' },
+              'Could not restore Game Session events during recovery',
+            );
+          }
+          if (session.agentActionsPending) {
+            const actions = await this.runtime.phaseOperations.submitAgentActions(session);
+            if (actions.isErr()) {
+              this.logger.error(
+                { error: actions.error, sessionId: snapshot.sessionId },
+                'Could not resume pending Agent actions during recovery',
+              );
+              this.runtime.phaseOperations.retryAgentActions(snapshot.sessionId);
+              return;
+            }
+          }
+          if (session.scheduledAgentMafiaChatReplies.length > 0) {
+            this.runtime.phaseOperations.retryMafiaChatReplies(snapshot.sessionId);
+          }
+          const recovered = await this.recoverExpiredPhaseDurably(session);
+          if (recovered.isErr()) {
+            this.logger.error(
+              { error: recovered.error, sessionId: snapshot.sessionId },
+              'Could not recover an expired Game Session phase',
+            );
+            this.runtime.phaseOperations.retryPhaseTransition(snapshot.sessionId);
+            return;
+          }
+          const current = this.runtime.state.sessions.get(snapshot.sessionId);
+          if (!current || current.status !== 'in-progress') return;
+          this.runtime.agentActions.resumeScheduledTasks(current);
+          this.schedulePhaseTransition(current);
+        }),
       );
     } finally {
       this.recoveringDurableSessions = false;
@@ -368,7 +460,13 @@ export class GameSessionLifecycle {
     const authority = this.runtime.persistence.authorityFor();
     if (!authority) return;
     const snapshots = await authority.activeSnapshots();
-    if (snapshots.isErr()) return;
+    if (snapshots.isErr()) {
+      this.logger.error(
+        { error: snapshots.error, operation: 'sweep-reconnect-grace' },
+        'Could not load Game Sessions while sweeping reconnect deadlines',
+      );
+      return;
+    }
     await Promise.all(
       map(snapshots.value, async (snapshot) => {
         if (

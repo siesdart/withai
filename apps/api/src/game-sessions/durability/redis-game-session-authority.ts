@@ -12,6 +12,7 @@ import { filter, map } from 'remeda';
 import { match } from 'ts-pattern';
 import * as v from 'valibot';
 
+import type { StructuredLogger } from '../../logging/structured-logger.js';
 import type { AgentMind } from '../agents/agent-mind.js';
 import type { GameSessionStatus } from '../application/game-session-status.js';
 import { gameSessionsConfig } from '../application/game-sessions.config.js';
@@ -194,16 +195,23 @@ export class RedisGameSessionAuthority {
     private readonly now: () => Date = () => new Date(),
   ) {}
 
-  static fromEnvironment() {
+  static fromEnvironment(logger?: StructuredLogger) {
     const redisUrl = process.env.REDIS_URL;
-    return redisUrl
-      ? new RedisGameSessionAuthority(
-          new Redis(redisUrl, { lazyConnect: true }),
-          process.env.NODE_ENV === 'production'
-            ? 'withai:game-sessions'
-            : 'withai-dev:game-sessions',
-        )
-      : undefined;
+    if (!redisUrl) return undefined;
+
+    const redis = new Redis(redisUrl, { lazyConnect: true });
+    redis.on('ready', () => logger?.info({}, 'Redis Game Session authority is ready'));
+    redis.on('reconnecting', (delayMs: number) =>
+      logger?.warn({ retryDelayMs: delayMs }, 'Redis Game Session authority is reconnecting'),
+    );
+    redis.on('error', (cause: Error) =>
+      logger?.error({ err: cause }, 'Redis Game Session authority reported an error'),
+    );
+
+    return new RedisGameSessionAuthority(
+      redis,
+      process.env.NODE_ENV === 'production' ? 'withai:game-sessions' : 'withai-dev:game-sessions',
+    );
   }
 
   activeSessionIdForHolder(holderId: string): ResultAsync<string | undefined, DurableSessionError> {

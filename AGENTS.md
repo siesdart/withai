@@ -56,6 +56,12 @@
 
 - When creating or changing API endpoints, reflect them in the Scalar API Reference.
 
+## Server logging
+
+- Whenever adding or changing server-side code, use the existing `nestjs-pino` structured logger to make production failures diagnosable at the responsible boundary. Cover external calls, persistence, startup and recovery, background or scheduled work, retries and fallbacks, and state transitions when operationally useful.
+- Include the operation or stage, safe resource identifiers, relevant attempt or state details, and the original error or cause. Preserve request correlation context for HTTP work. Give handled failures and domain rejections a searchable reason, and keep routine high-volume success logs limited to useful milestones.
+- Use an injected `PinoLogger` in Nest providers or pass a logger into helper code. Keep fields intentional; never log credentials, tokens, cookies, idempotency keys, request bodies, user-authored content, prompts, or model outputs. Use structured logging instead of `console.*` in server code.
+
 ## Linting and formatting
 
 - After making code changes, run `npx oxlint --fix`, then run `npx oxfmt`.

@@ -4,8 +4,10 @@ import dayjs from 'dayjs';
 import { err, ok, type Result } from 'neverthrow';
 import { ReplaySubject } from 'rxjs';
 
+import { createStructuredLogger, type StructuredLogger } from '../../logging/structured-logger.js';
 import {
   type DurableSessionSnapshot,
+  type DurableSessionError,
   RedisGameSessionAuthority,
 } from '../durability/redis-game-session-authority.js';
 import type { GameSessionClock } from './game-session-clock.js';
@@ -21,6 +23,7 @@ export class GameSessionDurability {
     private readonly clock: GameSessionClock,
     private readonly sessions: Map<string, StoredGameSessionEntity>,
     private readonly disposeSession: SessionDisposer,
+    private readonly logger: StructuredLogger = createStructuredLogger(),
   ) {}
 
   async save(
@@ -36,6 +39,8 @@ export class GameSessionDurability {
       eventId: projection.eventId,
       projection,
     });
+    if (saved.isErr())
+      this.logAuthorityFailure('save-projection', projection.sessionId, saved.error);
     return saved
       .mapErr((): GameSessionError => ({ type: 'durability-unavailable' }))
       .map((wasSaved) => {
@@ -54,6 +59,8 @@ export class GameSessionDurability {
     if (projection.isErr())
       return err({ type: 'invalid-mafia-projection', cause: projection.error });
     const saved = await authority.saveSnapshot(this.snapshotFor(session, projection.value));
+    if (saved.isErr())
+      this.logAuthorityFailure('save-snapshot', projection.value.sessionId, saved.error);
     return saved.mapErr((): GameSessionError => ({ type: 'durability-unavailable' }));
   }
 
@@ -68,7 +75,14 @@ export class GameSessionDurability {
       session.gameSession.snapshot().sessionId,
       now.toISOString(),
     );
-    if (touched.isErr()) return err({ type: 'durability-unavailable' });
+    if (touched.isErr()) {
+      this.logAuthorityFailure(
+        'touch-session',
+        session.gameSession.snapshot().sessionId,
+        touched.error,
+      );
+      return err({ type: 'durability-unavailable' });
+    }
     if (!touched.value)
       return err({
         type: 'unavailable-to-guest',
@@ -82,9 +96,15 @@ export class GameSessionDurability {
     const authority = this.authorityFor();
     if (!authority) return ok(undefined);
     const events = await authority.eventsAfter(sessionId, 0);
-    if (events.isErr()) return err({ type: 'durability-unavailable' });
+    if (events.isErr()) {
+      this.logAuthorityFailure('load-events', sessionId, events.error);
+      return err({ type: 'durability-unavailable' });
+    }
     const loaded = await authority.load(sessionId);
-    if (loaded.isErr()) return err({ type: 'durability-unavailable' });
+    if (loaded.isErr()) {
+      this.logAuthorityFailure('load-snapshot', sessionId, loaded.error);
+      return err({ type: 'durability-unavailable' });
+    }
     if (!loaded.value) return err({ type: 'session-not-found', sessionId });
     const session = this.restore(loaded.value);
     for (const event of events.value) session.events.next(event.projection);
@@ -186,5 +206,18 @@ export class GameSessionDurability {
     const previous = this.sessions.get(sessionId);
     if (previous) this.disposeSession(previous);
     this.sessions.set(sessionId, next);
+  }
+
+  private logAuthorityFailure(operation: string, sessionId: string, error: DurableSessionError) {
+    this.logger.error(
+      {
+        operation,
+        sessionId,
+        authorityErrorType: error.type,
+        err: error.type === 'authority-unavailable' ? error.cause : undefined,
+        invalidStoredData: error.type === 'invalid-authority-data',
+      },
+      'Game Session durable storage operation failed',
+    );
   }
 }

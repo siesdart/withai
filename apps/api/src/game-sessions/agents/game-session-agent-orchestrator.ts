@@ -7,6 +7,7 @@ import { ok, type Result } from 'neverthrow';
 import { filter, find, findLast, map, pipe, sortBy } from 'remeda';
 import { match } from 'ts-pattern';
 
+import { createStructuredLogger, type StructuredLogger } from '../../logging/structured-logger.js';
 import {
   nativeGameSessionClock,
   type GameSessionClock,
@@ -87,6 +88,7 @@ export class GameSessionAgentOrchestrator {
     private readonly commitAgentMutation: CommitAgentMutation,
     private readonly clock: GameSessionClock = nativeGameSessionClock,
     private readonly currentSessionFor: CurrentSessionFor = (session) => session,
+    private readonly logger: StructuredLogger = createStructuredLogger(),
   ) {}
 
   async publishPublicSpeechReplies(session: StoredGameSessionEntity, hydrationLocked = false) {
@@ -475,7 +477,15 @@ export class GameSessionAgentOrchestrator {
             return submitted.match(
               () => true,
               (cause) => {
-                console.error(`Agent ${context.personal.role} Night action was rejected.`, cause);
+                this.logger.error(
+                  {
+                    err: cause,
+                    sessionId: session.gameSession.snapshot().sessionId,
+                    agentRole: context.personal.role,
+                    action: 'night-action',
+                  },
+                  'Agent Night action was rejected by the game session',
+                );
                 return false;
               },
             );
@@ -652,7 +662,14 @@ export class GameSessionAgentOrchestrator {
         : undefined,
     );
     void openingTask.catch((cause: unknown) => {
-      console.error('Could not prepare or commit an Agent Mafia Night opening.', cause);
+      this.logger.error(
+        {
+          err: cause,
+          sessionId: session.gameSession.snapshot().sessionId,
+          action: 'mafia-opening',
+        },
+        'Could not prepare or commit an Agent Mafia Night opening',
+      );
     });
 
     const requiredActions = Promise.all([mafiaTargetPromise, ...specialRolePromises]).then(
@@ -717,7 +734,15 @@ export class GameSessionAgentOrchestrator {
       session.mafiaTargetFallbackTimer = undefined;
       if (this.isDraining(session)) return;
       void this.commitMafiaTargetFallback(session, fallbackAt, phaseKey).catch((cause: unknown) => {
-        console.error('Could not apply the scheduled Agent Mafia Night target fallback.', cause);
+        this.logger.error(
+          {
+            err: cause,
+            sessionId: session.gameSession.snapshot().sessionId,
+            phaseKey,
+            action: 'mafia-target-fallback',
+          },
+          'Could not apply the scheduled Agent Mafia Night target fallback',
+        );
       });
     }, delayMs);
     session.mafiaTargetFallbackTimer.unref?.();
@@ -818,7 +843,14 @@ export class GameSessionAgentOrchestrator {
             return true;
           },
           (cause) => {
-            console.error('Agent Mafia Night target was rejected.', cause);
+            this.logger.error(
+              {
+                err: cause,
+                sessionId: session.gameSession.snapshot().sessionId,
+                action: 'mafia-target',
+              },
+              'Agent Mafia Night target was rejected by the game session',
+            );
             return false;
           },
         );
@@ -1330,7 +1362,16 @@ export class GameSessionAgentOrchestrator {
         );
         submitted.match(
           () => undefined,
-          (cause) => console.error('Scheduled Agent Mafia chat was rejected.', cause),
+          (cause) =>
+            this.logger.error(
+              {
+                err: cause,
+                sessionId: session.gameSession.snapshot().sessionId,
+                participantId: pending.participantId,
+                action: 'mafia-chat',
+              },
+              'Scheduled Agent Mafia chat was rejected by the game session',
+            ),
         );
         return true;
       },
@@ -1397,7 +1438,14 @@ export class GameSessionAgentOrchestrator {
         return submitted.match(
           () => true,
           (cause) => {
-            console.error('Agent Mafia fallback Night target was rejected.', cause);
+            this.logger.error(
+              {
+                err: cause,
+                sessionId: session.gameSession.snapshot().sessionId,
+                action: 'mafia-target-fallback',
+              },
+              'Agent Mafia fallback Night target was rejected by the game session',
+            );
             return false;
           },
         );

@@ -5,6 +5,7 @@ import { toStandardJsonSchema } from '@valibot/to-json-schema';
 import { filter, findLast } from 'remeda';
 import * as v from 'valibot';
 
+import { createStructuredLogger, type StructuredLogger } from '../../logging/structured-logger.js';
 import {
   buildAgentDecisionPrompt,
   type AgentDecisionPrompt,
@@ -118,12 +119,13 @@ export class LLMAgentDecisionGateway implements AgentDecisionGateway {
   constructor(
     private readonly runDecision: AgentDecisionRunner = tanstackRunner,
     outputLanguage: AgentOutputLanguage = 'ko',
+    private readonly logger: StructuredLogger = createStructuredLogger(),
   ) {
     this.outputLanguage = outputLanguage;
   }
 
   forLanguage(outputLanguage: AgentOutputLanguage): AgentDecisionGateway {
-    return new LLMAgentDecisionGateway(this.runDecision, outputLanguage);
+    return new LLMAgentDecisionGateway(this.runDecision, outputLanguage, this.logger);
   }
 
   decidePublicSpeech(
@@ -131,6 +133,8 @@ export class LLMAgentDecisionGateway implements AgentDecisionGateway {
     options?: AgentPublicSpeechOptions,
   ): Promise<AgentPublicSpeechDecision> {
     return this.withFallback(
+      'public-speech',
+      context,
       buildAgentDecisionPrompt(
         'Choose whether to send short public chat now. For either outcome, choose nextSpeakerParticipantId from the supplied eligible IDs. For remain-silent, set content to empty string.',
         context,
@@ -154,6 +158,8 @@ export class LLMAgentDecisionGateway implements AgentDecisionGateway {
 
   decideFinalDefence(context: MafiaAgentContext): Promise<AgentFinalDefence> {
     return this.withFallback(
+      'final-defence',
+      context,
       buildAgentDecisionPrompt(
         'Write this Agent Final Defence opening and follow-up.',
         context,
@@ -173,6 +179,8 @@ export class LLMAgentDecisionGateway implements AgentDecisionGateway {
   ): Promise<AgentPhaseActionDecision> {
     if (context.public.phase === 'verdict') return this.decideVerdict(context);
     return this.withFallback(
+      'phase-action',
+      context,
       buildAgentDecisionPrompt(
         participantActionInstructionFor(context, candidateParticipantIds),
         context,
@@ -190,6 +198,8 @@ export class LLMAgentDecisionGateway implements AgentDecisionGateway {
 
   private decideVerdict(context: MafiaAgentContext): Promise<AgentPhaseActionDecision> {
     return this.withFallback(
+      'verdict',
+      context,
       buildAgentDecisionPrompt(
         'Choose verdict for current nominee. Return eliminate or spare only.',
         context,
@@ -202,6 +212,8 @@ export class LLMAgentDecisionGateway implements AgentDecisionGateway {
 
   async decideMafiaChatOpening(context: MafiaAgentContext, targetName: string): Promise<string> {
     const decision = await this.withFallback(
+      'mafia-chat-opening',
+      context,
       buildAgentDecisionPrompt(
         `Write short private Mafia Night Chat opening to coordinate a Night-target choice involving ${targetName}.`,
         context,
@@ -215,6 +227,8 @@ export class LLMAgentDecisionGateway implements AgentDecisionGateway {
 
   async decideMafiaChatReply(context: MafiaAgentContext, targetName: string): Promise<string> {
     const decision = await this.withFallback(
+      'mafia-chat-reply',
+      context,
       buildAgentDecisionPrompt(
         `Write short private Mafia Night Chat reply to coordinate a Night-target choice involving ${targetName}.`,
         context,
@@ -228,6 +242,8 @@ export class LLMAgentDecisionGateway implements AgentDecisionGateway {
 
   async selectMafiaTarget(context: MafiaAgentContext): Promise<string | undefined> {
     const decision = await this.withFallback(
+      'mafia-target',
+      context,
       buildAgentDecisionPrompt(
         'Choose living Mafia Night target by participant id.',
         context,
@@ -243,24 +259,55 @@ export class LLMAgentDecisionGateway implements AgentDecisionGateway {
   }
 
   private async withFallback<TSchema extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>>(
+    operation: string,
+    context: MafiaAgentContext,
     prompt: AgentDecisionPrompt,
     schema: TSchema,
     fallback: v.InferOutput<TSchema>,
     abortController?: AbortController,
     isValidOutput: (output: v.InferOutput<TSchema>) => boolean = () => true,
   ): Promise<v.InferOutput<TSchema>> {
+    let lastFailure: unknown = { type: 'no-valid-output' };
     for (let attempt = 1; attempt <= maximumDecisionAttempts; attempt += 1) {
       if (abortController?.signal.aborted) return fallback;
       try {
         // oxlint-disable-next-line no-await-in-loop -- retries are intentionally sequential.
         const response = await this.runDecisionForAttempt(prompt, schema, abortController);
         const parsed = v.safeParse(schema, response);
-        if (parsed.success && isValidOutput(parsed.output)) return parsed.output;
-      } catch {
+        if (parsed.success && isValidOutput(parsed.output)) {
+          if (attempt > 1) {
+            this.logger.warn(
+              {
+                operation,
+                phase: context.public.phase,
+                agentRole: context.personal.role,
+                attempt,
+                maximumAttempts: maximumDecisionAttempts,
+              },
+              'Agent decision recovered after retry',
+            );
+          }
+          return parsed.output;
+        }
+        lastFailure = parsed.success
+          ? { type: 'domain-validation-failed' }
+          : { type: 'schema-validation-failed', issueCount: parsed.issues.length };
+      } catch (cause) {
         if (abortController?.signal.aborted) return fallback;
+        lastFailure = cause;
         // A transient provider failure is retried within the bounded decision budget.
       }
     }
+    this.logger.warn(
+      {
+        operation,
+        phase: context.public.phase,
+        agentRole: context.personal.role,
+        attempts: maximumDecisionAttempts,
+        ...(lastFailure instanceof Error ? { err: lastFailure } : { failure: lastFailure }),
+      },
+      'Agent decision retries exhausted; using fallback response',
+    );
     return fallback;
   }
 

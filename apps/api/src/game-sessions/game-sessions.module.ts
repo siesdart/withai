@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+import { PinoLogger } from 'nestjs-pino';
 
+import { createStructuredLogger } from '../logging/structured-logger.js';
 import {
   agentDecisionGateway,
   DeterministicAgentDecisionGateway,
@@ -16,10 +18,11 @@ import { GameSessionsController } from './transport/game-sessions.controller.js'
     { provide: gameSessionClock, useValue: nativeGameSessionClock },
     {
       provide: agentDecisionGateway,
-      useFactory: () =>
+      inject: [PinoLogger],
+      useFactory: (logger: PinoLogger) =>
         process.env.NODE_ENV === 'test'
           ? new DeterministicAgentDecisionGateway('ko')
-          : new LLMAgentDecisionGateway(undefined, 'ko'),
+          : new LLMAgentDecisionGateway(undefined, 'ko', createStructuredLogger(logger)),
     },
   ],
 })

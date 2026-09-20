@@ -6,10 +6,23 @@ import * as v from 'valibot';
 
 import { parseMafiaGameProjection, validateMafiaGameProjection } from './entity';
 import { type GameSessionApiError, toGameSessionApiError } from './error';
+import { addHolderTokenHeader, captureHolderToken, clearHolderToken } from './holder-token';
 
 const gameSessionsApi = ky.create({
   baseUrl: `${import.meta.env.VITE_API_BASE_URL}/game-sessions/`,
-  credentials: 'include',
+  hooks: {
+    beforeRequest: [
+      ({ request }) => {
+        addHolderTokenHeader(request);
+      },
+    ],
+    afterResponse: [
+      ({ response }) => {
+        captureHolderToken(response);
+        return response;
+      },
+    ],
+  },
 });
 const ActiveMafiaGameSessionSchema = v.object({
   projection: v.unknown(),
@@ -40,12 +53,6 @@ const GuestPlayAllowanceSchema = v.object({
 });
 
 export class MafiaGameSessionClient {
-  readonly #sessionId: string;
-
-  constructor(sessionId: string) {
-    this.#sessionId = sessionId;
-  }
-
   static createSession(
     idempotencyKey: string,
     settings: { humanName: string; outputLanguage: MafiaOutputLanguage },
@@ -59,7 +66,9 @@ export class MafiaGameSessionClient {
 
   static activeSession(): ResultAsync<ActiveMafiaGameSession | undefined, GameSessionApiError> {
     return ResultAsync.fromPromise(
-      gameSessionsApi.get('mafia/active').json<unknown>(),
+      MafiaGameSessionClient.#withHolderRecovery(() =>
+        gameSessionsApi.get('mafia/active').json<unknown>(),
+      ),
       toGameSessionApiError,
     ).andThen((value) => {
       if (value === null) return ok(undefined);
@@ -74,7 +83,9 @@ export class MafiaGameSessionClient {
 
   static guestPlayAllowance(): ResultAsync<GuestPlayAllowance, GameSessionApiError> {
     return ResultAsync.fromPromise(
-      gameSessionsApi.get('mafia/allowance').json<unknown>(),
+      MafiaGameSessionClient.#withHolderRecovery(() =>
+        gameSessionsApi.get('mafia/allowance').json<unknown>(),
+      ),
       toGameSessionApiError,
     ).andThen((value) => {
       const parsed = v.safeParse(GuestPlayAllowanceSchema, value);
@@ -85,9 +96,7 @@ export class MafiaGameSessionClient {
   }
 
   getSnapshot(): ResultAsync<MafiaGameProjection, GameSessionApiError> {
-    return MafiaGameSessionClient.#request(
-      gameSessionsApi.get(`${this.#sessionId}/snapshot`).json(),
-    );
+    return MafiaGameSessionClient.#request(() => gameSessionsApi.get('mafia/snapshot').json());
   }
 
   submitPublicSpeech(
@@ -95,7 +104,7 @@ export class MafiaGameSessionClient {
     idempotencyKey: string,
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
     return MafiaGameSessionClient.#postProjection(
-      `${this.#sessionId}/actions/public-speech`,
+      'mafia/actions/public-speech',
       { content },
       idempotencyKey,
     );
@@ -106,7 +115,7 @@ export class MafiaGameSessionClient {
     idempotencyKey: string,
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
     return MafiaGameSessionClient.#postProjection(
-      `${this.#sessionId}/actions/mafia-chat`,
+      'mafia/actions/mafia-chat',
       { content },
       idempotencyKey,
     );
@@ -117,7 +126,7 @@ export class MafiaGameSessionClient {
     idempotencyKey: string,
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
     return MafiaGameSessionClient.#postProjection(
-      `${this.#sessionId}/actions/nomination`,
+      'mafia/actions/nomination',
       { targetParticipantId },
       idempotencyKey,
     );
@@ -128,7 +137,7 @@ export class MafiaGameSessionClient {
     idempotencyKey: string,
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
     return MafiaGameSessionClient.#postProjection(
-      `${this.#sessionId}/actions/verdict`,
+      'mafia/actions/verdict',
       { vote },
       idempotencyKey,
     );
@@ -139,7 +148,7 @@ export class MafiaGameSessionClient {
     idempotencyKey: string,
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
     return MafiaGameSessionClient.#postProjection(
-      `${this.#sessionId}/actions/final-defence`,
+      'mafia/actions/final-defence',
       { content },
       idempotencyKey,
     );
@@ -147,21 +156,21 @@ export class MafiaGameSessionClient {
 
   submitMafiaTarget(targetParticipantId: string, idempotencyKey: string) {
     return MafiaGameSessionClient.#postProjection(
-      `${this.#sessionId}/actions/mafia-target`,
+      'mafia/actions/mafia-target',
       { targetParticipantId },
       idempotencyKey,
     );
   }
   submitDoctorProtection(targetParticipantId: string, idempotencyKey: string) {
     return MafiaGameSessionClient.#postProjection(
-      `${this.#sessionId}/actions/doctor-protection`,
+      'mafia/actions/doctor-protection',
       { targetParticipantId },
       idempotencyKey,
     );
   }
   submitPoliceInvestigation(targetParticipantId: string, idempotencyKey: string) {
     return MafiaGameSessionClient.#postProjection(
-      `${this.#sessionId}/actions/police-investigation`,
+      'mafia/actions/police-investigation',
       { targetParticipantId },
       idempotencyKey,
     );
@@ -173,7 +182,7 @@ export class MafiaGameSessionClient {
     idempotencyKey: string,
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
     return MafiaGameSessionClient.#postProjection(
-      `${this.#sessionId}/actions/discussion-time-adjustment`,
+      'mafia/actions/discussion-time-adjustment',
       { adjustmentSeconds, expectedDeadline },
       idempotencyKey,
     );
@@ -187,13 +196,15 @@ export class MafiaGameSessionClient {
   }: MafiaGameSessionSubscriptionOptions): ResultAsync<void, GameSessionApiError> {
     return ResultAsync.fromPromise(
       (async () => {
-        const response = await gameSessionsApi.get(`${this.#sessionId}/events`, {
-          headers: {
-            Accept: 'text/event-stream',
-            ...(lastEventId ? { 'Last-Event-ID': lastEventId } : {}),
-          },
-          signal,
-        });
+        const response = await MafiaGameSessionClient.#withHolderRecovery(() =>
+          gameSessionsApi.get('mafia/events', {
+            headers: {
+              Accept: 'text/event-stream',
+              ...(lastEventId ? { 'Last-Event-ID': lastEventId } : {}),
+            },
+            signal,
+          }),
+        );
         onConnected();
 
         for await (const event of parseServerSentEvents(response)) {
@@ -214,11 +225,12 @@ export class MafiaGameSessionClient {
   }
 
   static #request(
-    request: Promise<unknown>,
+    request: () => Promise<unknown>,
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
-    return ResultAsync.fromPromise(request, toGameSessionApiError).andThen(
-      validateMafiaGameProjection,
-    );
+    return ResultAsync.fromPromise(
+      MafiaGameSessionClient.#withHolderRecovery(request),
+      toGameSessionApiError,
+    ).andThen(validateMafiaGameProjection);
   }
 
   static #postProjection(
@@ -226,7 +238,7 @@ export class MafiaGameSessionClient {
     json: Record<string, unknown>,
     idempotencyKey: string,
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
-    return MafiaGameSessionClient.#request(
+    return MafiaGameSessionClient.#request(() =>
       gameSessionsApi
         .post(path, {
           json,
@@ -234,5 +246,18 @@ export class MafiaGameSessionClient {
         })
         .json(),
     );
+  }
+
+  static async #withHolderRecovery<Value>(request: () => Promise<Value>): Promise<Value> {
+    try {
+      return await request();
+    } catch (error) {
+      const apiError = toGameSessionApiError(error);
+      if (apiError.type !== 'holder-token-invalid') throw error;
+
+      clearHolderToken();
+      await gameSessionsApi.get('mafia/active').json();
+      return request();
+    }
   }
 }

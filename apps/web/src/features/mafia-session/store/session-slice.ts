@@ -1,12 +1,10 @@
 import type { GameSessionSliceCreator, SessionSlice } from './game-session.types';
 
 export const createSessionSlice: GameSessionSliceCreator<SessionSlice> = (set, get) => ({
-  sessionId: undefined,
   outputLanguage: undefined,
   creationKey: undefined,
-  setSessionId: (sessionId, outputLanguage) => {
+  setGameSession: (outputLanguage) => {
     set({
-      sessionId,
       outputLanguage,
       creationKey: undefined,
       gameActionDrafts: {},
@@ -27,7 +25,6 @@ export const createSessionSlice: GameSessionSliceCreator<SessionSlice> = (set, g
   },
   clearSession: () => {
     set({
-      sessionId: undefined,
       outputLanguage: undefined,
       creationKey: undefined,
       gameActionDrafts: {},

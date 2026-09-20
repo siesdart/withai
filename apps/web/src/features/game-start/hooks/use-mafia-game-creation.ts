@@ -38,8 +38,8 @@ export function useMafiaGameCreation() {
           await MafiaGameSessionClient.createSession(state.ensureCreationKey(), settings))
         : firstResult;
     await result.match(
-      async (projection) => {
-        useGameSessionStore.getState().setSessionId(projection.sessionId, outputLanguage);
+      async () => {
+        useGameSessionStore.getState().setGameSession(outputLanguage);
         await navigate({ to: '/mafia' });
       },
       () => {

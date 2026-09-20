@@ -34,6 +34,8 @@ import {
 import { GameSessionsService } from '../../../src/game-sessions/application/game-sessions.service.js';
 import { RedisGameSessionAuthority } from '../../../src/game-sessions/durability/redis-game-session-authority.js';
 
+const holderTokenHeader = 'X-Holder-Token';
+
 const flushMicrotasks = async (remaining = 10): Promise<void> => {
   if (remaining === 0) return;
   await Promise.resolve();
@@ -106,16 +108,10 @@ class ControlledGameSessionClock implements GameSessionClock {
   }
 }
 
-function firstSetCookie(value: unknown) {
-  if (Array.isArray(value) && typeof value[0] === 'string') {
-    return value[0].split(';')[0];
-  }
-
-  if (typeof value === 'string') {
-    return value.split(';')[0];
-  }
-
-  throw new Error('Expected a guest cookie.');
+function holderToken(headers: Record<string, unknown>) {
+  const token = headers[holderTokenHeader.toLowerCase()];
+  if (typeof token === 'string') return token;
+  throw new Error('Expected an X-Holder-Token response header.');
 }
 
 type LifecycleFixture = {
@@ -189,8 +185,7 @@ const createLifecycleFixture = async (options?: {
 
 const openSse = async (
   app: INestApplication,
-  sessionId: string,
-  guestCookie: string,
+  holderTokenValue: string,
 ): Promise<{ close: () => Promise<void> }> => {
   const address = app.getHttpServer().address();
   if (!address || typeof address === 'string') {
@@ -202,8 +197,8 @@ const openSse = async (
       {
         hostname: '127.0.0.1',
         port: address.port,
-        path: `/game-sessions/${sessionId}/events`,
-        headers: { Cookie: guestCookie },
+        path: '/game-sessions/mafia/events',
+        headers: { [holderTokenHeader]: holderTokenValue },
       },
       (eventResponse) => {
         let body = '';
@@ -280,7 +275,7 @@ describe('Mafia Game Session API', () => {
     const initial = await request(app.getHttpServer())
       .get('/game-sessions/mafia/allowance')
       .expect(200);
-    const guestCookie = firstSetCookie(initial.headers['set-cookie']);
+    const initialHolderToken = holderToken(initial.headers);
 
     expect(initial.body).toEqual({
       remaining: 10,
@@ -290,13 +285,13 @@ describe('Mafia Game Session API', () => {
 
     await request(app.getHttpServer())
       .post('/game-sessions/mafia')
-      .set('Cookie', guestCookie)
+      .set(holderTokenHeader, initialHolderToken)
       .send({ participantCount: 5 })
       .expect(201);
 
     await request(app.getHttpServer())
       .get('/game-sessions/mafia/allowance')
-      .set('Cookie', guestCookie)
+      .set(holderTokenHeader, initialHolderToken)
       .expect({
         remaining: 9,
         limit: 10,
@@ -349,8 +344,8 @@ describe('Mafia Game Session API', () => {
     await restartedApp.listen(0, '127.0.0.1');
     try {
       await request(restartedApp.getHttpServer())
-        .get(`/game-sessions/${created.body.sessionId}/snapshot`)
-        .set('Cookie', firstSetCookie(created.headers['set-cookie']))
+        .get('/game-sessions/mafia/snapshot')
+        .set(holderTokenHeader, holderToken(created.headers))
         .expect(200)
         .expect((response) => {
           expect(response.body.sessionId).toBe(created.body.sessionId);
@@ -364,9 +359,9 @@ describe('Mafia Game Session API', () => {
           {
             hostname: '127.0.0.1',
             port: address.port,
-            path: `/game-sessions/${created.body.sessionId}/events`,
+            path: '/game-sessions/mafia/events',
             headers: {
-              Cookie: firstSetCookie(created.headers['set-cookie']),
+              [holderTokenHeader]: holderToken(created.headers),
               'Last-Event-ID': '0',
             },
           },
@@ -396,17 +391,17 @@ describe('Mafia Game Session API', () => {
       .post('/game-sessions/mafia')
       .send({ participantCount: 5 })
       .expect(201);
-    const guestCookie = firstSetCookie(holder.headers['set-cookie']);
+    const holderTokenValue = holderToken(holder.headers);
     const [first, second] = await Promise.all([
       request(app.getHttpServer())
         .post('/game-sessions/mafia')
-        .set('Cookie', guestCookie)
+        .set(holderTokenHeader, holderTokenValue)
         .set('Idempotency-Key', 'concurrent-http-creation-key')
         .send({ participantCount: 5 })
         .expect(201),
       request(app.getHttpServer())
         .post('/game-sessions/mafia')
-        .set('Cookie', guestCookie)
+        .set(holderTokenHeader, holderTokenValue)
         .set('Idempotency-Key', 'concurrent-http-creation-key')
         .send({ participantCount: 5 })
         .expect(201),
@@ -427,8 +422,8 @@ describe('Mafia Game Session API', () => {
       .expect(201);
 
     await request(app.getHttpServer())
-      .post(`/game-sessions/${created.body.sessionId}/actions/public-speech`)
-      .set('Cookie', firstSetCookie(created.headers['set-cookie']))
+      .post('/game-sessions/mafia/actions/public-speech')
+      .set(holderTokenHeader, holderToken(created.headers))
       .send({ content: 'I want to hear from the other participants.' })
       .expect(400);
   });
@@ -437,8 +432,7 @@ describe('Mafia Game Session API', () => {
     const created = await request(app.getHttpServer())
       .post('/game-sessions/mafia')
       .send({ participantCount: 5 });
-    const sessionId = String(created.body.sessionId);
-    const guestCookie = firstSetCookie(created.headers['set-cookie']);
+    const createdHolderToken = holderToken(created.headers);
 
     const address = app.getHttpServer().address();
     if (!address || typeof address === 'string') {
@@ -450,8 +444,8 @@ describe('Mafia Game Session API', () => {
         {
           hostname: '127.0.0.1',
           port: address.port,
-          path: `/game-sessions/${sessionId}/events`,
-          headers: { Cookie: guestCookie },
+          path: '/game-sessions/mafia/events',
+          headers: { [holderTokenHeader]: createdHolderToken },
         },
         (eventResponse) => {
           let body = '';
@@ -479,18 +473,17 @@ describe('Mafia Game Session API', () => {
       .post('/game-sessions/mafia')
       .send({ participantCount: 5 })
       .expect(201);
-    const guestCookie = firstSetCookie(created.headers['set-cookie']);
-    const sessionId = String(created.body.sessionId);
+    const createdHolderToken = holderToken(created.headers);
     clock.elapseWithoutTimers(31_000);
     await request(app.getHttpServer())
-      .get(`/game-sessions/${sessionId}/snapshot`)
-      .set('Cookie', guestCookie)
+      .get('/game-sessions/mafia/snapshot')
+      .set(holderTokenHeader, createdHolderToken)
       .expect(200)
       .expect((response) => expect(response.body.public.phase).toBe('discussion'));
 
     const speech = await request(app.getHttpServer())
-      .post(`/game-sessions/${sessionId}/actions/public-speech`)
-      .set('Cookie', guestCookie)
+      .post('/game-sessions/mafia/actions/public-speech')
+      .set(holderTokenHeader, createdHolderToken)
       .set('Idempotency-Key', 'a-public-speech-idempotency-key')
       .send({ content: "I want to hear everyone's read before we nominate." })
       .expect(201);
@@ -517,8 +510,8 @@ describe('Mafia Game Session API', () => {
     expect(speech.body.public).not.toHaveProperty('outcomes');
 
     const retried = await request(app.getHttpServer())
-      .post(`/game-sessions/${sessionId}/actions/public-speech`)
-      .set('Cookie', guestCookie)
+      .post('/game-sessions/mafia/actions/public-speech')
+      .set(holderTokenHeader, createdHolderToken)
       .set('Idempotency-Key', 'a-public-speech-idempotency-key')
       .send({ content: "I want to hear everyone's read before we nominate." })
       .expect(201);
@@ -538,8 +531,8 @@ describe('Mafia Game Session API', () => {
         {
           hostname: '127.0.0.1',
           port: address.port,
-          path: `/game-sessions/${sessionId}/events`,
-          headers: { Cookie: guestCookie, 'Last-Event-ID': '1' },
+          path: '/game-sessions/mafia/events',
+          headers: { [holderTokenHeader]: createdHolderToken, 'Last-Event-ID': '1' },
         },
         (eventResponse) => {
           let body = '';
@@ -571,34 +564,33 @@ describe('Mafia Game Session API', () => {
       .post('/game-sessions/mafia')
       .send({ participantCount: 5 })
       .expect(201);
-    const guestCookie = firstSetCookie(created.headers['set-cookie']);
-    const sessionId = String(created.body.sessionId);
+    const createdHolderToken = holderToken(created.headers);
     clock.elapseWithoutTimers(31_000);
     await request(app.getHttpServer())
-      .get(`/game-sessions/${sessionId}/snapshot`)
-      .set('Cookie', guestCookie)
+      .get('/game-sessions/mafia/snapshot')
+      .set(holderTokenHeader, createdHolderToken)
       .expect(200)
       .expect((response) => expect(response.body.public.phase).toBe('discussion'));
     const firstKey = 'first-public-speech-idempotency-key';
 
     const first = await request(app.getHttpServer())
-      .post(`/game-sessions/${sessionId}/actions/public-speech`)
-      .set('Cookie', guestCookie)
+      .post('/game-sessions/mafia/actions/public-speech')
+      .set(holderTokenHeader, createdHolderToken)
       .set('Idempotency-Key', firstKey)
       .send({ content: 'I want more time to consider the evidence.' })
       .expect(201);
 
     await request(app.getHttpServer())
-      .post(`/game-sessions/${sessionId}/actions/public-speech`)
-      .set('Cookie', guestCookie)
+      .post('/game-sessions/mafia/actions/public-speech')
+      .set(holderTokenHeader, createdHolderToken)
       .set('Idempotency-Key', 'second-public-speech-idempotency-key')
       .send({ content: 'I have changed my mind.' })
       .expect('Retry-After', '1')
       .expect(429);
 
     const retried = await request(app.getHttpServer())
-      .post(`/game-sessions/${sessionId}/actions/public-speech`)
-      .set('Cookie', guestCookie)
+      .post('/game-sessions/mafia/actions/public-speech')
+      .set(holderTokenHeader, createdHolderToken)
       .set('Idempotency-Key', firstKey)
       .send({ content: 'I want more time to consider the evidence.' })
       .expect(201);
@@ -608,8 +600,8 @@ describe('Mafia Game Session API', () => {
     await clock.advanceBy(1100);
 
     await request(app.getHttpServer())
-      .post(`/game-sessions/${sessionId}/actions/public-speech`)
-      .set('Cookie', guestCookie)
+      .post('/game-sessions/mafia/actions/public-speech')
+      .set(holderTokenHeader, createdHolderToken)
       .set('Idempotency-Key', 'second-public-speech-idempotency-key')
       .send({ content: 'I have changed my mind.' })
       .expect(201);
@@ -619,13 +611,13 @@ describe('Mafia Game Session API', () => {
     const first = await request(app.getHttpServer())
       .post('/game-sessions/mafia')
       .send({ participantCount: 5 });
-    const guestCookie = firstSetCookie(first.headers['set-cookie']);
+    const holderTokenValue = holderToken(first.headers);
 
     for (let index = 0; index < 9; index += 1) {
       // oxlint-disable-next-line no-await-in-loop -- each request must observe the previous allowance count.
       const repeated = await request(app.getHttpServer())
         .post('/game-sessions/mafia')
-        .set('Cookie', guestCookie)
+        .set(holderTokenHeader, holderTokenValue)
         .send({ participantCount: 5 })
         .expect(201);
       expect(repeated.body.sessionId).toBe(first.body.sessionId);
@@ -633,7 +625,7 @@ describe('Mafia Game Session API', () => {
 
     const repeated = await request(app.getHttpServer())
       .post('/game-sessions/mafia')
-      .set('Cookie', guestCookie)
+      .set(holderTokenHeader, holderTokenValue)
       .send({ participantCount: 5 })
       .expect(201);
     expect(repeated.body.sessionId).toBe(first.body.sessionId);
@@ -649,7 +641,7 @@ describe('Mafia Game Session API', () => {
 
     const retried = await request(app.getHttpServer())
       .post('/game-sessions/mafia')
-      .set('Cookie', firstSetCookie(first.headers['set-cookie']))
+      .set(holderTokenHeader, holderToken(first.headers))
       .set('Idempotency-Key', idempotencyKey)
       .send({ participantCount: 5 })
       .expect(201);
@@ -659,7 +651,7 @@ describe('Mafia Game Session API', () => {
     expect(retried.body.eventId).toBeGreaterThanOrEqual(1);
   });
 
-  it('does not share an idempotent session with a different guest', async () => {
+  it('does not share an idempotent session with a different holder', async () => {
     const idempotencyKey = 'a-secure-client-generated-idempotency-key';
     const first = await request(app.getHttpServer())
       .post('/game-sessions/mafia')
@@ -674,9 +666,10 @@ describe('Mafia Game Session API', () => {
 
     expect(second.body.sessionId).not.toBe(first.body.sessionId);
     await request(app.getHttpServer())
-      .get(`/game-sessions/${first.body.sessionId}/snapshot`)
-      .set('Cookie', firstSetCookie(second.headers['set-cookie']))
-      .expect(403);
+      .get('/game-sessions/mafia/snapshot')
+      .set(holderTokenHeader, holderToken(second.headers))
+      .expect(200)
+      .expect((response) => expect(response.body.sessionId).toBe(second.body.sessionId));
   });
 
   it('rejects idempotency key reuse with a different request body', async () => {
@@ -689,9 +682,9 @@ describe('Mafia Game Session API', () => {
 
     await request(app.getHttpServer())
       .post('/game-sessions/mafia')
-      .set('Cookie', firstSetCookie(first.headers['set-cookie']))
+      .set(holderTokenHeader, holderToken(first.headers))
       .set('Idempotency-Key', idempotencyKey)
-      .send({ participantCount: 10 })
+      .send({ participantCount: 6 })
       .expect(409);
   });
 
@@ -700,11 +693,11 @@ describe('Mafia Game Session API', () => {
       .post('/game-sessions/mafia')
       .send({ participantCount: 5 })
       .expect(201);
-    const guestCookie = firstSetCookie(first.headers['set-cookie']);
+    const holderTokenValue = holderToken(first.headers);
 
     await request(app.getHttpServer())
       .post('/game-sessions/mafia')
-      .set('Cookie', guestCookie)
+      .set(holderTokenHeader, holderTokenValue)
       .send({ participantCount: 5.5 })
       .expect(400);
 
@@ -712,14 +705,14 @@ describe('Mafia Game Session API', () => {
       // oxlint-disable-next-line no-await-in-loop -- each request must observe the previous allowance count.
       await request(app.getHttpServer())
         .post('/game-sessions/mafia')
-        .set('Cookie', guestCookie)
+        .set(holderTokenHeader, holderTokenValue)
         .send({ participantCount: 5 })
         .expect(201);
     }
 
     const repeated = await request(app.getHttpServer())
       .post('/game-sessions/mafia')
-      .set('Cookie', guestCookie)
+      .set(holderTokenHeader, holderTokenValue)
       .send({ participantCount: 5 })
       .expect(201);
     expect(repeated.body.sessionId).toBe(first.body.sessionId);
@@ -730,11 +723,11 @@ describe('Mafia Game Session API', () => {
       .post('/game-sessions/mafia')
       .send({ participantCount: 5 })
       .expect(201);
-    const guestCookie = firstSetCookie(created.headers['set-cookie']);
+    const createdHolderToken = holderToken(created.headers);
 
     const response = await request(app.getHttpServer())
-      .post(`/game-sessions/${created.body.sessionId}/actions/public-speech`)
-      .set('Cookie', guestCookie)
+      .post('/game-sessions/mafia/actions/public-speech')
+      .set(holderTokenHeader, createdHolderToken)
       .set('Idempotency-Key', 'public-speech-outside-discussion-key')
       .send({ content: 'The first Night is still resolving.' })
       .expect(400);
@@ -756,13 +749,12 @@ describe('Mafia Game Session API lifecycle acceptance', () => {
         .post('/game-sessions/mafia')
         .send({ participantCount: 5 })
         .expect(201);
-      const sessionId = String(created.body.sessionId);
-      const guestCookie = firstSetCookie(created.headers['set-cookie']);
+      const holderTokenValue = holderToken(created.headers);
 
       await fixture.clock.advanceBy(30_001);
       await request(fixture.app.getHttpServer())
-        .post(`/game-sessions/${sessionId}/actions/public-speech`)
-        .set('Cookie', guestCookie)
+        .post('/game-sessions/mafia/actions/public-speech')
+        .set(holderTokenHeader, holderTokenValue)
         .set('Idempotency-Key', 'all-agent-public-replies-key')
         .send({ content: 'What should we make of the night?' })
         .expect(201);
@@ -771,8 +763,8 @@ describe('Mafia Game Session API lifecycle acceptance', () => {
       await fixture.clock.advanceBy(10_000);
 
       await request(fixture.app.getHttpServer())
-        .get(`/game-sessions/${sessionId}/snapshot`)
-        .set('Cookie', guestCookie)
+        .get('/game-sessions/mafia/snapshot')
+        .set(holderTokenHeader, holderTokenValue)
         .expect(200)
         .expect((response) => {
           const agentMessages = response.body.timeline.filter(
@@ -795,9 +787,8 @@ describe('Mafia Game Session API lifecycle acceptance', () => {
         .post('/game-sessions/mafia')
         .send({ participantCount: 5 })
         .expect(201);
-      const sessionId = String(created.body.sessionId);
-      const guestCookie = firstSetCookie(created.headers['set-cookie']);
-      const stream = await openSse(fixture.app, sessionId, guestCookie);
+      const holderTokenValue = holderToken(created.headers);
+      const stream = await openSse(fixture.app, holderTokenValue);
 
       vi.clearAllMocks();
       await stream.close();
@@ -805,12 +796,12 @@ describe('Mafia Game Session API lifecycle acceptance', () => {
       await fixture.clock.advanceBy(60_001);
 
       await request(fixture.app.getHttpServer())
-        .get(`/game-sessions/${sessionId}/snapshot`)
-        .set('Cookie', guestCookie)
+        .get('/game-sessions/mafia/snapshot')
+        .set(holderTokenHeader, holderTokenValue)
         .expect(403);
       await request(fixture.app.getHttpServer())
-        .post(`/game-sessions/${sessionId}/actions/public-speech`)
-        .set('Cookie', guestCookie)
+        .post('/game-sessions/mafia/actions/public-speech')
+        .set(holderTokenHeader, holderTokenValue)
         .set('Idempotency-Key', 'abandoned-session-public-speech-key')
         .send({ content: 'This action must not be accepted.' })
         .expect(403);
@@ -836,23 +827,22 @@ describe('Mafia Game Session API lifecycle acceptance', () => {
         .post('/game-sessions/mafia')
         .send({ participantCount: 5 })
         .expect(201);
-      const sessionId = String(created.body.sessionId);
-      const guestCookie = firstSetCookie(created.headers['set-cookie']);
-      const stream = await openSse(fixture.app, sessionId, guestCookie);
+      const holderTokenValue = holderToken(created.headers);
+      const stream = await openSse(fixture.app, holderTokenValue);
 
       for (let elapsed = 0; elapsed < 15 * 60 * 1000 + 1; elapsed += 30 * 1000)
         await fixture.clock.advanceBy(30 * 1000);
       await request(fixture.app.getHttpServer())
-        .get(`/game-sessions/${sessionId}/snapshot`)
-        .set('Cookie', guestCookie)
+        .get('/game-sessions/mafia/snapshot')
+        .set(holderTokenHeader, holderTokenValue)
         .expect(200);
 
       await stream.close();
       await flushMicrotasks();
       await fixture.clock.advanceBy(15 * 60 * 1000 + 1);
       await request(fixture.app.getHttpServer())
-        .get(`/game-sessions/${sessionId}/snapshot`)
-        .set('Cookie', guestCookie)
+        .get('/game-sessions/mafia/snapshot')
+        .set(holderTokenHeader, holderTokenValue)
         .expect(403);
     } finally {
       await fixture.close();
@@ -871,8 +861,7 @@ describe('Mafia Game Session API lifecycle acceptance', () => {
         .post('/game-sessions/mafia')
         .send({ participantCount: 5 })
         .expect(201);
-      const sessionId = String(created.body.sessionId);
-      const guestCookie = firstSetCookie(created.headers['set-cookie']);
+      const holderTokenValue = holderToken(created.headers);
 
       await first.close();
       clock.elapseWithoutTimers(30_001);
@@ -880,14 +869,14 @@ describe('Mafia Game Session API lifecycle acceptance', () => {
       const second = await createLifecycleFixture({ clock, gatewaySpy, prefix, redis });
       try {
         const recovered = await request(second.app.getHttpServer())
-          .get(`/game-sessions/${sessionId}/snapshot`)
-          .set('Cookie', guestCookie)
+          .get('/game-sessions/mafia/snapshot')
+          .set(holderTokenHeader, holderTokenValue)
           .expect(200);
         expect(recovered.body.public.phase).toBe('discussion');
 
         const repeated = await request(second.app.getHttpServer())
-          .get(`/game-sessions/${sessionId}/snapshot`)
-          .set('Cookie', guestCookie)
+          .get('/game-sessions/mafia/snapshot')
+          .set(holderTokenHeader, holderTokenValue)
           .expect(200);
         expect(repeated.body.public.phase).toBe('discussion');
         expect(repeated.body.eventId).toBe(recovered.body.eventId);

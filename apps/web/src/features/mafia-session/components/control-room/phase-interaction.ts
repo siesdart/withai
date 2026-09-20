@@ -11,7 +11,6 @@ export type PhasePanel =
       type: 'discussion';
       disabled: boolean;
       phaseDeadline: string;
-      sessionId: string;
       gameAction: UseGameActionResult;
     }
   | { type: 'nomination' }
@@ -86,7 +85,6 @@ export function createPhaseInteraction({
         type: 'discussion' as const,
         disabled,
         phaseDeadline: snapshot.public.phaseDeadline,
-        sessionId: snapshot.sessionId,
         gameAction,
       },
       participantSelection: undefined,

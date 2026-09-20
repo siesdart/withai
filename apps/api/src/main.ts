@@ -18,7 +18,8 @@ async function bootstrap() {
   );
   app.enableCors({
     origin: process.env.ALLOWED_ORIGIN ?? 'http://localhost:5173',
-    credentials: true,
+    allowedHeaders: ['Content-Type', 'Idempotency-Key', 'Last-Event-ID', 'X-Holder-Token'],
+    exposedHeaders: ['Retry-After', 'X-Holder-Token'],
   });
   app.set('trust proxy', true);
 
@@ -27,7 +28,7 @@ async function bootstrap() {
       .setTitle('WithAI Game Sessions API')
       .setDescription('Server-authoritative APIs for WithAI Game Sessions.')
       .setVersion('0.1.0')
-      .addCookieAuth('withai_guest')
+      .addApiKey({ type: 'apiKey', name: 'X-Holder-Token', in: 'header' }, 'holder-token')
       .addTag('Game Sessions')
       .build();
     const openApiDocument = SwaggerModule.createDocument(app, openApiConfig);

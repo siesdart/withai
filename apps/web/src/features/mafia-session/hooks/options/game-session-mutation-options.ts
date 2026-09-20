@@ -7,14 +7,12 @@ import { isGameSessionApiError } from '../../api/error';
 import { gameSessionSnapshotOptions } from './game-session-snapshot-options';
 
 type GameSessionMutationConfig<Variables> = {
-  sessionId: string;
   mutationFn: (variables: Variables) => ResultAsync<MafiaGameProjection, GameSessionApiError>;
   onRateLimited?: (retryAfterMs: number) => void;
   onSuccess?: (projection: MafiaGameProjection) => void;
 };
 
 export function gameSessionMutationOptions<Variables>({
-  sessionId,
   mutationFn,
   onRateLimited,
   onSuccess,
@@ -22,7 +20,7 @@ export function gameSessionMutationOptions<Variables>({
   return mutationOptions({
     mutationFn: (variables: Variables) => unwrapGameSessionResult(mutationFn(variables)),
     onSuccess: (projection, _variables, _onMutateResult, context) => {
-      updateGameSessionSnapshot(context.client, sessionId, projection);
+      updateGameSessionSnapshot(context.client, projection);
       onSuccess?.(projection);
     },
     onError: (error) => {
@@ -30,16 +28,14 @@ export function gameSessionMutationOptions<Variables>({
         onRateLimited?.(error.retryAfterMs);
       }
     },
-    meta: { sessionId },
   });
 }
 
 export function updateGameSessionSnapshot(
   queryClient: QueryClient,
-  sessionId: string,
   projection: MafiaGameProjection,
 ) {
-  queryClient.setQueryData(gameSessionSnapshotOptions(sessionId).queryKey, projection);
+  queryClient.setQueryData(gameSessionSnapshotOptions().queryKey, projection);
 }
 
 async function unwrapGameSessionResult(

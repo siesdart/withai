@@ -3,6 +3,7 @@ import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { useCallback } from 'react';
 
 import { isUnavailableGameSession } from '@/features/mafia-session/api/error';
+import { getHolderToken } from '@/features/mafia-session/api/holder-token';
 import { ControlRoom } from '@/features/mafia-session/components/control-room/control-room';
 import { ControlRoomError } from '@/features/mafia-session/components/control-room/control-room-error';
 import { ControlRoomLoading } from '@/features/mafia-session/components/control-room/control-room-loading';
@@ -10,32 +11,25 @@ import { gameSessionSnapshotOptions } from '@/features/mafia-session/hooks/optio
 import { useGameSessionStore } from '@/features/mafia-session/store/game-session';
 
 export const Route = createFileRoute('/mafia')({
-  beforeLoad: (): { sessionId: string } => {
-    const { sessionId } = useGameSessionStore.getState();
-    if (sessionId) {
-      return { sessionId };
+  beforeLoad: () => {
+    if (getHolderToken()) {
+      return;
     }
     throw Route.redirect({ to: '/' });
   },
   loader: ({ context }) =>
     context.queryClient.query({
-      ...gameSessionSnapshotOptions(context.sessionId),
+      ...gameSessionSnapshotOptions(),
       staleTime: 'static',
     }),
   component: () => {
-    const { sessionId } = Route.useRouteContext();
-    return <ControlRoom sessionId={sessionId} />;
+    return <ControlRoom />;
   },
   errorComponent: ({ error }) => {
     const router = useRouter();
     const queryClient = useQueryClient();
     const onRetry = useCallback(() => {
-      const { sessionId } = useGameSessionStore.getState();
-      if (sessionId) {
-        queryClient.removeQueries({
-          queryKey: gameSessionSnapshotOptions(sessionId).queryKey,
-        });
-      }
+      queryClient.removeQueries({ queryKey: gameSessionSnapshotOptions().queryKey });
       void router.invalidate();
     }, [queryClient, router]);
 

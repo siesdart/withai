@@ -1,5 +1,4 @@
 export const gameSessionsConfig = {
-  guestCookieName: 'withai_guest',
   guestAllowance: 10,
   humanActionCooldownMs: 1000,
   agentChatTypingMsPerCharacter: 0,

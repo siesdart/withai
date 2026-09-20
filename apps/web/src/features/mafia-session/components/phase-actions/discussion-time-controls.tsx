@@ -4,12 +4,11 @@ import { MinusIcon, PlusIcon } from 'lucide-react';
 import { useDiscussionTimeAdjustment } from '../../hooks/actions/use-discussion-time-adjustment';
 
 type DiscussionTimeControlsProps = {
-  sessionId: string;
   phaseDeadline: string;
 };
 
-export function DiscussionTimeControls({ sessionId, phaseDeadline }: DiscussionTimeControlsProps) {
-  const discussionTimeAdjustment = useDiscussionTimeAdjustment(sessionId, phaseDeadline);
+export function DiscussionTimeControls({ phaseDeadline }: DiscussionTimeControlsProps) {
+  const discussionTimeAdjustment = useDiscussionTimeAdjustment(phaseDeadline);
   const cooldownLabel = discussionTimeAdjustment.retryAfterSeconds
     ? ` Available again in ${discussionTimeAdjustment.retryAfterSeconds} seconds.`
     : '';

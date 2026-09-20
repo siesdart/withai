@@ -30,7 +30,7 @@ export function PhaseActionPanel({ panel, isNight }: { panel: PhasePanel; isNigh
     ))
     .with({ type: 'discussion' }, (p) => (
       <div className="flex shrink-0 flex-col">
-        <DiscussionTimeControls phaseDeadline={p.phaseDeadline} sessionId={p.sessionId} />
+        <DiscussionTimeControls phaseDeadline={p.phaseDeadline} />
         <PublicSpeechForm disabled={p.disabled} gameAction={p.gameAction} />
       </div>
     ))

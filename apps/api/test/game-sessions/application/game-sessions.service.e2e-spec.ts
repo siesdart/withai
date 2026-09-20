@@ -13,6 +13,7 @@ import type { GameSessionError } from '../../../src/game-sessions/application/ga
 import { GameSessionsService } from '../../../src/game-sessions/application/game-sessions.service.js';
 import { RedisGameSessionAuthority } from '../../../src/game-sessions/durability/redis-game-session-authority.js';
 import { GameSessionsController } from '../../../src/game-sessions/transport/game-sessions.controller.js';
+import { createHolderTokenSigner } from '../../../src/game-sessions/transport/holder-token.js';
 import { MafiaGameSessionProjectionEntity } from '../../../src/game-sessions/transport/mafia-game-session-projection.entity.js';
 
 const createDeferred = <Value>() => {
@@ -1555,7 +1556,9 @@ describe('GameSessionsService', () => {
     vi.spyOn(service, 'eventsFor').mockReturnValue(eventsFor.promise);
     const request = Object.assign(new EventEmitter(), {
       destroyed: false,
-      headers: {},
+      headers: {
+        'x-holder-token': createHolderTokenSigner('local-development-secret').sign('holder-id'),
+      },
     }) as unknown as Request;
     const flushHeaders = vi.fn();
     const write = vi.fn();
@@ -1570,7 +1573,13 @@ describe('GameSessionsService', () => {
       subscribed = true;
     });
 
-    const handling = controller.events('session-id', request, response);
+    vi.spyOn(service, 'activeMafiaSession').mockResolvedValue(
+      ok({
+        projection: { sessionId: 'session-id' } as MafiaGameSessionProjectionEntity,
+        outputLanguage: 'ko',
+      }),
+    );
+    const handling = controller.events(request, response);
     request.emit('close');
     eventsFor.resolve(ok(events));
     await handling;

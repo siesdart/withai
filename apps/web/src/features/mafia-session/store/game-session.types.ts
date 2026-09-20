@@ -6,10 +6,9 @@ import type { GameAction, GameActionDrafts } from './drafts/game-action-draft';
 export type GameSessionStore = SessionSlice & DraftSlice;
 
 export type SessionSlice = {
-  sessionId: string | undefined;
   outputLanguage: MafiaOutputLanguage | undefined;
   creationKey: string | undefined;
-  setSessionId: (sessionId: string, outputLanguage: MafiaOutputLanguage) => void;
+  setGameSession: (outputLanguage: MafiaOutputLanguage) => void;
   ensureCreationKey: () => string;
   resetCreationKey: () => void;
   clearSession: () => void;

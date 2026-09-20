@@ -27,6 +27,7 @@ export const publicSpeechDecisionSchema = v.object({
     'ask-question',
     'none',
   ] as const),
+  nextSpeakerParticipantId: v.optional(v.string()),
   allegianceEstimates: v.optional(v.array(allegianceEstimateSchema)),
   strategy: v.optional(v.pipe(v.string(), v.maxLength(240))),
 });

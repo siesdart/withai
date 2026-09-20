@@ -68,6 +68,10 @@ type MafiaAgentTargetSelection = {
   targetParticipantId: string;
 };
 
+type PublicSpeechOutcome =
+  | { type: 'speak'; reply: ScheduledAgentPublicSpeech }
+  | { type: 'remain-silent'; nextSpeakerParticipantId?: string };
+
 export class GameSessionAgentOrchestrator {
   private readonly drainingSessionIds = new Set<string>();
   private readonly publicSpeechRequests = new Map<string, PublicSpeechRequest>();
@@ -98,16 +102,48 @@ export class GameSessionAgentOrchestrator {
     const request = this.beginPublicSpeechRequest(session, snapshotKey);
 
     try {
-      for (const participantId of this.publicSpeechCandidateOrder(session)) {
+      const candidateParticipantIds = this.publicSpeechCandidateOrder(session);
+      const requestedParticipantIds = new Set<string>();
+      let participantId = candidateParticipantIds[0];
+      while (participantId !== undefined) {
+        requestedParticipantIds.add(participantId);
+        const remainingParticipantIds = filter(
+          candidateParticipantIds,
+          (candidateId) => !requestedParticipantIds.has(candidateId),
+        );
         // oxlint-disable-next-line no-await-in-loop -- call one Agent at a time until one chooses to speak.
-        const reply = await this.publicSpeechFor(session, participantId, request);
+        const outcome = await this.publicSpeechFor(
+          session,
+          participantId,
+          request,
+          remainingParticipantIds,
+        );
         if (!this.isCurrentPublicSpeechRequest(session, request)) return;
-        if (reply) {
-          session.lastAutonomousPublicSpeechSnapshotKey = snapshotKey;
-          // oxlint-disable-next-line no-await-in-loop -- the selected Agent must be durably scheduled before this turn ends.
-          await this.schedulePublicSpeechReply(session, reply);
-          return;
-        }
+        // oxlint-disable-next-line no-await-in-loop -- routing depends on this Agent's sequential response.
+        const routing = await match(outcome)
+          .with({ type: 'speak' }, async (speechOutcome) => {
+            session.lastAutonomousPublicSpeechSnapshotKey = snapshotKey;
+            // oxlint-disable-next-line no-await-in-loop -- the selected Agent must be durably scheduled before this turn ends.
+            await this.schedulePublicSpeechReply(session, speechOutcome.reply);
+            return { shouldStop: true as const, nextParticipantId: undefined };
+          })
+          .with({ type: 'remain-silent' }, (silentOutcome) => {
+            const suggestedParticipantId = silentOutcome.nextSpeakerParticipantId;
+            return {
+              shouldStop: false as const,
+              nextParticipantId:
+                suggestedParticipantId && remainingParticipantIds.includes(suggestedParticipantId)
+                  ? suggestedParticipantId
+                  : remainingParticipantIds[0],
+            };
+          })
+          .with(undefined, () => ({
+            shouldStop: false as const,
+            nextParticipantId: remainingParticipantIds[0],
+          }))
+          .exhaustive();
+        if (routing.shouldStop) return;
+        participantId = routing.nextParticipantId;
       }
 
       if (this.isCurrentPublicSpeechRequest(session, request))
@@ -716,7 +752,8 @@ export class GameSessionAgentOrchestrator {
     session: StoredGameSessionEntity,
     participantId: string,
     request: PublicSpeechRequest,
-  ) {
+    nextCandidateParticipantIds: readonly string[],
+  ): Promise<PublicSpeechOutcome | undefined> {
     return session.gameSession.agentSpeechContextFor(participantId).match(
       async (context) => {
         const mind = agentMindFor(session.agentMinds, participantId);
@@ -725,6 +762,7 @@ export class GameSessionAgentOrchestrator {
         const decisionResult = await Promise.race([
           this.decisionsFor(session).decidePublicSpeech(personalSnapshot, {
             abortController: request.abortController,
+            candidateParticipantIds: nextCandidateParticipantIds,
           }),
           new Promise<undefined>((resolve) => {
             if (request.abortController.signal.aborted) {
@@ -748,12 +786,15 @@ export class GameSessionAgentOrchestrator {
               speechDecision.strategy,
             );
             return {
-              participantId,
-              content: speechDecision.content,
-              dueAt: agentChatDueAt({
+              type: 'speak' as const,
+              reply: {
+                participantId,
                 content: speechDecision.content,
-                earliestAt: this.clock.now(),
-              }),
+                dueAt: agentChatDueAt({
+                  content: speechDecision.content,
+                  earliestAt: this.clock.now(),
+                }),
+              },
             };
           })
           .with({ type: 'remain-silent' }, (silentDecision) => {
@@ -763,7 +804,12 @@ export class GameSessionAgentOrchestrator {
               silentDecision.allegianceEstimates,
               silentDecision.strategy,
             );
-            return undefined;
+            return {
+              type: 'remain-silent' as const,
+              ...(silentDecision.nextSpeakerParticipantId
+                ? { nextSpeakerParticipantId: silentDecision.nextSpeakerParticipantId }
+                : {}),
+            };
           })
           .exhaustive();
       },

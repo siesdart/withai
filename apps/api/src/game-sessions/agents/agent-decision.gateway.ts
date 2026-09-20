@@ -32,7 +32,12 @@ export type AgentPublicSpeechDecision =
       allegianceEstimates?: AgentAllegianceEstimate[];
       strategy?: string;
     }
-  | { type: 'remain-silent'; allegianceEstimates?: AgentAllegianceEstimate[]; strategy?: string };
+  | {
+      type: 'remain-silent';
+      nextSpeakerParticipantId?: string;
+      allegianceEstimates?: AgentAllegianceEstimate[];
+      strategy?: string;
+    };
 
 type AgentReasoningMove = 'cite-evidence' | 'challenge-claim' | 'conditional-read' | 'ask-question';
 type PublicSpeechReasoningOutput = PublicSpeechDecisionOutput & {
@@ -41,6 +46,7 @@ type PublicSpeechReasoningOutput = PublicSpeechDecisionOutput & {
 
 export type AgentPublicSpeechOptions = {
   abortController?: AbortController;
+  candidateParticipantIds?: readonly string[];
 };
 
 export type AgentFinalDefence = {
@@ -126,10 +132,15 @@ export class LLMAgentDecisionGateway implements AgentDecisionGateway {
   ): Promise<AgentPublicSpeechDecision> {
     return this.withFallback(
       buildAgentDecisionPrompt(
-        'Choose whether to send short public chat now. For remain-silent, set content to empty string.',
+        'Choose whether to send short public chat now. For remain-silent, set content to empty string and set nextSpeakerParticipantId.',
         context,
         this.outputLanguage,
-        { additionalSystemPrompts: [publicSpeechConversationProgressPolicy] },
+        {
+          additionalSystemPrompts: [
+            publicSpeechConversationProgressPolicy,
+            publicSpeechRoutingPolicy(options?.candidateParticipantIds ?? []),
+          ],
+        },
       ),
       publicSpeechDecisionSchema,
       {
@@ -297,10 +308,17 @@ const toPublicSpeechDecision = (
   }
   return {
     type: 'remain-silent',
+    ...(decision.nextSpeakerParticipantId
+      ? { nextSpeakerParticipantId: decision.nextSpeakerParticipantId }
+      : {}),
     ...(allegianceEstimates ? { allegianceEstimates } : {}),
     ...(decision.strategy ? { strategy: decision.strategy } : {}),
   };
 };
+
+const publicSpeechRoutingPolicy = (candidateParticipantIds: readonly string[]) =>
+  `# Next Agent routing
+If you choose remain-silent, set nextSpeakerParticipantId to one ID from this list who you think should speak next: ${JSON.stringify(candidateParticipantIds)}. This field is internal routing data; do not mention it in player-visible content.`;
 
 const hasPublicReasoningMove = (
   decision: PublicSpeechDecisionOutput,

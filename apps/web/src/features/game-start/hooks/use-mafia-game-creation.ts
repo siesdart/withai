@@ -16,7 +16,8 @@ const defaultNameFor = (outputLanguage: MafiaOutputLanguage) =>
 export function useMafiaGameCreation() {
   const navigate = useNavigate({ from: '/' });
   const queryClient = useQueryClient();
-  const [humanName, setHumanName] = useState('');
+  const humanName = useGameSessionStore((state) => state.playerName);
+  const setHumanName = useGameSessionStore((state) => state.setPlayerName);
   const [outputLanguage, setOutputLanguage] = useState<MafiaOutputLanguage>('ko');
   const [creationError, setCreationError] = useState<string>();
   const [isCreating, setIsCreating] = useState(false);
@@ -29,6 +30,7 @@ export function useMafiaGameCreation() {
       outputLanguage,
     };
     const state = useGameSessionStore.getState();
+    state.setPlayerName(settings.humanName);
     const firstResult = await MafiaGameSessionClient.createSession(
       state.ensureCreationKey(),
       settings,

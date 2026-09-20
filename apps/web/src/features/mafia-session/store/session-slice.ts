@@ -2,6 +2,7 @@ import type { GameSessionSliceCreator, SessionSlice } from './game-session.types
 
 export const createSessionSlice: GameSessionSliceCreator<SessionSlice> = (set, get) => ({
   outputLanguage: undefined,
+  playerName: '',
   creationKey: undefined,
   setGameSession: (outputLanguage) => {
     set({
@@ -9,6 +10,9 @@ export const createSessionSlice: GameSessionSliceCreator<SessionSlice> = (set, g
       creationKey: undefined,
       gameActionDrafts: {},
     });
+  },
+  setPlayerName: (playerName) => {
+    set({ playerName });
   },
   ensureCreationKey: () => {
     const existingKey = get().creationKey;

@@ -54,12 +54,14 @@ export function ParticipantList({
                 <ParticipantItem
                   currentParticipantId={currentParticipantId}
                   participant={participant}
+                  role={role}
                 />
               </Button>
             ) : (
               <ParticipantItem
                 currentParticipantId={currentParticipantId}
                 participant={participant}
+                role={role}
               />
             )}
             <ParticipantRoleSelect

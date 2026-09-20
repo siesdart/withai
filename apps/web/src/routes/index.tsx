@@ -96,9 +96,7 @@ function Index() {
             <article className="flex min-h-72 flex-col justify-between border border-dashed border-[#22221e]/45 bg-[#e9e3d6] p-5 text-[#625e55] sm:p-7">
               <div>
                 <span className="text-sm">02</span>
-                <h3 className="mt-8 text-3xl font-bold tracking-tighter">
-                  라이어 게임 <span className="text-base font-normal">(예정)</span>
-                </h3>
+                <h3 className="mt-8 text-3xl font-bold tracking-tighter">예정</h3>
                 <p className="mt-3 max-w-sm text-sm leading-6">
                   다음 추리 테이블을 준비하고 있어요.
                 </p>

@@ -4,16 +4,20 @@ import { cn } from 'cn';
 export function ParticipantItem({
   currentParticipantId,
   participant,
+  role,
 }: {
   currentParticipantId: string;
   participant: MafiaGameProjection['public']['participants'][number];
+  role: MafiaGameProjection['personal']['knownRoles'][number]['role'] | undefined;
 }) {
   return (
     <div className="flex h-5 w-full min-w-0 items-center">
       <span
         className={cn(
           'min-w-0 truncate text-sm',
-          !participant.alive && 'text-[#a43b31] line-through',
+          !participant.alive && 'line-through',
+          !participant.alive && role === 'Mafia' && 'text-[#a43b31]',
+          !participant.alive && role !== 'Mafia' && 'text-[#67806d]',
         )}
       >
         {participant.name}

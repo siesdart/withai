@@ -7,8 +7,10 @@ export type GameSessionStore = SessionSlice & DraftSlice;
 
 export type SessionSlice = {
   outputLanguage: MafiaOutputLanguage | undefined;
+  playerName: string;
   creationKey: string | undefined;
   setGameSession: (outputLanguage: MafiaOutputLanguage) => void;
+  setPlayerName: (playerName: string) => void;
   ensureCreationKey: () => string;
   resetCreationKey: () => void;
   clearSession: () => void;

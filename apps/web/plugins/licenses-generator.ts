@@ -15,7 +15,7 @@ export type OpenSourceLicenseItem = {
 export function generateLicensesPlugin(workspaceRoot: string): Plugin {
   const targetFile = path.resolve(
     workspaceRoot,
-    'apps/web/src/features/legal/data/licenses-data.ts',
+    'apps/web/src/features/legal/data/licenses-data.gen.ts',
   );
 
   function updateLicensesData() {

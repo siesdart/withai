@@ -4,7 +4,7 @@ import { ExternalLink, Search } from 'lucide-react';
 import { type ChangeEvent, type MouseEvent, useCallback, useMemo, useState } from 'react';
 import { sortBy } from 'remeda';
 
-import { openSourceLicenses } from '../data/licenses-data';
+import { openSourceLicenses } from '../data/licenses-data.gen';
 
 export function LicenseList() {
   const [search, setSearch] = useState('');

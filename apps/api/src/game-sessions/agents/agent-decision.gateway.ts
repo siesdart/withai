@@ -51,6 +51,10 @@ export type AgentPublicSpeechOptions = {
   candidateParticipantIds?: readonly string[];
 };
 
+export type AgentMafiaTargetOptions = {
+  abortController?: AbortController;
+};
+
 export type AgentFinalDefence = {
   opening: string;
   followUp: string;
@@ -82,7 +86,10 @@ export type AgentDecisionGateway = {
   ): MaybePromise<AgentPhaseActionDecision>;
   decideMafiaChatOpening(context: MafiaAgentContext, targetName: string): MaybePromise<string>;
   decideMafiaChatReply(context: MafiaAgentContext, targetName: string): MaybePromise<string>;
-  selectMafiaTarget(context: MafiaAgentContext): MaybePromise<string | undefined>;
+  selectMafiaTarget(
+    context: MafiaAgentContext,
+    options?: AgentMafiaTargetOptions,
+  ): MaybePromise<string | undefined>;
 };
 
 export const agentDecisionGateway = Symbol('agent-decision-gateway');
@@ -240,7 +247,10 @@ export class LLMAgentDecisionGateway implements AgentDecisionGateway {
     return decision.content;
   }
 
-  async selectMafiaTarget(context: MafiaAgentContext): Promise<string | undefined> {
+  async selectMafiaTarget(
+    context: MafiaAgentContext,
+    options?: AgentMafiaTargetOptions,
+  ): Promise<string | undefined> {
     const decision = await this.withFallback(
       'mafia-target',
       context,
@@ -251,6 +261,7 @@ export class LLMAgentDecisionGateway implements AgentDecisionGateway {
       ),
       mafiaTargetSchema,
       { targetParticipantId: undefined },
+      options?.abortController,
     );
     return filter(
       context.public.participants,
@@ -320,11 +331,30 @@ export class LLMAgentDecisionGateway implements AgentDecisionGateway {
     const abortAttempt = () => attemptAbortController.abort();
     abortController?.signal.addEventListener('abort', abortAttempt, { once: true });
     if (abortController?.signal.aborted) abortAttempt();
-    const timeout = setTimeout(abortAttempt, agentDecisionAttemptTimeoutMs);
+    let timeout: NodeJS.Timeout | undefined;
+    let rejectAbort: (() => void) | undefined;
+    const interrupted = new Promise<never>((_resolve, reject) => {
+      rejectAbort = () => {
+        const cause = new Error('Agent decision attempt was aborted');
+        cause.name = 'AbortError';
+        reject(cause);
+      };
+      const rejectTimeout = () => {
+        abortAttempt();
+        reject(new Error('Agent decision attempt timed out'));
+      };
+      abortController?.signal.addEventListener('abort', rejectAbort, { once: true });
+      if (abortController?.signal.aborted) rejectAbort();
+      timeout = setTimeout(rejectTimeout, agentDecisionAttemptTimeoutMs);
+    });
     try {
-      return await this.runDecision(prompt, schema, attemptAbortController);
+      return await Promise.race([
+        this.runDecision(prompt, schema, attemptAbortController),
+        interrupted,
+      ]);
     } finally {
-      clearTimeout(timeout);
+      if (timeout) clearTimeout(timeout);
+      if (rejectAbort) abortController?.signal.removeEventListener('abort', rejectAbort);
       abortController?.signal.removeEventListener('abort', abortAttempt);
     }
   }
@@ -421,7 +451,10 @@ export class DeterministicAgentDecisionGateway implements AgentDecisionGateway {
     return fallbackText(this.outputLanguage, 'mafiaReply', targetName);
   }
 
-  selectMafiaTarget(context: MafiaAgentContext): string | undefined {
+  selectMafiaTarget(
+    context: MafiaAgentContext,
+    _options?: AgentMafiaTargetOptions,
+  ): string | undefined {
     const targetParticipants = filter(context.public.participants, ({ alive }) => alive);
     return targetParticipants[stableIndex(context, targetParticipants.length)]?.id;
   }

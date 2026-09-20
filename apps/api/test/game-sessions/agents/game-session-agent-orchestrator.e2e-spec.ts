@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   AgentDecisionGateway,
   AgentFinalDefence,
+  AgentMafiaTargetOptions,
   AgentPhaseActionDecision,
   AgentPublicSpeechDecision,
 } from '../../../src/game-sessions/agents/agent-decision.gateway.js';
@@ -217,11 +218,18 @@ class ParallelMafiaChatGateway extends SequencedMafiaTargetGateway {
 class DeferredMafiaTargetGateway extends SequencedMafiaTargetGateway {
   private markTargetSelectionStarted: (() => void) | undefined;
   private resolveTargetSelection: ((targetParticipantId: string | undefined) => void) | undefined;
+  private selections = 0;
+  readonly abortSignals: AbortSignal[] = [];
   readonly targetSelectionStarted = new Promise<void>((resolve) => {
     this.markTargetSelectionStarted = resolve;
   });
 
-  override selectMafiaTarget(_context: MafiaAgentContext): string | Promise<string | undefined> {
+  override selectMafiaTarget(
+    _context: MafiaAgentContext,
+    options?: AgentMafiaTargetOptions,
+  ): string | Promise<string | undefined> {
+    this.selections += 1;
+    if (options?.abortController) this.abortSignals.push(options.abortController.signal);
     this.markTargetSelectionStarted?.();
     return new Promise<string | undefined>((resolve) => {
       this.resolveTargetSelection = resolve;
@@ -230,6 +238,10 @@ class DeferredMafiaTargetGateway extends SequencedMafiaTargetGateway {
 
   releaseTargetSelection(targetParticipantId: string | undefined = 'participant-3') {
     this.resolveTargetSelection?.(targetParticipantId);
+  }
+
+  selectedTargetCount() {
+    return this.selections;
   }
 }
 
@@ -254,6 +266,10 @@ class LatePrimaryMafiaTargetGateway extends NightActionGateway {
 
   releasePrimaryTarget(targetParticipantId = 'participant-4') {
     this.releasePrimary?.(targetParticipantId);
+  }
+
+  targetSelectionCount() {
+    return this.selections;
   }
 }
 
@@ -326,12 +342,12 @@ const createAgentOnlyMafiaSession = (): StoredGameSessionEntity => ({
       nominationDurationMs: 1,
       finalDefenceDurationMs: 1,
       verdictDurationMs: 1,
-      nightDurationMs: 1_000,
+      nightDurationMs: 20_000,
     },
   ),
 });
 
-const createNightActionSession = (): StoredGameSessionEntity => ({
+const createNightActionSession = (nightDurationMs = 1_000): StoredGameSessionEntity => ({
   ...createSession(),
   humanParticipantId: 'participant-1',
   gameSession: new MafiaGameSession(
@@ -348,7 +364,7 @@ const createNightActionSession = (): StoredGameSessionEntity => ({
       nominationDurationMs: 1,
       finalDefenceDurationMs: 1,
       verdictDurationMs: 1,
-      nightDurationMs: 1_000,
+      nightDurationMs,
     },
   ),
 });
@@ -503,9 +519,9 @@ describe('GameSessionAgentOrchestrator', () => {
     expect(snapshot.policeInvestigations).toContainEqual(['participant-4', 'participant-1']);
   });
 
-  it('commits the fallback Agent Mafia target before resolving Night', async () => {
+  it('uses a deterministic fallback for a recovered overdue Mafia target without calling the LLM', async () => {
     const session = createSession();
-    const decisions = new DeferredMafiaTargetGateway();
+    const decisions = new SequencedMafiaTargetGateway();
     let persistedMafiaTargetParticipantId: string | undefined;
     const orchestrator = new GameSessionAgentOrchestrator(decisions, async (_stale, mutate) => {
       mutate(session);
@@ -513,16 +529,91 @@ describe('GameSessionAgentOrchestrator', () => {
       return ok(undefined);
     });
     session.scheduledMafiaTargetFallbackAt = '2026-08-28T00:00:00.000Z';
+    session.scheduledMafiaTargetFallbackPhaseKey = mafiaNightPhaseKey(
+      session.gameSession.snapshot(),
+    );
 
-    const drained = orchestrator.drainDueScheduledTasks(session);
-    await decisions.targetSelectionStarted;
-    decisions.releaseTargetSelection();
-    await expect(drained).resolves.toEqual(ok(undefined));
+    await expect(orchestrator.drainDueScheduledTasks(session)).resolves.toEqual(ok(undefined));
 
-    expect(persistedMafiaTargetParticipantId).toBe('participant-3');
+    expect(decisions.selectedTargetCount()).toBe(0);
+    expect(persistedMafiaTargetParticipantId).toBeDefined();
+    expect(session.gameSession.snapshot().mafiaTargetParticipantId).toBeDefined();
   });
 
-  it('keeps the first valid target when the primary result returns after the fallback', async () => {
+  it('coalesces timer and recovery drains for one Mafia target fallback', async () => {
+    const session = createNightActionSession();
+    let markCommitStarted: (() => void) | undefined;
+    let releaseCommit: (() => void) | undefined;
+    const commitStarted = new Promise<void>((resolve) => {
+      markCommitStarted = resolve;
+    });
+    const commitGate = new Promise<void>((resolve) => {
+      releaseCommit = resolve;
+    });
+    const commitAgentMutation = vi.fn(
+      async (
+        _stale: StoredGameSessionEntity,
+        mutate: (current: StoredGameSessionEntity) => boolean,
+      ) => {
+        markCommitStarted?.();
+        await commitGate;
+        mutate(session);
+        return ok(undefined);
+      },
+    );
+    const decisions = new SequencedMafiaTargetGateway();
+    const orchestrator = new GameSessionAgentOrchestrator(decisions, commitAgentMutation);
+    session.scheduledMafiaTargetFallbackAt = '2026-08-28T00:00:00.000Z';
+    session.scheduledMafiaTargetFallbackPhaseKey = mafiaNightPhaseKey(
+      session.gameSession.snapshot(),
+    );
+    orchestrator.resumeScheduledTasks(session);
+
+    await vi.advanceTimersByTimeAsync(0);
+    await commitStarted;
+    const drain = orchestrator.drainDueScheduledTasks(session);
+
+    expect(commitAgentMutation).toHaveBeenCalledOnce();
+    releaseCommit?.();
+    await expect(drain).resolves.toEqual(ok(undefined));
+
+    expect(commitAgentMutation).toHaveBeenCalledOnce();
+    expect(decisions.selectedTargetCount()).toBe(0);
+    expect(session.gameSession.snapshot().mafiaTargetParticipantId).toBeDefined();
+  });
+
+  it('commits a deterministic legal target when the primary Mafia target request stalls', async () => {
+    const session = createNightActionSession();
+    const decisions = new DeferredMafiaTargetGateway();
+    const orchestrator = new GameSessionAgentOrchestrator(decisions, async (_stale, mutate) => {
+      mutate(session);
+      return ok(undefined);
+    });
+    const submission = orchestrator.submitDayActions(session);
+
+    await decisions.targetSelectionStarted;
+    await vi.advanceTimersByTimeAsync(0);
+
+    const fallbackTarget = session.gameSession.snapshot().mafiaTargetParticipantId;
+    expect(fallbackTarget).toBeDefined();
+    expect(fallbackTarget).not.toBe(session.humanParticipantId);
+    expect(session.gameSession.snapshot().participants).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: fallbackTarget, alive: true })]),
+    );
+    expect(decisions.selectedTargetCount()).toBe(1);
+    expect(decisions.abortSignals[0]?.aborted).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    await expect(submission).resolves.toBeUndefined();
+    const transition = session.gameSession.advanceDayPhase(
+      new Date(Date.parse(session.gameSession.snapshot().phaseDeadline) + 1),
+    );
+    expect(transition.isOk()).toBe(true);
+    expect(session.gameSession.snapshot().phase).not.toBe('night');
+    expect(session.gameSession.snapshot().mafiaTargetParticipantId).toBe(fallbackTarget);
+  });
+
+  it('does not let a late primary result overwrite the deterministic fallback', async () => {
     const session = createNightActionSession();
     const decisions = new LatePrimaryMafiaTargetGateway();
     const orchestrator = new GameSessionAgentOrchestrator(decisions, async (_stale, mutate) => {
@@ -533,11 +624,15 @@ describe('GameSessionAgentOrchestrator', () => {
 
     await decisions.primaryStarted;
     await vi.advanceTimersByTimeAsync(0);
-    expect(session.gameSession.snapshot().mafiaTargetParticipantId).toBe('participant-3');
-    decisions.releasePrimaryTarget();
+    const fallbackTarget = session.gameSession.snapshot().mafiaTargetParticipantId;
+    expect(fallbackTarget).toBeDefined();
+
+    decisions.releasePrimaryTarget('participant-4');
+    await vi.advanceTimersByTimeAsync(1_000);
     await submission;
 
-    expect(session.gameSession.snapshot().mafiaTargetParticipantId).toBe('participant-3');
+    expect(decisions.targetSelectionCount()).toBe(1);
+    expect(session.gameSession.snapshot().mafiaTargetParticipantId).toBe(fallbackTarget);
   });
 
   it('records an Agent nomination that returns after the nomination countdown', async () => {
@@ -762,7 +857,7 @@ describe('GameSessionAgentOrchestrator', () => {
   });
 
   it('preserves a fast Mafia target when hydration replaces the session before the Doctor finishes', async () => {
-    const staleSession = createNightActionSession();
+    const staleSession = createNightActionSession(20_000);
     let authoritativeSession = staleSession;
     let persistedSnapshot = staleSession.gameSession.snapshot();
     const decisions = new DeferredDoctorNightActionGateway();

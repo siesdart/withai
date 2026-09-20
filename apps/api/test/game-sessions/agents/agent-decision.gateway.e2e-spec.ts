@@ -158,6 +158,26 @@ describe('LLMAgentDecisionGateway', () => {
     } satisfies MafiaAgentContext;
 
     await expect(gateway.selectMafiaTarget(context)).resolves.toBe('participant-3');
+
+    const parentAbortController = new AbortController();
+    const abortedRunner = vi.fn(
+      (_prompt, _schema, attemptAbortController) =>
+        new Promise<never>((_resolve, reject) => {
+          attemptAbortController?.signal.addEventListener(
+            'abort',
+            () => reject(new Error('provider aborted')),
+            { once: true },
+          );
+        }),
+    );
+    const cancellableGateway = new LLMAgentDecisionGateway(abortedRunner);
+    const selection = cancellableGateway.selectMafiaTarget(context, {
+      abortController: parentAbortController,
+    });
+    parentAbortController.abort();
+
+    await expect(selection).resolves.toBeUndefined();
+    expect(abortedRunner).toHaveBeenCalledTimes(1);
   });
 
   it('returns a Mafia Night Chat opening from the decision runner', async () => {

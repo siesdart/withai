@@ -781,7 +781,7 @@ describe('Mafia Game Session API lifecycle acceptance', () => {
     }
   });
 
-  it('abandons a disconnected SSE session after its grace period while preserving its Night fallback', async () => {
+  it('abandons a disconnected SSE session while preserving its no-LLM Night fallback', async () => {
     const fixture = await createLifecycleFixture({ randomIntExclusive: () => 0 });
     try {
       const created = await request(fixture.app.getHttpServer())
@@ -806,7 +806,7 @@ describe('Mafia Game Session API lifecycle acceptance', () => {
         .set('Idempotency-Key', 'abandoned-session-public-speech-key')
         .send({ content: 'This action must not be accepted.' })
         .expect(403);
-      expect(gatewayCallCount(fixture.gatewaySpy)).toBe(1);
+      expect(gatewayCallCount(fixture.gatewaySpy)).toBe(0);
     } finally {
       await fixture.close();
       fixture.redis.disconnect();

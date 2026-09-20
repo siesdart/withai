@@ -1717,7 +1717,10 @@ describe('GameSessionsService', () => {
     await vi.advanceTimersByTimeAsync(1000);
     await vi.runOnlyPendingTimersAsync();
 
-    expect(claimPhaseDeadline).toHaveBeenCalledTimes(2);
+    await vi.waitFor(() => expect(claimPhaseDeadline).toHaveBeenCalledTimes(2), {
+      timeout: 1_000,
+      interval: 10,
+    });
     redis.disconnect();
   });
 
@@ -1749,7 +1752,10 @@ describe('GameSessionsService', () => {
     await vi.advanceTimersByTimeAsync(1);
     await vi.runOnlyPendingTimersAsync();
 
-    expect(claimPhaseDeadline).toHaveBeenCalledTimes(2);
+    await vi.waitFor(() => expect(claimPhaseDeadline).toHaveBeenCalledTimes(2), {
+      timeout: 1_000,
+      interval: 10,
+    });
     redis.disconnect();
   });
 

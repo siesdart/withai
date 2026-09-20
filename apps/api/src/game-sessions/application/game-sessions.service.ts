@@ -224,6 +224,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     if (this.cleanupTimer) {
       this.clock.clearInterval(this.cleanupTimer);
     }
+    this.agentActions.dispose();
     this.agentActionRetries.clearAll();
     this.phaseTransitionRetries.clearAll();
     this.scheduledAgentRetries.clearAll();

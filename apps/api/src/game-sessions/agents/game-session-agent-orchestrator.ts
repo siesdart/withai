@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import type { MafiaAgentContext } from '@repo/mafia';
 import type { MafiaGameProjection } from '@repo/mafia';
@@ -26,7 +26,7 @@ import {
   sameScheduledAgentFinalDefence,
 } from '../application/stored-game-session.entity.js';
 import { agentChatDueAt } from './agent-chat-timing.js';
-import type { AgentDecisionGateway } from './agent-decision.gateway.js';
+import type { AgentDecisionGateway, AgentMafiaTargetOptions } from './agent-decision.gateway.js';
 import {
   agentMindFor,
   hasHandledSnapshot,
@@ -66,6 +66,20 @@ type VerdictRequest = {
   promise: Promise<void>;
 };
 
+type MafiaTargetRequest = {
+  phaseKey: string;
+  abortController: AbortController;
+  promise: Promise<MafiaAgentTargetSelection | undefined>;
+  selection?: MafiaAgentTargetSelection;
+  completedAt?: number;
+};
+
+type MafiaTargetFallbackRequest = {
+  phaseKey: string;
+  fallbackAt: string;
+  promise: Promise<Result<void, GameSessionError>>;
+};
+
 type MafiaAgentTargetSelection = {
   participantId: string;
   targetParticipantId: string;
@@ -82,6 +96,8 @@ export class GameSessionAgentOrchestrator {
   private readonly publicSpeechRequests = new Map<string, PublicSpeechRequest>();
   private readonly nightActionRequests = new Map<string, NightActionRequest>();
   private readonly verdictRequests = new Map<string, VerdictRequest>();
+  private readonly mafiaTargetRequests = new Map<string, MafiaTargetRequest>();
+  private readonly mafiaTargetFallbackRequests = new Map<string, MafiaTargetFallbackRequest>();
 
   constructor(
     private readonly agentDecisions: AgentDecisionGateway,
@@ -359,6 +375,7 @@ export class GameSessionAgentOrchestrator {
 
   clearTimers(session: StoredGameSessionEntity) {
     this.cancelPublicSpeechReply(session);
+    this.cancelMafiaTargetSelection(session.gameSession.snapshot().sessionId);
     if (session.agentFinalDefenceTimer) this.clock.clearTimeout(session.agentFinalDefenceTimer);
     if (session.mafiaTargetFallbackTimer) this.clock.clearTimeout(session.mafiaTargetFallbackTimer);
     for (const timer of session.publicSpeechAgentTimers.values()) this.clock.clearTimeout(timer);
@@ -376,6 +393,11 @@ export class GameSessionAgentOrchestrator {
     session.lastAutonomousPublicSpeechSnapshotKey = undefined;
     session.preferredPublicSpeechParticipantId = undefined;
     session.autonomousPublicSpeechLimitReachedDiscussionKey = undefined;
+  }
+
+  dispose() {
+    for (const request of this.mafiaTargetRequests.values()) request.abortController.abort();
+    this.mafiaTargetRequests.clear();
   }
 
   private async recordAutonomousPublicSpeechLimitReached(
@@ -821,13 +843,30 @@ export class GameSessionAgentOrchestrator {
 
   private async submitMafiaAgentTarget(session: StoredGameSessionEntity, phaseKey: string) {
     if (mafiaNightPhaseKey(session.gameSession.snapshot()) !== phaseKey) return undefined;
-    const selection = await this.mafiaAgentTargetSelection(session);
+    const sessionId = session.gameSession.snapshot().sessionId;
+    const request = this.mafiaAgentTargetSelection(session, phaseKey);
+    const selection = await request.promise;
     if (!selection) return undefined;
+    if (
+      request.abortController.signal.aborted ||
+      this.mafiaTargetRequests.get(sessionId) !== request
+    )
+      return undefined;
     const committed = await this.commitAgentMutation(
       session,
       (current) => {
         if (mafiaNightPhaseKey(current.gameSession.snapshot()) !== phaseKey) return false;
+        if (
+          request.abortController.signal.aborted ||
+          this.mafiaTargetRequests.get(sessionId) !== request
+        )
+          return false;
         if (current.gameSession.snapshot().mafiaTargetParticipantId) return false;
+        const fallbackAt =
+          current.scheduledMafiaTargetFallbackPhaseKey === phaseKey
+            ? current.scheduledMafiaTargetFallbackAt
+            : undefined;
+        if (fallbackAt && this.clock.now().valueOf() > dayjs(fallbackAt).valueOf()) return false;
         const submitted = current.gameSession.submitMafiaTarget(
           selection.participantId,
           selection.targetParticipantId,
@@ -867,20 +906,58 @@ export class GameSessionAgentOrchestrator {
     if (!current || mafiaNightPhaseKey(current.gameSession.snapshot()) !== phaseKey)
       return undefined;
     const targetParticipantId = current.gameSession.snapshot().mafiaTargetParticipantId;
+    if (targetParticipantId) this.cancelMafiaTargetSelection(sessionId, phaseKey);
     return targetParticipantId
       ? { participantId: selection.participantId, targetParticipantId }
       : undefined;
   }
 
-  private async mafiaAgentTargetSelection(
+  private mafiaAgentTargetSelection(session: StoredGameSessionEntity, phaseKey: string) {
+    const sessionId = session.gameSession.snapshot().sessionId;
+    const existing = this.mafiaTargetRequests.get(sessionId);
+    if (existing?.phaseKey === phaseKey) return existing;
+    if (existing) this.cancelMafiaTargetSelection(sessionId);
+
+    const request: MafiaTargetRequest = {
+      phaseKey,
+      abortController: new AbortController(),
+      promise: Promise.resolve(undefined),
+    };
+    request.promise = this.selectMafiaAgentTarget(session, request).then((selection) => {
+      request.selection = selection;
+      request.completedAt = this.clock.now().valueOf();
+      return selection;
+    });
+    this.mafiaTargetRequests.set(sessionId, request);
+    return request;
+  }
+
+  private async selectMafiaAgentTarget(
     session: StoredGameSessionEntity,
+    request: MafiaTargetRequest,
   ): Promise<MafiaAgentTargetSelection | undefined> {
     const [coordinator] = await this.livingMafiaAgentContextsFor(session);
-    if (!coordinator) return undefined;
-    const targetParticipantId = await this.mafiaTargetFor(session, coordinator.context);
+    if (!coordinator || request.abortController.signal.aborted) return undefined;
+    const committedTarget =
+      this.currentSessionFor(session)?.gameSession.snapshot().mafiaTargetParticipantId;
+    const targetParticipantId =
+      committedTarget ??
+      (coordinator.context.personal.nightAction?.type === 'mafia-target'
+        ? coordinator.context.personal.nightAction.targetParticipantId
+        : undefined) ??
+      (await this.decisionsFor(session).selectMafiaTarget(coordinator.context, {
+        abortController: request.abortController,
+      }));
     return targetParticipantId
       ? { participantId: coordinator.participantId, targetParticipantId }
       : undefined;
+  }
+
+  private cancelMafiaTargetSelection(sessionId: string, phaseKey?: string) {
+    const request = this.mafiaTargetRequests.get(sessionId);
+    if (!request || (phaseKey !== undefined && request.phaseKey !== phaseKey)) return;
+    request.abortController.abort();
+    this.mafiaTargetRequests.delete(sessionId);
   }
 
   private async livingMafiaAgentContextsFor(session: StoredGameSessionEntity) {
@@ -915,14 +992,29 @@ export class GameSessionAgentOrchestrator {
     }
   }
 
-  private async mafiaTargetFor(session: StoredGameSessionEntity, context: MafiaAgentContext) {
-    return (
+  private async mafiaTargetFor(
+    session: StoredGameSessionEntity,
+    context: MafiaAgentContext,
+    options?: AgentMafiaTargetOptions,
+  ) {
+    const current = this.currentSessionFor(session) ?? session;
+    const existingTarget =
+      current.gameSession.snapshot().mafiaTargetParticipantId ??
       this.humanMafiaTarget(session) ??
       (context.personal.nightAction?.type === 'mafia-target'
         ? context.personal.nightAction.targetParticipantId
-        : undefined) ??
-      (await this.decisionsFor(session).selectMafiaTarget(context))
-    );
+        : undefined);
+    if (existingTarget) return existingTarget;
+    if (mafiaNightPhaseKey(current.gameSession.snapshot()))
+      return this.mafiaTargetSelectionForChat(session);
+    return this.decisionsFor(session).selectMafiaTarget(context, options);
+  }
+
+  private async mafiaTargetSelectionForChat(session: StoredGameSessionEntity) {
+    const current = this.currentSessionFor(session) ?? session;
+    const phaseKey = mafiaNightPhaseKey(current.gameSession.snapshot());
+    if (!phaseKey) return undefined;
+    return (await this.mafiaAgentTargetSelection(session, phaseKey).promise)?.targetParticipantId;
   }
 
   private participantNameFor(context: MafiaAgentContext, participantId: string) {
@@ -1380,16 +1472,51 @@ export class GameSessionAgentOrchestrator {
     );
   }
 
-  private async commitMafiaTargetFallback(
+  private commitMafiaTargetFallback(
     session: StoredGameSessionEntity,
     fallbackAt: string,
     phaseKey: string,
     schedulePhaseTransition = true,
     hydrationLocked = false,
+  ): Promise<Result<void, GameSessionError>> {
+    const sessionId = session.gameSession.snapshot().sessionId;
+    const existing = this.mafiaTargetFallbackRequests.get(sessionId);
+    if (existing?.phaseKey === phaseKey && existing.fallbackAt === fallbackAt)
+      return existing.promise;
+
+    const request: MafiaTargetFallbackRequest = {
+      phaseKey,
+      fallbackAt,
+      promise: this.applyMafiaTargetFallback(
+        session,
+        fallbackAt,
+        phaseKey,
+        schedulePhaseTransition,
+        hydrationLocked,
+      ),
+    };
+    this.mafiaTargetFallbackRequests.set(sessionId, request);
+    const release = () => {
+      if (this.mafiaTargetFallbackRequests.get(sessionId) === request)
+        this.mafiaTargetFallbackRequests.delete(sessionId);
+    };
+    void request.promise.then(release, release);
+    return request.promise;
+  }
+
+  private async applyMafiaTargetFallback(
+    session: StoredGameSessionEntity,
+    fallbackAt: string,
+    phaseKey: string,
+    schedulePhaseTransition: boolean,
+    hydrationLocked: boolean,
   ) {
     const authoritative = this.currentSessionFor(session);
-    if (!authoritative || mafiaNightPhaseKey(authoritative.gameSession.snapshot()) !== phaseKey)
+    const sessionId = session.gameSession.snapshot().sessionId;
+    if (!authoritative || mafiaNightPhaseKey(authoritative.gameSession.snapshot()) !== phaseKey) {
+      this.cancelMafiaTargetSelection(sessionId, phaseKey);
       return ok(undefined);
+    }
     const clearFallback = () =>
       this.commitAgentMutation(
         session,
@@ -1412,10 +1539,23 @@ export class GameSessionAgentOrchestrator {
         false,
         false,
       );
-    if (authoritative.gameSession.snapshot().mafiaTargetParticipantId) return clearFallback();
-    const selection = await this.mafiaAgentTargetSelection(authoritative);
-    if (!selection) return clearFallback();
-    return this.commitAgentMutation(
+    if (authoritative.gameSession.snapshot().mafiaTargetParticipantId) {
+      this.cancelMafiaTargetSelection(sessionId, phaseKey);
+      return clearFallback();
+    }
+
+    const request = this.mafiaTargetRequests.get(sessionId);
+    const fallbackTime = dayjs(fallbackAt).valueOf();
+    const completedSelection =
+      request?.phaseKey === phaseKey &&
+      request.completedAt !== undefined &&
+      request.completedAt <= fallbackTime
+        ? request.selection
+        : undefined;
+    if (!completedSelection) this.cancelMafiaTargetSelection(sessionId, phaseKey);
+
+    let deterministicSelection: MafiaAgentTargetSelection | undefined;
+    const committed = await this.commitAgentMutation(
       session,
       (current) => {
         current.mafiaTargetFallbackTimer = undefined;
@@ -1429,7 +1569,11 @@ export class GameSessionAgentOrchestrator {
           return false;
         current.scheduledMafiaTargetFallbackAt = undefined;
         current.scheduledMafiaTargetFallbackPhaseKey = undefined;
-        if (current.gameSession.snapshot().mafiaTargetParticipantId || !selection) return false;
+        if (current.gameSession.snapshot().mafiaTargetParticipantId) return true;
+        const selection =
+          completedSelection ??
+          (deterministicSelection = this.deterministicMafiaTargetSelection(current, phaseKey));
+        if (!selection) return true;
         const submitted = current.gameSession.submitMafiaTarget(
           selection.participantId,
           selection.targetParticipantId,
@@ -1454,5 +1598,66 @@ export class GameSessionAgentOrchestrator {
       hydrationLocked,
       !authoritative.agentActionsPending,
     );
+    this.cancelMafiaTargetSelection(sessionId, phaseKey);
+    if (committed.isErr()) return committed;
+    if (deterministicSelection) {
+      this.logger.warn(
+        {
+          sessionId,
+          phaseKey,
+          targetParticipantId: deterministicSelection.targetParticipantId,
+          reason:
+            request?.phaseKey !== phaseKey
+              ? 'request-unavailable'
+              : request.completedAt === undefined
+                ? 'request-pending'
+                : request.completedAt > fallbackTime
+                  ? 'request-late'
+                  : 'request-returned-no-target',
+        },
+        'Agent Mafia Night target used deterministic fallback',
+      );
+    }
+    return committed;
+  }
+
+  private deterministicMafiaTargetSelection(
+    session: StoredGameSessionEntity,
+    phaseKey: string,
+  ): MafiaAgentTargetSelection | undefined {
+    const snapshot = session.gameSession.snapshot();
+    const coordinatorParticipantId = find(
+      snapshot.participants,
+      ({ id, alive, role }) => id !== session.humanParticipantId && alive && role === 'Mafia',
+    )?.id;
+    const legalTargetParticipantIds = pipe(
+      snapshot.participants,
+      filter(({ alive }) => alive),
+      map(({ id }) => id),
+      sortBy([(participantId) => participantId, 'asc']),
+    );
+    const opposingTargetParticipantIds = pipe(
+      snapshot.participants,
+      filter(({ alive, role }) => alive && role !== 'Mafia'),
+      map(({ id }) => id),
+      sortBy([(participantId) => participantId, 'asc']),
+    );
+    const opposingAgentTargetParticipantIds = pipe(
+      opposingTargetParticipantIds,
+      filter((participantId) => participantId !== session.humanParticipantId),
+    );
+    const targetParticipantIds =
+      opposingAgentTargetParticipantIds.length > 0
+        ? opposingAgentTargetParticipantIds
+        : opposingTargetParticipantIds.length > 0
+          ? opposingTargetParticipantIds
+          : legalTargetParticipantIds;
+    if (!coordinatorParticipantId || targetParticipantIds.length === 0) return undefined;
+    const hash = createHash('sha256').update(phaseKey).digest('hex');
+    const index = Number.parseInt(hash.slice(0, 8), 16) % targetParticipantIds.length;
+    const targetParticipantId = targetParticipantIds[index];
+    return targetParticipantId
+      ? { participantId: coordinatorParticipantId, targetParticipantId }
+      : undefined;
   }
 }

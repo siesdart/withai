@@ -47,6 +47,7 @@ export type DurableSessionSnapshot = {
   scheduledAgentFinalDefence?: ScheduledAgentFinalDefence;
   scheduledAgentMafiaChatReplies?: ScheduledAgentMafiaChatReply[];
   scheduledMafiaTargetFallbackAt?: string;
+  scheduledMafiaTargetFallbackPhaseKey?: string;
   autonomousPublicSpeechTurns?: number;
   lastAutonomousPublicSpeechSnapshotKey?: string;
   autonomousPublicSpeechLimitReachedDiscussionKey?: string;
@@ -145,6 +146,7 @@ const DurableSessionSnapshotSchema: v.GenericSchema<unknown, DurableSessionSnaps
     scheduledAgentFinalDefence: v.optional(ScheduledAgentPublicSpeechSchema),
     scheduledAgentMafiaChatReplies: v.optional(v.array(ScheduledAgentMafiaChatReplySchema)),
     scheduledMafiaTargetFallbackAt: v.optional(v.string()),
+    scheduledMafiaTargetFallbackPhaseKey: v.optional(v.string()),
     autonomousPublicSpeechTurns: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0))),
     lastAutonomousPublicSpeechSnapshotKey: v.optional(v.string()),
     autonomousPublicSpeechLimitReachedDiscussionKey: v.optional(v.string()),

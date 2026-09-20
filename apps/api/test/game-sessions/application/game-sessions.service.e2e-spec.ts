@@ -1196,8 +1196,10 @@ describe('GameSessionsService', () => {
     await expect(
       restartedService.getProjection(created.value.projection.sessionId, holderId),
     ).resolves.toMatchObject({ value: { sessionId: created.value.projection.sessionId } });
-    await expect(authority.load(created.value.projection.sessionId)).resolves.toMatchObject({
-      value: { agentActionsPending: false },
+    await vi.waitFor(async () => {
+      await expect(authority.load(created.value.projection.sessionId)).resolves.toMatchObject({
+        value: { agentActionsPending: false },
+      });
     });
     redis.disconnect();
   });

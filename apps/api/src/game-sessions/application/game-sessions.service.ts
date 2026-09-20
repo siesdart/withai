@@ -120,8 +120,23 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     this.mafiaModule = new MafiaGameModule(undefined, undefined, () => this.clock.now());
     this.agentActions = new GameSessionAgentOrchestrator(
       agentDecisions,
-      (session, mutate, schedulePhaseTransition, hydrationLocked) =>
-        this.commitAgentMutation(session, mutate, 0, schedulePhaseTransition, hydrationLocked),
+      (
+        session,
+        mutate,
+        schedulePhaseTransition,
+        hydrationLocked,
+        publishProjection,
+        hydrateBeforeCommit,
+      ) =>
+        this.commitAgentMutation(
+          session,
+          mutate,
+          0,
+          schedulePhaseTransition,
+          hydrationLocked,
+          publishProjection,
+          hydrateBeforeCommit,
+        ),
       this.clock,
       (session) => this.sessions.get(session.gameSession.snapshot().sessionId),
     );
@@ -287,6 +302,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       scheduledAgentFinalDefence: undefined,
       scheduledAgentMafiaChatReplies: [],
       scheduledMafiaTargetFallbackAt: undefined,
+      scheduledMafiaTargetFallbackPhaseKey: undefined,
       autonomousPublicSpeechTurns: 0,
       lastAutonomousPublicSpeechSnapshotKey: undefined,
       autonomousPublicSpeechLimitReachedDiscussionKey: undefined,
@@ -1228,12 +1244,10 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       current.gameSession.snapshot().phase !== actionPhase ||
       current.gameSession.snapshot().phaseDeadline !== actionPhaseDeadline;
     current.agentActionsPending = phaseChanged;
-    const saved =
-      current !== session || phaseChanged
-        ? await this.durability.saveSnapshot(current)
-        : beforeGame !== JSON.stringify(current.gameSession.snapshot())
-          ? await this.publishAgentProjection(current, hydrationLocked)
-          : await this.durability.saveSnapshot(current);
+    const gameChanged = beforeGame !== JSON.stringify(current.gameSession.snapshot());
+    const saved = gameChanged
+      ? await this.publishAgentProjection(current, hydrationLocked)
+      : await this.durability.saveSnapshot(current);
     if (saved.isOk() && saved.value) {
       if (current.gameSession.snapshot().phase === 'discussion')
         this.queuePublicSpeechReplies(current);
@@ -1403,6 +1417,8 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     attempt = 0,
     schedulePhaseTransition = true,
     hydrationLocked = false,
+    publishProjection = true,
+    hydrateBeforeCommit = true,
   ): Promise<Result<void, GameSessionError>> {
     const sessionId = staleSession.gameSession.snapshot().sessionId;
     if (!this.authority || hydrationLocked)
@@ -1412,6 +1428,8 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         attempt,
         schedulePhaseTransition,
         true,
+        publishProjection,
+        hydrateBeforeCommit,
       );
     return this.withSessionMutation(sessionId, () =>
       this.commitAgentMutationUnlocked(
@@ -1420,6 +1438,8 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         attempt,
         schedulePhaseTransition,
         true,
+        publishProjection,
+        hydrateBeforeCommit,
       ),
     );
   }
@@ -1430,9 +1450,11 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     attempt: number,
     schedulePhaseTransition: boolean,
     hydrationLocked: boolean,
+    publishProjection: boolean,
+    hydrateBeforeCommit: boolean,
   ): Promise<Result<void, GameSessionError>> {
     const sessionId = staleSession.gameSession.snapshot().sessionId;
-    if (this.authority) {
+    if (this.authority && hydrateBeforeCommit) {
       const hydrated = await this.hydrateAuthoritativeSession(sessionId, true);
       if (hydrated.isErr()) {
         this.retryScheduledAgentTasks(sessionId);
@@ -1447,14 +1469,45 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         if (schedulePhaseTransition) this.lifecycle.schedulePhaseTransition(session);
         return ok(undefined);
       }
-      if (attempt < 1)
+      if (attempt < 1) {
+        if (this.authority && !hydrateBeforeCommit) {
+          const hydrated = await this.hydrateAuthoritativeSession(sessionId, true);
+          if (hydrated.isErr()) return err(hydrated.error);
+        }
         return this.commitAgentMutationUnlocked(
           staleSession,
           mutate,
           attempt + 1,
-          schedulePhaseTransition,
+          schedulePhaseTransition || !hydrateBeforeCommit,
           hydrationLocked,
+          publishProjection,
+          true,
         );
+      }
+      this.retryScheduledAgentTasks(sessionId);
+      return err({ type: 'durability-unavailable' });
+    }
+    if (!publishProjection) {
+      const saved = await this.durability.saveSnapshot(session);
+      if (saved.isOk() && saved.value) {
+        if (schedulePhaseTransition) this.lifecycle.schedulePhaseTransition(session);
+        return ok(undefined);
+      }
+      if (attempt < 1) {
+        if (this.authority && !hydrateBeforeCommit) {
+          const hydrated = await this.hydrateAuthoritativeSession(sessionId, true);
+          if (hydrated.isErr()) return err(hydrated.error);
+        }
+        return this.commitAgentMutationUnlocked(
+          staleSession,
+          mutate,
+          attempt + 1,
+          schedulePhaseTransition || !hydrateBeforeCommit,
+          hydrationLocked,
+          publishProjection,
+          true,
+        );
+      }
       this.retryScheduledAgentTasks(sessionId);
       return err({ type: 'durability-unavailable' });
     }
@@ -1474,6 +1527,8 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       attempt + 1,
       schedulePhaseTransition,
       hydrationLocked,
+      publishProjection,
+      hydrateBeforeCommit,
     );
   }
 

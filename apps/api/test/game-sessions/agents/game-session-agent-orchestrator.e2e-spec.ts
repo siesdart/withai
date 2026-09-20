@@ -46,11 +46,14 @@ class SequencedMafiaTargetGateway implements AgentDecisionGateway {
     };
   }
 
-  decideMafiaChatOpening(_context: MafiaAgentContext, targetName: string) {
+  decideMafiaChatOpening(
+    _context: MafiaAgentContext,
+    targetName: string,
+  ): string | Promise<string> {
     return `Opening target: ${targetName}`;
   }
 
-  decideMafiaChatReply(_context: MafiaAgentContext, targetName: string) {
+  decideMafiaChatReply(_context: MafiaAgentContext, targetName: string): string | Promise<string> {
     return `Reply target: ${targetName}`;
   }
 
@@ -114,12 +117,17 @@ class NightActionGateway extends SequencedMafiaTargetGateway {
     };
   }
 
-  override selectMafiaTarget(context: MafiaAgentContext) {
+  override selectMafiaTarget(
+    context: MafiaAgentContext,
+  ): string | undefined | Promise<string | undefined> {
     this.mafiaTargetRoles.push(context.personal.role);
     return context.public.participants[0]?.id;
   }
 
-  override decideMafiaChatOpening(context: MafiaAgentContext, targetName: string) {
+  override decideMafiaChatOpening(
+    context: MafiaAgentContext,
+    targetName: string,
+  ): string | Promise<string> {
     this.mafiaOpeningRoles.push(context.personal.role);
     return super.decideMafiaChatOpening(context, targetName);
   }
@@ -152,6 +160,60 @@ class DeferredDoctorNightActionGateway extends NightActionGateway {
   }
 }
 
+class DeferredMafiaOpeningGateway extends NightActionGateway {
+  private markOpeningStarted: (() => void) | undefined;
+  private resolveOpening: ((content: string) => void) | undefined;
+  readonly openingStarted = new Promise<void>((resolve) => {
+    this.markOpeningStarted = resolve;
+  });
+
+  override decideMafiaChatOpening(_context: MafiaAgentContext, _targetName: string) {
+    this.markOpeningStarted?.();
+    return new Promise<string>((resolve) => {
+      this.resolveOpening = resolve;
+    });
+  }
+
+  releaseOpening(content = 'We should target the same player.') {
+    this.resolveOpening?.(content);
+  }
+}
+
+class ParallelMafiaChatGateway extends SequencedMafiaTargetGateway {
+  readonly openingParticipantIds: string[] = [];
+  readonly replyParticipantIds: string[] = [];
+  private openingReleases: ((content: string) => void)[] = [];
+  private replyReleases: ((content: string) => void)[] = [];
+  private openingsReleased = false;
+  private repliesReleased = false;
+
+  override decideMafiaChatOpening(context: MafiaAgentContext, _targetName: string) {
+    this.openingParticipantIds.push(context.participant.id);
+    return new Promise<string>((resolve) => {
+      this.openingReleases.push(resolve);
+      if (this.openingsReleased) resolve(`Opening from ${context.participant.id}`);
+    });
+  }
+
+  override decideMafiaChatReply(context: MafiaAgentContext, _targetName: string) {
+    this.replyParticipantIds.push(context.participant.id);
+    return new Promise<string>((resolve) => {
+      this.replyReleases.push(resolve);
+      if (this.repliesReleased) resolve(`Reply from ${context.participant.id}`);
+    });
+  }
+
+  releaseOpenings() {
+    this.openingsReleased = true;
+    for (const [index, release] of this.openingReleases.entries()) release(`Opening ${index + 1}`);
+  }
+
+  releaseReplies() {
+    this.repliesReleased = true;
+    for (const [index, release] of this.replyReleases.entries()) release(`Reply ${index + 1}`);
+  }
+}
+
 class DeferredMafiaTargetGateway extends SequencedMafiaTargetGateway {
   private markTargetSelectionStarted: (() => void) | undefined;
   private resolveTargetSelection: ((targetParticipantId: string | undefined) => void) | undefined;
@@ -159,7 +221,7 @@ class DeferredMafiaTargetGateway extends SequencedMafiaTargetGateway {
     this.markTargetSelectionStarted = resolve;
   });
 
-  override selectMafiaTarget(_context: MafiaAgentContext) {
+  override selectMafiaTarget(_context: MafiaAgentContext): string | Promise<string | undefined> {
     this.markTargetSelectionStarted?.();
     return new Promise<string | undefined>((resolve) => {
       this.resolveTargetSelection = resolve;
@@ -168,6 +230,30 @@ class DeferredMafiaTargetGateway extends SequencedMafiaTargetGateway {
 
   releaseTargetSelection(targetParticipantId: string | undefined = 'participant-3') {
     this.resolveTargetSelection?.(targetParticipantId);
+  }
+}
+
+class LatePrimaryMafiaTargetGateway extends NightActionGateway {
+  private markPrimaryStarted: (() => void) | undefined;
+  private releasePrimary: ((targetParticipantId: string) => void) | undefined;
+  private selections = 0;
+  readonly primaryStarted = new Promise<void>((resolve) => {
+    this.markPrimaryStarted = resolve;
+  });
+
+  override selectMafiaTarget(
+    _context: MafiaAgentContext,
+  ): string | undefined | Promise<string | undefined> {
+    this.selections += 1;
+    if (this.selections > 1) return 'participant-3';
+    this.markPrimaryStarted?.();
+    return new Promise<string>((resolve) => {
+      this.releasePrimary = resolve;
+    });
+  }
+
+  releasePrimaryTarget(targetParticipantId = 'participant-4') {
+    this.releasePrimary?.(targetParticipantId);
   }
 }
 
@@ -436,6 +522,24 @@ describe('GameSessionAgentOrchestrator', () => {
     expect(persistedMafiaTargetParticipantId).toBe('participant-3');
   });
 
+  it('keeps the first valid target when the primary result returns after the fallback', async () => {
+    const session = createNightActionSession();
+    const decisions = new LatePrimaryMafiaTargetGateway();
+    const orchestrator = new GameSessionAgentOrchestrator(decisions, async (_stale, mutate) => {
+      mutate(session);
+      return ok(undefined);
+    });
+    const submission = orchestrator.submitDayActions(session);
+
+    await decisions.primaryStarted;
+    await vi.advanceTimersByTimeAsync(0);
+    expect(session.gameSession.snapshot().mafiaTargetParticipantId).toBe('participant-3');
+    decisions.releasePrimaryTarget();
+    await submission;
+
+    expect(session.gameSession.snapshot().mafiaTargetParticipantId).toBe('participant-3');
+  });
+
   it('records an Agent nomination that returns after the nomination countdown', async () => {
     const session = createSession();
     const orchestrator = new GameSessionAgentOrchestrator(
@@ -615,6 +719,174 @@ describe('GameSessionAgentOrchestrator', () => {
       decisions.releaseDoctorAction();
       await submission;
     }
+  });
+
+  it('arms the Mafia target fallback while required Night decisions are still pending', async () => {
+    const session = createNightActionSession();
+    const decisions = new DeferredDoctorNightActionGateway();
+    const orchestrator = new GameSessionAgentOrchestrator(decisions, async (_stale, mutate) => {
+      mutate(session);
+      return ok(undefined);
+    });
+    const submission = orchestrator.submitDayActions(session);
+
+    await decisions.doctorActionStarted;
+
+    expect(session.scheduledMafiaTargetFallbackAt).toBe(
+      dayjs(session.gameSession.snapshot().phaseDeadline).subtract(1, 'second').toISOString(),
+    );
+    expect(session.scheduledMafiaTargetFallbackPhaseKey).toBe(
+      mafiaNightPhaseKey(session.gameSession.snapshot()),
+    );
+    decisions.releaseDoctorAction();
+    await submission;
+  });
+
+  it('does not let an unfinished Doctor decision hold the Night barrier past its deadline', async () => {
+    const session = createNightActionSession();
+    const decisions = new DeferredDoctorNightActionGateway();
+    const orchestrator = new GameSessionAgentOrchestrator(decisions, async (_stale, mutate) => {
+      mutate(session);
+      return ok(undefined);
+    });
+    const submission = orchestrator.submitDayActions(session);
+    await decisions.doctorActionStarted;
+
+    const remainingMs = Math.max(
+      0,
+      Date.parse(session.gameSession.snapshot().phaseDeadline) - Date.now(),
+    );
+    await vi.advanceTimersByTimeAsync(remainingMs);
+    await expect(submission).resolves.toBeUndefined();
+    decisions.releaseDoctorAction();
+  });
+
+  it('preserves a fast Mafia target when hydration replaces the session before the Doctor finishes', async () => {
+    const staleSession = createNightActionSession();
+    let authoritativeSession = staleSession;
+    let persistedSnapshot = staleSession.gameSession.snapshot();
+    const decisions = new DeferredDoctorNightActionGateway();
+    const orchestrator = new GameSessionAgentOrchestrator(
+      decisions,
+      async (_stale, mutate) => {
+        if (mutate(authoritativeSession))
+          persistedSnapshot = authoritativeSession.gameSession.snapshot();
+        return ok(undefined);
+      },
+      undefined,
+      () => authoritativeSession,
+    );
+    const submission = orchestrator.submitDayActions(staleSession);
+
+    await decisions.doctorActionStarted;
+    await vi.waitFor(() =>
+      expect(staleSession.gameSession.snapshot().mafiaTargetParticipantId).toBe('participant-1'),
+    );
+    authoritativeSession = {
+      ...staleSession,
+      gameSession: MafiaGameSession.restore(persistedSnapshot),
+    };
+    decisions.releaseDoctorAction();
+    await submission;
+
+    expect(authoritativeSession.gameSession.snapshot().mafiaTargetParticipantId).toBe(
+      'participant-1',
+    );
+    expect(
+      authoritativeSession.gameSession.projectionFor('participant-3', 1).match(
+        (projection) => projection.personal.nightAction,
+        () => undefined,
+      ),
+    ).toEqual({ type: 'doctor-protection', targetParticipantId: 'participant-1' });
+  });
+
+  it('commits a Mafia opening to the latest session when hydration occurs during generation', async () => {
+    const staleSession = createNightActionSession();
+    let authoritativeSession = staleSession;
+    let persistedSnapshot = staleSession.gameSession.snapshot();
+    const decisions = new DeferredMafiaOpeningGateway();
+    const orchestrator = new GameSessionAgentOrchestrator(
+      decisions,
+      async (_stale, mutate) => {
+        if (mutate(authoritativeSession))
+          persistedSnapshot = authoritativeSession.gameSession.snapshot();
+        return ok(undefined);
+      },
+      undefined,
+      () => authoritativeSession,
+    );
+    const submission = orchestrator.submitDayActions(staleSession);
+
+    await decisions.openingStarted;
+    authoritativeSession = {
+      ...staleSession,
+      gameSession: MafiaGameSession.restore(persistedSnapshot),
+    };
+    decisions.releaseOpening();
+    await submission;
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(authoritativeSession.gameSession.snapshot().timeline).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'mafia-chat',
+          message: expect.objectContaining({ content: 'We should target the same player.' }),
+        }),
+      ]),
+    );
+  });
+
+  it('lets required Night actions finish while Mafia opening generation is still pending', async () => {
+    const session = createNightActionSession();
+    const decisions = new DeferredMafiaOpeningGateway();
+    const orchestrator = new GameSessionAgentOrchestrator(decisions, async (_stale, mutate) => {
+      mutate(session);
+      return ok(undefined);
+    });
+    const submission = orchestrator.submitDayActions(session);
+
+    await decisions.openingStarted;
+    await expect(submission).resolves.toBeUndefined();
+    decisions.releaseOpening();
+    await vi.advanceTimersByTimeAsync(0);
+  });
+
+  it('starts all independent Mafia opening decisions before any one finishes', async () => {
+    const session = createAgentOnlyMafiaSession();
+    const decisions = new ParallelMafiaChatGateway();
+    const orchestrator = new GameSessionAgentOrchestrator(decisions, async (_stale, mutate) => {
+      mutate(session);
+      return ok(undefined);
+    });
+    const submission = orchestrator.submitDayActions(session);
+
+    await vi
+      .waitFor(() => expect(decisions.openingParticipantIds).toHaveLength(2), { timeout: 100 })
+      .catch(() => undefined);
+    const startedParticipantIds = [...decisions.openingParticipantIds];
+    decisions.releaseOpenings();
+    await submission;
+    await vi.advanceTimersByTimeAsync(0);
+    expect(startedParticipantIds).toEqual(['participant-2', 'participant-3']);
+  });
+
+  it('starts all independent Mafia reply decisions before any one finishes', async () => {
+    const session = createAgentOnlyMafiaSession();
+    session.gameSession.submitMafiaTarget('participant-2', 'participant-4');
+    const decisions = new ParallelMafiaChatGateway();
+    const orchestrator = new GameSessionAgentOrchestrator(decisions, async (_stale, mutate) => {
+      mutate(session);
+      return ok(undefined);
+    });
+    const replies = orchestrator.mafiaChatRepliesFor(session);
+
+    await vi
+      .waitFor(() => expect(decisions.replyParticipantIds).toHaveLength(2), { timeout: 100 })
+      .catch(() => undefined);
+    const startedParticipantIds = [...decisions.replyParticipantIds];
+    decisions.releaseReplies();
+    await expect(replies).resolves.toHaveLength(2);
+    expect(startedParticipantIds).toEqual(['participant-2', 'participant-3']);
   });
 
   it('does not request public-speech decisions during Night', async () => {

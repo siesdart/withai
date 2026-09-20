@@ -73,6 +73,7 @@ export type StoredGameSessionEntity = {
   scheduledAgentFinalDefence: ScheduledAgentFinalDefence | undefined;
   scheduledAgentMafiaChatReplies: ScheduledAgentMafiaChatReply[];
   scheduledMafiaTargetFallbackAt: string | undefined;
+  scheduledMafiaTargetFallbackPhaseKey?: string;
   autonomousPublicSpeechTurns: number;
   lastAutonomousPublicSpeechSnapshotKey: string | undefined;
   autonomousPublicSpeechLimitReachedDiscussionKey: string | undefined;

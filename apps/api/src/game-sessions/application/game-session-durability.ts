@@ -123,6 +123,7 @@ export class GameSessionDurability {
       scheduledAgentFinalDefence: session.scheduledAgentFinalDefence,
       scheduledAgentMafiaChatReplies: session.scheduledAgentMafiaChatReplies,
       scheduledMafiaTargetFallbackAt: session.scheduledMafiaTargetFallbackAt,
+      scheduledMafiaTargetFallbackPhaseKey: session.scheduledMafiaTargetFallbackPhaseKey,
       autonomousPublicSpeechTurns: session.autonomousPublicSpeechTurns,
       lastAutonomousPublicSpeechSnapshotKey: session.lastAutonomousPublicSpeechSnapshotKey,
       autonomousPublicSpeechLimitReachedDiscussionKey:
@@ -166,6 +167,7 @@ export class GameSessionDurability {
       scheduledAgentFinalDefence: snapshot.scheduledAgentFinalDefence,
       scheduledAgentMafiaChatReplies: snapshot.scheduledAgentMafiaChatReplies ?? [],
       scheduledMafiaTargetFallbackAt: snapshot.scheduledMafiaTargetFallbackAt,
+      scheduledMafiaTargetFallbackPhaseKey: snapshot.scheduledMafiaTargetFallbackPhaseKey,
       autonomousPublicSpeechTurns: snapshot.autonomousPublicSpeechTurns ?? 0,
       lastAutonomousPublicSpeechSnapshotKey: snapshot.lastAutonomousPublicSpeechSnapshotKey,
       autonomousPublicSpeechLimitReachedDiscussionKey:

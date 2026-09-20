@@ -440,7 +440,7 @@ export class GameSessionsController {
       subscription?.unsubscribe();
     };
     request.once('close', close);
-    const currentSession = await this.currentSessionId(holderId);
+    const currentSession = await this.latestSessionId(holderId);
     const events = this.resolveGameSessionResult(
       await this.gameSessionsService.eventsFor(
         currentSession,
@@ -473,7 +473,7 @@ export class GameSessionsController {
 
   private async currentProjection(holderId: string | undefined) {
     const requiredHolderId = this.requireHolderId(holderId);
-    const sessionId = await this.currentSessionId(requiredHolderId);
+    const sessionId = await this.latestSessionId(requiredHolderId);
     return this.gameSessionsService.getProjection(sessionId, requiredHolderId);
   }
 
@@ -494,6 +494,16 @@ export class GameSessionsController {
     if (!active.value)
       throw new ForbiddenException('This Game Session is not available to this guest.');
     return active.value.projection.sessionId;
+  }
+
+  private async latestSessionId(holderId: string): Promise<string> {
+    const latestSessionId = await this.gameSessionsService.latestSessionIdForHolder(holderId);
+    if (latestSessionId.isErr()) {
+      throw this.toHttpException(latestSessionId.error);
+    }
+    if (!latestSessionId.value)
+      throw new ForbiddenException('This Game Session is not available to this guest.');
+    return latestSessionId.value;
   }
 
   private resolveGameSessionResult<Value>(

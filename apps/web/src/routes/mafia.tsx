@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { createFileRoute, useRouter } from '@tanstack/react-router';
+import { createFileRoute, Navigate, useRouter } from '@tanstack/react-router';
 import { useCallback } from 'react';
 
 import { isUnavailableGameSession } from '@/features/mafia-session/api/error';
@@ -22,9 +22,7 @@ export const Route = createFileRoute('/mafia')({
       ...gameSessionSnapshotOptions(),
       staleTime: 'static',
     }),
-  component: () => {
-    return <ControlRoom />;
-  },
+  component: ControlRoom,
   errorComponent: ({ error }) => {
     const router = useRouter();
     const queryClient = useQueryClient();
@@ -35,7 +33,7 @@ export const Route = createFileRoute('/mafia')({
 
     if (isUnavailableGameSession(error)) {
       useGameSessionStore.getState().clearSession();
-      throw Route.redirect({ to: '/' });
+      return <Navigate to="/" replace />;
     }
 
     return <ControlRoomError onRetry={onRetry} />;

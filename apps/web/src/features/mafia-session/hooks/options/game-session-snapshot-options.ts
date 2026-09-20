@@ -5,9 +5,11 @@ import { MafiaGameSessionClient } from '../../api/client';
 import { isUnavailableGameSession } from '../../api/error';
 import { retainNewerProjection } from './projection-order';
 
+export const gameSessionSnapshotQueryKey = ['game-session'] as const;
+
 export const gameSessionSnapshotOptions = () =>
   queryOptions<MafiaGameProjection>({
-    queryKey: ['game-session'],
+    queryKey: gameSessionSnapshotQueryKey,
     queryFn: async () => {
       const client = new MafiaGameSessionClient();
       const result = await client.getSnapshot();

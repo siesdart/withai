@@ -1,6 +1,6 @@
 import type { MafiaAgentContext } from '@repo/mafia';
 import { chat } from '@tanstack/ai';
-import { createOpenRouterText } from '@tanstack/ai-openrouter';
+import { geminiText } from '@tanstack/ai-gemini';
 import { toStandardJsonSchema } from '@valibot/to-json-schema';
 import { filter, findLast } from 'remeda';
 import * as v from 'valibot';
@@ -100,13 +100,17 @@ const tanstackRunner: AgentDecisionRunner = async (
   abortController,
 ) => {
   return chat({
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    adapter: createOpenRouterText('@preset/with-ai' as any, process.env.OPENROUTER_API_KEY!, {
-      appTitle: 'WithAI',
-    }),
+    adapter: geminiText(
+      process.env.NODE_ENV === 'production' ? 'gemini-3.8-flash' : 'gemini-3.1-flash-lite',
+    ),
     systemPrompts,
     messages: [{ role: 'user', content: userPrompt }],
     outputSchema: toStandardJsonSchema(outputSchema),
+    modelOptions: {
+      thinkingConfig: {
+        thinkingLevel: 'LOW',
+      },
+    },
     stream: false,
     abortController,
   });

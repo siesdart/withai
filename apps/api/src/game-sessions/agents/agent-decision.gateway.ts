@@ -28,6 +28,7 @@ export type AgentPublicSpeechDecision =
   | {
       type: 'speak';
       content: string;
+      nextSpeakerParticipantId?: string;
       reasoningMove?: AgentReasoningMove;
       allegianceEstimates?: AgentAllegianceEstimate[];
       strategy?: string;
@@ -136,7 +137,7 @@ export class LLMAgentDecisionGateway implements AgentDecisionGateway {
   ): Promise<AgentPublicSpeechDecision> {
     return this.withFallback(
       buildAgentDecisionPrompt(
-        'Choose whether to send short public chat now. For remain-silent, set content to empty string and set nextSpeakerParticipantId.',
+        'Choose whether to send short public chat now. For either outcome, choose nextSpeakerParticipantId from the supplied eligible IDs. For remain-silent, set content to empty string.',
         context,
         this.outputLanguage,
         {
@@ -305,6 +306,9 @@ const toPublicSpeechDecision = (
     return {
       type: 'speak',
       content: decision.content,
+      ...(decision.nextSpeakerParticipantId
+        ? { nextSpeakerParticipantId: decision.nextSpeakerParticipantId }
+        : {}),
       reasoningMove: decision.reasoningMove,
       ...(allegianceEstimates ? { allegianceEstimates } : {}),
       ...(decision.strategy ? { strategy: decision.strategy } : {}),
@@ -322,7 +326,7 @@ const toPublicSpeechDecision = (
 
 const publicSpeechRoutingPolicy = (candidateParticipantIds: readonly string[]) =>
   `# Next Agent routing
-If you choose remain-silent, set nextSpeakerParticipantId to one ID from this list who you think should speak next: ${JSON.stringify(candidateParticipantIds)}. This field is internal routing data; do not mention it in player-visible content.`;
+Set nextSpeakerParticipantId to one ID from this list who you think should speak next: ${JSON.stringify(candidateParticipantIds)}. If you don't have a clear and strict person to think should speak next, choose to be silent based on recent conversations or omit it.`;
 
 const hasPublicReasoningMove = (
   decision: PublicSpeechDecisionOutput,

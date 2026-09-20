@@ -106,7 +106,19 @@ export class GameSessionAgentOrchestrator {
     const request = this.beginPublicSpeechRequest(session, snapshotKey);
 
     try {
-      const candidateParticipantIds = this.publicSpeechCandidateOrder(session);
+      const randomizedCandidateParticipantIds = this.publicSpeechCandidateOrder(session);
+      const preferredParticipantId = session.preferredPublicSpeechParticipantId;
+      session.preferredPublicSpeechParticipantId = undefined;
+      const candidateParticipantIds =
+        preferredParticipantId && randomizedCandidateParticipantIds.includes(preferredParticipantId)
+          ? [
+              preferredParticipantId,
+              ...filter(
+                randomizedCandidateParticipantIds,
+                (candidateId) => candidateId !== preferredParticipantId,
+              ),
+            ]
+          : randomizedCandidateParticipantIds;
       const requestedParticipantIds = new Set<string>();
       let participantId = candidateParticipantIds[0];
       while (participantId !== undefined) {
@@ -133,6 +145,8 @@ export class GameSessionAgentOrchestrator {
           })
           .with({ type: 'remain-silent' }, (silentOutcome) => {
             const suggestedParticipantId = silentOutcome.nextSpeakerParticipantId;
+            console.log(suggestedParticipantId);
+            console.log(remainingParticipantIds);
             return {
               shouldStop: false as const,
               nextParticipantId:
@@ -360,6 +374,7 @@ export class GameSessionAgentOrchestrator {
     session.scheduledMafiaTargetFallbackPhaseKey = undefined;
     session.autonomousPublicSpeechTurns = 0;
     session.lastAutonomousPublicSpeechSnapshotKey = undefined;
+    session.preferredPublicSpeechParticipantId = undefined;
     session.autonomousPublicSpeechLimitReachedDiscussionKey = undefined;
   }
 
@@ -980,6 +995,10 @@ export class GameSessionAgentOrchestrator {
                   content: speechDecision.content,
                   earliestAt: this.clock.now(),
                 }),
+                ...(speechDecision.nextSpeakerParticipantId &&
+                nextCandidateParticipantIds.includes(speechDecision.nextSpeakerParticipantId)
+                  ? { nextSpeakerParticipantId: speechDecision.nextSpeakerParticipantId }
+                  : {}),
               },
             };
           })
@@ -1244,6 +1263,7 @@ export class GameSessionAgentOrchestrator {
         );
         if (submitted.isErr()) return false;
         current.autonomousPublicSpeechTurns += 1;
+        current.preferredPublicSpeechParticipantId = scheduled.nextSpeakerParticipantId;
         return true;
       },
       schedulePhaseTransition,

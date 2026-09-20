@@ -44,6 +44,7 @@ export type DurableSessionSnapshot = {
   };
   idempotency?: Record<string, [string, { fingerprint: string; result: MafiaGameProjection }][]>;
   scheduledAgentPublicSpeeches?: ScheduledAgentPublicSpeech[];
+  preferredPublicSpeechParticipantId?: string;
   scheduledAgentFinalDefence?: ScheduledAgentFinalDefence;
   scheduledAgentMafiaChatReplies?: ScheduledAgentMafiaChatReply[];
   scheduledMafiaTargetFallbackAt?: string;
@@ -85,6 +86,7 @@ const ScheduledAgentPublicSpeechSchema = v.object({
   participantId: v.string(),
   content: v.string(),
   dueAt: v.string(),
+  nextSpeakerParticipantId: v.optional(v.string()),
 });
 const ScheduledAgentMafiaChatReplySchema = v.object({
   id: v.string(),
@@ -143,6 +145,7 @@ const DurableSessionSnapshotSchema: v.GenericSchema<unknown, DurableSessionSnaps
       v.record(v.string(), v.array(v.tuple([v.string(), IdempotencyRecordSchema]))),
     ),
     scheduledAgentPublicSpeeches: v.optional(v.array(ScheduledAgentPublicSpeechSchema)),
+    preferredPublicSpeechParticipantId: v.optional(v.string()),
     scheduledAgentFinalDefence: v.optional(ScheduledAgentPublicSpeechSchema),
     scheduledAgentMafiaChatReplies: v.optional(v.array(ScheduledAgentMafiaChatReplySchema)),
     scheduledMafiaTargetFallbackAt: v.optional(v.string()),

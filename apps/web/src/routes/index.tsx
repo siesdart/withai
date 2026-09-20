@@ -121,10 +121,17 @@ function Index() {
             </div>
             <div className="flex flex-wrap items-center gap-4 text-[#22221e]">
               <Link
+                to="/terms"
+                className="underline underline-offset-4 transition-colors hover:text-[#a43b31]"
+              >
+                서비스 이용약관
+              </Link>
+              <span className="text-[#22221e]/30">|</span>
+              <Link
                 to="/privacy"
                 className="underline underline-offset-4 transition-colors hover:text-[#a43b31]"
               >
-                개인정보 처리방침 및 AI 고지
+                개인정보 처리방침
               </Link>
               <span className="text-[#22221e]/30">|</span>
               <Link

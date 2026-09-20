@@ -221,7 +221,7 @@ export const gameResources = {
         dayStarted: '{{dayNumber}}일차 낮이 시작되었습니다.',
         discussionTimeAdded: '{{dayNumber}}일차: 토론 시간이 10초 늘어났습니다.',
         discussionTimeRemoved: '{{dayNumber}}일차: 토론 시간이 10초 줄었습니다.',
-        phaseStarted: '{{dayNumber}}일차 {{phase}}이 시작되었습니다.',
+        phaseStarted: '{{dayNumber}}일차 {{phase}}이/가 시작되었습니다.',
         gameCompleted: '게임이 종료되었습니다.',
         allegianceReveal: '{{participantName}}님의 진영은 {{allegiance}}입니다.',
         victory: '{{allegiance}} 진영 승리!',

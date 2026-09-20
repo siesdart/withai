@@ -1,7 +1,7 @@
 export const gameSessionsConfig = {
   guestAllowance: 5,
   humanActionCooldownMs: 1000,
-  agentChatTypingMsPerCharacter: 0,
+  agentChatTypingMsPerCharacter: 150,
   agentChatMinimumGapMs: 900,
   maximumAutonomousPublicSpeechTurnsPerDiscussion: 100,
   sessionIdleTtlHours: 24,

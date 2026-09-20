@@ -252,14 +252,8 @@ export class LLMAgentDecisionGateway implements AgentDecisionGateway {
     for (let attempt = 1; attempt <= maximumDecisionAttempts; attempt += 1) {
       if (abortController?.signal.aborted) return fallback;
       try {
-        const start = new Date();
         // oxlint-disable-next-line no-await-in-loop -- retries are intentionally sequential.
         const response = await this.runDecisionForAttempt(prompt, schema, abortController);
-        const end = new Date();
-        console.log(
-          `Agent decision attempt ${attempt} response (${(end.getTime() - start.getTime()) / 1000} s) :`,
-          response,
-        );
         const parsed = v.safeParse(schema, response);
         if (parsed.success && isValidOutput(parsed.output)) return parsed.output;
       } catch {

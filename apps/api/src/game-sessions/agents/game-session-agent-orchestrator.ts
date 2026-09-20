@@ -145,8 +145,6 @@ export class GameSessionAgentOrchestrator {
           })
           .with({ type: 'remain-silent' }, (silentOutcome) => {
             const suggestedParticipantId = silentOutcome.nextSpeakerParticipantId;
-            console.log(suggestedParticipantId);
-            console.log(remainingParticipantIds);
             return {
               shouldStop: false as const,
               nextParticipantId:

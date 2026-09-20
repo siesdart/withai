@@ -9,6 +9,7 @@ import { HealthModule } from './health/health.module.js';
   imports: [
     LoggerModule.forRoot({
       pinoHttp: {
+        level: process.env.NODE_ENV === 'test' ? 'silent' : 'info',
         transport: process.env.NODE_ENV !== 'production' ? { target: 'pino-pretty' } : undefined,
         autoLogging: {
           ignore: (req) => req.url === '/health' || req.url === '/favicon.ico',

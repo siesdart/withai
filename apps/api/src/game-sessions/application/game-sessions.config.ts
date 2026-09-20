@@ -1,5 +1,5 @@
 export const gameSessionsConfig = {
-  guestAllowance: 10,
+  guestAllowance: 5,
   humanActionCooldownMs: 1000,
   agentChatTypingMsPerCharacter: 0,
   agentChatMinimumGapMs: 900,

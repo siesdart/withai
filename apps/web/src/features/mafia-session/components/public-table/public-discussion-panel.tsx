@@ -137,14 +137,14 @@ export function PublicDiscussionPanel({
       ) : null}
       <div
         className={cn(
-          'flex shrink-0 flex-nowrap items-center gap-1.5 border-b px-3 py-2 text-xs font-medium tracking-[0.16em] uppercase sm:gap-2 sm:px-5',
+          'flex shrink-0 flex-nowrap items-center gap-1.5 border-b px-3 py-2 text-xs font-medium tracking-[0.16em] uppercase sm:gap-2',
           currentPeriod === 'night'
             ? 'border-[#565968] bg-[#292b35] text-[#c9cad5] shadow-[0_1px_0_rgb(255_255_255/0.05)]'
             : 'border-[#ded7c9] bg-[#f8f4eb] text-[#766f63]',
         )}
       >
         <CurrentPeriodIcon aria-hidden="true" className="size-3.5" />
-        <span className="whitespace-nowrap">
+        <span className="py-2 whitespace-nowrap">
           Day {publicInformation.dayNumber} / {currentPeriod}
         </span>
         <GamePhaseTimer phase={publicInformation.phase} deadline={deadline} />

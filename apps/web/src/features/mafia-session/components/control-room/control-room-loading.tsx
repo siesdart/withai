@@ -63,7 +63,7 @@ function ParticipantsLoading() {
         <Skeleton className="h-3.5 w-24 bg-[#ded6c8]" />
         <Skeleton className="ml-auto h-3.5 w-12 bg-[#ded6c8]" />
       </div>
-      <ul className="mt-4 grid grid-cols-[repeat(auto-fit,5rem)] justify-center gap-1 lg:grid-cols-1 lg:justify-normal">
+      <ul className="mt-4 grid grid-cols-4 justify-center gap-1 lg:grid-cols-1 lg:justify-normal">
         {map(participantSkeletons, (_, index) => (
           <li className="aspect-square min-w-0 lg:aspect-auto" key={index}>
             <Skeleton className="h-full min-h-0 w-full bg-[#ded6c8] lg:min-h-12" />
@@ -80,9 +80,6 @@ export function ControlRoomLoading() {
       className="flex h-dvh flex-col overflow-hidden bg-[#e9e3d6] px-4 py-3 text-[#22221e] sm:px-8 sm:py-5"
       aria-label="Starting Game Session"
     >
-      <header className="relative mx-auto w-full max-w-7xl min-w-0 shrink-0 border-b-2 border-[#22221e] pb-3 sm:pb-5">
-        <Skeleton className="h-7 w-48 bg-[#d8d0c2] sm:h-8" />
-      </header>
       <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col gap-3 py-3 lg:grid lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-5 lg:py-6">
         <DiscussionPanelLoading />
         <ParticipantsLoading />

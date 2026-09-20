@@ -1,3 +1,5 @@
+/* oxlint-disable react-perf/jsx-no-new-function-as-prop -- the completed-game link clears transient session storage at the click boundary. */
+
 import type { MafiaGameProjection } from '@repo/mafia/client';
 import { Bubble, BubbleContent } from '@repo/ui/components/bubble';
 import { Message, MessageContent, MessageGroup, MessageHeader } from '@repo/ui/components/message';
@@ -15,6 +17,7 @@ import { map, reduce } from 'remeda';
 
 import type { UseDeadlineCountdownResult } from '../../hooks/ui/use-deadline-countdown';
 import { useResumeAutoScrollAtEnd } from '../../hooks/ui/use-public-discussion-scroll';
+import { useGameSessionStore } from '../../store/game-session';
 import type { PhasePanel } from '../control-room/phase-interaction';
 import { PhaseActionPanel } from '../phase-actions/phase-action-panel';
 import { GamePhaseTimer } from './game-phase-timer';
@@ -134,7 +137,7 @@ export function PublicDiscussionPanel({
       ) : null}
       <div
         className={cn(
-          'flex shrink-0 flex-nowrap items-center gap-1.5 border-b px-3 py-4 text-xs font-medium tracking-[0.16em] uppercase sm:gap-2 sm:px-5',
+          'flex shrink-0 flex-nowrap items-center gap-1.5 border-b px-3 py-2 text-xs font-medium tracking-[0.16em] uppercase sm:gap-2 sm:px-5',
           currentPeriod === 'night'
             ? 'border-[#565968] bg-[#292b35] text-[#c9cad5] shadow-[0_1px_0_rgb(255_255_255/0.05)]'
             : 'border-[#ded7c9] bg-[#f8f4eb] text-[#766f63]',
@@ -145,6 +148,15 @@ export function PublicDiscussionPanel({
           Day {publicInformation.dayNumber} / {currentPeriod}
         </span>
         <GamePhaseTimer phase={publicInformation.phase} deadline={deadline} />
+        {publicInformation.phase === 'completed' ? (
+          <a
+            href="/"
+            className="ml-auto inline-flex h-8 items-center border border-[#22221e] px-2.5 text-xs font-medium hover:bg-[#22221e] hover:text-[#f4efe7]"
+            onClick={() => useGameSessionStore.getState().clearSession()}
+          >
+            게임 목록으로
+          </a>
+        ) : null}
       </div>
       <MessageScrollerProvider autoScroll>
         <MessageScroller className="h-auto! flex-1!">

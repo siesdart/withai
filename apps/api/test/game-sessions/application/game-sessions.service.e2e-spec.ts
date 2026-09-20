@@ -13,6 +13,7 @@ import type { GameSessionError } from '../../../src/game-sessions/application/ga
 import { GameSessionsService } from '../../../src/game-sessions/application/game-sessions.service.js';
 import { RedisGameSessionAuthority } from '../../../src/game-sessions/durability/redis-game-session-authority.js';
 import { GameSessionsController } from '../../../src/game-sessions/transport/game-sessions.controller.js';
+import { createHolderTokenSigner } from '../../../src/game-sessions/transport/holder-token.js';
 import { MafiaGameSessionProjectionEntity } from '../../../src/game-sessions/transport/mafia-game-session-projection.entity.js';
 
 const createDeferred = <Value>() => {
@@ -32,6 +33,48 @@ const flushMicrotasks = async (remaining = 10): Promise<void> => {
 describe('GameSessionsService', () => {
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it('keeps a completed latest session separate from the active session and replaces it on creation', async () => {
+    const service = new GameSessionsService({
+      decidePublicSpeech: () => ({ type: 'remain-silent' as const }),
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit to this target.',
+      selectMafiaTarget: () => undefined,
+    });
+    const holderId = 'latest-session-holder';
+
+    try {
+      const created = await service.createMafiaSession(holderId, 5, 'latest-session-key');
+      if (created.isErr()) throw new Error('Expected an in-memory session.');
+
+      const state = service as unknown as {
+        sessions: Map<string, { status: 'in-progress' | 'completed' | 'abandoned' }>;
+      };
+      const session = state.sessions.get(created.value.projection.sessionId);
+      if (!session) throw new Error('Expected a stored session.');
+      session.status = 'completed';
+
+      await expect(service.activeMafiaSession(holderId)).resolves.toEqual({ value: undefined });
+      await expect(service.latestSessionIdForHolder(holderId)).resolves.toEqual({
+        value: created.value.projection.sessionId,
+      });
+
+      const replacement = await service.createMafiaSession(
+        holderId,
+        5,
+        'latest-session-replacement-key',
+      );
+      if (replacement.isErr()) throw new Error('Expected a replacement in-memory session.');
+
+      expect(replacement.value.projection.sessionId).not.toBe(created.value.projection.sessionId);
+      await expect(service.latestSessionIdForHolder(holderId)).resolves.toEqual({
+        value: replacement.value.projection.sessionId,
+      });
+    } finally {
+      service.onModuleDestroy();
+    }
   });
 
   it('coalesces concurrent Agent action submissions for one session', async () => {
@@ -1555,7 +1598,9 @@ describe('GameSessionsService', () => {
     vi.spyOn(service, 'eventsFor').mockReturnValue(eventsFor.promise);
     const request = Object.assign(new EventEmitter(), {
       destroyed: false,
-      headers: {},
+      headers: {
+        'x-holder-token': createHolderTokenSigner('local-development-secret').sign('holder-id'),
+      },
     }) as unknown as Request;
     const flushHeaders = vi.fn();
     const write = vi.fn();
@@ -1570,7 +1615,8 @@ describe('GameSessionsService', () => {
       subscribed = true;
     });
 
-    const handling = controller.events('session-id', request, response);
+    vi.spyOn(service, 'latestSessionIdForHolder').mockResolvedValue(ok('session-id'));
+    const handling = controller.events(request, response);
     request.emit('close');
     eventsFor.resolve(ok(events));
     await handling;

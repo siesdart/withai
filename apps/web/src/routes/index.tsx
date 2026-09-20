@@ -12,7 +12,7 @@ import { useGameSessionStore } from '@/features/mafia-session/store/game-session
 export const Route = createFileRoute('/')({
   component: Index,
   loader: async () => {
-    const { clearSession, setSessionId } = useGameSessionStore.getState();
+    const { clearSession, setGameSession } = useGameSessionStore.getState();
 
     const result = await MafiaGameSessionClient.activeSession();
     if (result.isErr() || !result.value) {
@@ -20,7 +20,7 @@ export const Route = createFileRoute('/')({
       return undefined;
     }
 
-    setSessionId(result.value.projection.sessionId, result.value.outputLanguage);
+    setGameSession(result.value.outputLanguage);
     return result.value;
   },
 });

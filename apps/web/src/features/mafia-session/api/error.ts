@@ -3,6 +3,7 @@ import { match } from 'ts-pattern';
 import * as v from 'valibot';
 
 export const GameSessionApiErrorSchema = v.variant('type', [
+  v.object({ type: v.literal('holder-token-invalid') }),
   v.object({ type: v.literal('unavailable'), status: v.picklist([403, 404] as const) }),
   v.object({ type: v.literal('action-rejected'), status: v.picklist([400, 409] as const) }),
   v.object({ type: v.literal('rate-limited'), retryAfterMs: v.number() }),
@@ -24,6 +25,7 @@ export function toGameSessionApiError(error: unknown): GameSessionApiError {
 
   if (error instanceof HTTPError) {
     return match(error.response.status)
+      .with(401, () => ({ type: 'holder-token-invalid' }) as const)
       .with(403, 404, (status) => ({ type: 'unavailable', status }) as const)
       .with(400, 409, (status) => ({ type: 'action-rejected', status }) as const)
       .with(429, () => ({

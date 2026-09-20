@@ -6,15 +6,14 @@ import {
   Get,
   HttpException,
   HttpStatus,
-  Param,
   Post,
   Req,
   Res,
+  UnauthorizedException,
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBody,
-  ApiCookieAuth,
   ApiConflictResponse,
   ApiCreatedResponse,
   ApiForbiddenResponse,
@@ -25,6 +24,7 @@ import {
   ApiServiceUnavailableResponse,
   ApiTags,
   ApiTooManyRequestsResponse,
+  ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import type { Result } from 'neverthrow';
@@ -32,7 +32,6 @@ import type { Subscription } from 'rxjs';
 import { match } from 'ts-pattern';
 
 import { retryAfterSeconds } from '../application/cooldown/cooldown.js';
-import { gameSessionsConfig } from '../application/game-sessions.config.js';
 import {
   type GameSessionError,
   GameSessionsService,
@@ -43,8 +42,8 @@ import { CreateMafiaSessionDto } from './dto/create-mafia-session.dto.js';
 import { CreateNominationDto } from './dto/create-nomination.dto.js';
 import { CreatePublicSpeechDto } from './dto/create-public-speech.dto.js';
 import { CreateVerdictDto } from './dto/create-verdict.dto.js';
-import { createGuestCookieSigner, guestCookieSecret } from './guest-cookie.js';
 import { GuestPlayAllowanceEntity } from './guest-play-allowance.entity.js';
+import { createHolderTokenSigner, holderTokenHeader, holderTokenSecret } from './holder-token.js';
 import { OptionalIdempotencyKey, RequiredIdempotencyKey } from './idempotency-key.decorator.js';
 import { MafiaGameSessionProjectionEntity } from './mafia-game-session-projection.entity.js';
 
@@ -52,12 +51,12 @@ import { MafiaGameSessionProjectionEntity } from './mafia-game-session-projectio
 @ApiServiceUnavailableResponse({
   description: 'The durable Game Session authority is temporarily unavailable.',
 })
+@ApiUnauthorizedResponse({
+  description: 'The X-Holder-Token header is missing or invalid.',
+})
 @Controller('game-sessions')
 export class GameSessionsController {
-  private readonly guestCookies = createGuestCookieSigner(
-    gameSessionsConfig.guestCookieName,
-    guestCookieSecret(),
-  );
+  private readonly holderTokens = createHolderTokenSigner(holderTokenSecret());
 
   constructor(private readonly gameSessionsService: GameSessionsService) {}
 
@@ -73,9 +72,11 @@ export class GameSessionsController {
     description: 'The Idempotency-Key header is invalid or the request body fails validation.',
   })
   @ApiCreatedResponse({
-    description: 'The initial authorized projection and a signed anonymous guest cookie.',
+    description:
+      'The initial authorized projection. The signed holder token is returned in X-Holder-Token.',
     type: MafiaGameSessionProjectionEntity,
   })
+  @ApiHeader({ name: holderTokenHeader, required: false })
   @ApiTooManyRequestsResponse({ description: 'The Guest Play Allowance is exhausted for today.' })
   @ApiConflictResponse({
     description: 'The Idempotency-Key was already used with a different request.',
@@ -89,7 +90,7 @@ export class GameSessionsController {
     return this.resolveGameSessionResult(
       (
         await this.gameSessionsService.createMafiaSession(
-          this.holderId(request.headers.cookie),
+          this.holderId(request),
           body.participantCount,
           idempotencyKey,
           body.humanName,
@@ -98,11 +99,7 @@ export class GameSessionsController {
           this.allowanceHolderId(request),
         )
       ).map(({ holderId, projection }) => {
-        response.cookie(gameSessionsConfig.guestCookieName, this.guestCookies.sign(holderId), {
-          httpOnly: true,
-          sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
-          secure: process.env.NODE_ENV === 'production',
-        });
+        this.setHolderToken(response, holderId);
         return projection;
       }),
     );
@@ -110,7 +107,7 @@ export class GameSessionsController {
 
   @Get('mafia/allowance')
   @ApiOperation({ summary: 'Get the anonymous guest remaining daily Game Session allowance' })
-  @ApiCookieAuth('withai_guest')
+  @ApiHeader({ name: holderTokenHeader, required: false })
   @ApiOkResponse({ type: GuestPlayAllowanceEntity })
   async guestPlayAllowance(
     @Req() request: Request,
@@ -120,14 +117,10 @@ export class GameSessionsController {
       (
         await this.gameSessionsService.guestPlayAllowance(
           this.allowanceHolderId(request),
-          this.holderId(request.headers.cookie),
+          this.holderId(request, true),
         )
       ).map(({ holderId, ...allowance }) => {
-        response.cookie(gameSessionsConfig.guestCookieName, this.guestCookies.sign(holderId), {
-          httpOnly: true,
-          sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
-          secure: process.env.NODE_ENV === 'production',
-        });
+        this.setHolderToken(response, holderId);
         return allowance;
       }),
       response,
@@ -136,30 +129,35 @@ export class GameSessionsController {
 
   @Get('mafia/active')
   @ApiOperation({ summary: 'Get the anonymous guest active Mafia Game Session, if any' })
-  @ApiCookieAuth('withai_guest')
+  @ApiHeader({ name: holderTokenHeader, required: false })
   @ApiOkResponse({ description: 'The active Game Session or null when none is available.' })
-  async activeMafiaSession(@Req() request: Request) {
+  async activeMafiaSession(
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const holderId = this.requireHolderId(this.holderId(request, true));
+    this.setHolderToken(response, holderId);
     return this.resolveGameSessionResult(
-      (
-        await this.gameSessionsService.activeMafiaSession(this.holderId(request.headers.cookie))
-      ).map((session) => session ?? null),
+      (await this.gameSessionsService.activeMafiaSession(holderId)).map(
+        (session) => session ?? null,
+      ),
     );
   }
 
-  @Get(':sessionId/snapshot')
+  @Get('mafia/snapshot')
   @ApiOperation({ summary: 'Get the current authorized Game Session snapshot' })
-  @ApiCookieAuth('withai_guest')
+  @ApiHeader({ name: holderTokenHeader, required: true })
   @ApiOkResponse({ type: MafiaGameSessionProjectionEntity })
   @ApiForbiddenResponse({
     description: 'The Game Session does not exist or is unavailable to this guest.',
   })
-  async snapshot(@Param('sessionId') sessionId: string, @Req() request: Request) {
-    return this.projectionFor(sessionId, this.holderId(request.headers.cookie));
+  async snapshot(@Req() request: Request) {
+    return this.resolveGameSessionResult(this.currentProjection(this.holderId(request)));
   }
 
-  @Post(':sessionId/actions/public-speech')
+  @Post('mafia/actions/public-speech')
   @ApiOperation({ summary: 'Submit Public Chat speech for the Human Player' })
-  @ApiCookieAuth('withai_guest')
+  @ApiHeader({ name: holderTokenHeader, required: true })
   @ApiBody({ type: CreatePublicSpeechDto })
   @ApiHeader({
     name: 'Idempotency-Key',
@@ -182,74 +180,75 @@ export class GameSessionsController {
     description: 'The Game Session does not exist or is unavailable to this guest.',
   })
   async submitPublicSpeech(
-    @Param('sessionId') sessionId: string,
     @Body() body: CreatePublicSpeechDto,
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
     @RequiredIdempotencyKey() idempotencyKey: string,
   ) {
+    const holderId = this.requiredHolderId(request);
     return this.resolveGameSessionResult(
-      this.gameSessionsService.submitPublicSpeech(
-        sessionId,
-        this.holderId(request.headers.cookie),
-        body.content,
-        idempotencyKey,
+      this.withCurrentSession(holderId, (sessionId) =>
+        this.gameSessionsService.submitPublicSpeech(
+          sessionId,
+          holderId,
+          body.content,
+          idempotencyKey,
+        ),
       ),
       response,
     );
   }
 
-  @Post(':sessionId/actions/mafia-chat')
+  @Post('mafia/actions/mafia-chat')
   @ApiOperation({ summary: 'Submit a private Mafia Chat statement during Night' })
-  @ApiCookieAuth('withai_guest')
+  @ApiHeader({ name: holderTokenHeader, required: true })
   @ApiBody({ type: CreateMafiaChatDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ApiCreatedResponse({ type: MafiaGameSessionProjectionEntity })
   async submitMafiaChat(
-    @Param('sessionId') sessionId: string,
     @Body() body: CreateMafiaChatDto,
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
     @RequiredIdempotencyKey() idempotencyKey: string,
   ) {
+    const holderId = this.requiredHolderId(request);
     return this.resolveGameSessionResult(
-      this.gameSessionsService.submitMafiaChat(
-        sessionId,
-        this.holderId(request.headers.cookie),
-        body.content,
-        idempotencyKey,
+      this.withCurrentSession(holderId, (sessionId) =>
+        this.gameSessionsService.submitMafiaChat(sessionId, holderId, body.content, idempotencyKey),
       ),
       response,
     );
   }
 
-  @Post(':sessionId/actions/nomination')
+  @Post('mafia/actions/nomination')
   @ApiOperation({ summary: 'Nominate a living Participant for Final Defence' })
-  @ApiCookieAuth('withai_guest')
+  @ApiHeader({ name: holderTokenHeader, required: true })
   @ApiBody({ type: CreateNominationDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ApiCreatedResponse({ type: MafiaGameSessionProjectionEntity })
   @ApiBadRequestResponse({ description: 'The nomination is not permitted in the current Phase.' })
   @ApiConflictResponse({ description: 'The idempotency key was reused with a different action.' })
   async submitNomination(
-    @Param('sessionId') sessionId: string,
     @Body() body: CreateNominationDto,
     @Req() request: Request,
     @RequiredIdempotencyKey() idempotencyKey: string,
   ) {
+    const holderId = this.requiredHolderId(request);
     return this.resolveGameSessionResult(
-      this.gameSessionsService.submitNomination(
-        sessionId,
-        this.holderId(request.headers.cookie),
-        body.targetParticipantId,
-        idempotencyKey,
+      this.withCurrentSession(holderId, (sessionId) =>
+        this.gameSessionsService.submitNomination(
+          sessionId,
+          holderId,
+          body.targetParticipantId,
+          idempotencyKey,
+        ),
       ),
     );
   }
 
-  @Post(':sessionId/actions/final-defence')
+  @Post('mafia/actions/final-defence')
   @ApiOperation({ summary: 'Submit the nominated Human Player Final Defence' })
-  @ApiCookieAuth('withai_guest')
+  @ApiHeader({ name: holderTokenHeader, required: true })
   @ApiBody({ type: CreatePublicSpeechDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ApiCreatedResponse({ type: MafiaGameSessionProjectionEntity })
@@ -267,116 +266,121 @@ export class GameSessionsController {
   })
   @ApiConflictResponse({ description: 'The idempotency key was reused with a different action.' })
   async submitFinalDefence(
-    @Param('sessionId') sessionId: string,
     @Body() body: CreatePublicSpeechDto,
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
     @RequiredIdempotencyKey() idempotencyKey: string,
   ) {
+    const holderId = this.requiredHolderId(request);
     return this.resolveGameSessionResult(
-      this.gameSessionsService.submitFinalDefence(
-        sessionId,
-        this.holderId(request.headers.cookie),
-        body.content,
-        idempotencyKey,
+      this.withCurrentSession(holderId, (sessionId) =>
+        this.gameSessionsService.submitFinalDefence(
+          sessionId,
+          holderId,
+          body.content,
+          idempotencyKey,
+        ),
       ),
       response,
     );
   }
 
-  @Post(':sessionId/actions/verdict')
+  @Post('mafia/actions/verdict')
   @ApiOperation({ summary: 'Submit the Human Player verdict vote' })
-  @ApiCookieAuth('withai_guest')
+  @ApiHeader({ name: holderTokenHeader, required: true })
   @ApiBody({ type: CreateVerdictDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ApiCreatedResponse({ type: MafiaGameSessionProjectionEntity })
   @ApiBadRequestResponse({ description: 'The verdict is not permitted in the current Phase.' })
   @ApiConflictResponse({ description: 'The idempotency key was reused with a different action.' })
   async submitVerdict(
-    @Param('sessionId') sessionId: string,
     @Body() body: CreateVerdictDto,
     @Req() request: Request,
     @RequiredIdempotencyKey() idempotencyKey: string,
   ) {
+    const holderId = this.requiredHolderId(request);
     return this.resolveGameSessionResult(
-      this.gameSessionsService.submitVerdict(
-        sessionId,
-        this.holderId(request.headers.cookie),
-        body.vote,
-        idempotencyKey,
+      this.withCurrentSession(holderId, (sessionId) =>
+        this.gameSessionsService.submitVerdict(sessionId, holderId, body.vote, idempotencyKey),
       ),
     );
   }
 
-  @Post(':sessionId/actions/mafia-target')
+  @Post('mafia/actions/mafia-target')
   @ApiOperation({ summary: 'Submit the Human Player private Mafia target' })
-  @ApiCookieAuth('withai_guest')
+  @ApiHeader({ name: holderTokenHeader, required: true })
   @ApiBody({ type: CreateNominationDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ApiCreatedResponse({ type: MafiaGameSessionProjectionEntity })
   async submitMafiaTarget(
-    @Param('sessionId') sessionId: string,
     @Body() body: CreateNominationDto,
     @Req() request: Request,
     @RequiredIdempotencyKey() idempotencyKey: string,
   ) {
+    const holderId = this.requiredHolderId(request);
     return this.resolveGameSessionResult(
-      this.gameSessionsService.submitMafiaTarget(
-        sessionId,
-        this.holderId(request.headers.cookie),
-        body.targetParticipantId,
-        idempotencyKey,
+      this.withCurrentSession(holderId, (sessionId) =>
+        this.gameSessionsService.submitMafiaTarget(
+          sessionId,
+          holderId,
+          body.targetParticipantId,
+          idempotencyKey,
+        ),
       ),
     );
   }
 
-  @Post(':sessionId/actions/doctor-protection')
+  @Post('mafia/actions/doctor-protection')
   @ApiOperation({ summary: 'Submit the Human Player private Doctor protection' })
-  @ApiCookieAuth('withai_guest')
+  @ApiHeader({ name: holderTokenHeader, required: true })
   @ApiBody({ type: CreateNominationDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ApiCreatedResponse({ type: MafiaGameSessionProjectionEntity })
   async submitDoctorProtection(
-    @Param('sessionId') sessionId: string,
     @Body() body: CreateNominationDto,
     @Req() request: Request,
     @RequiredIdempotencyKey() idempotencyKey: string,
   ) {
+    const holderId = this.requiredHolderId(request);
     return this.resolveGameSessionResult(
-      this.gameSessionsService.submitDoctorProtection(
-        sessionId,
-        this.holderId(request.headers.cookie),
-        body.targetParticipantId,
-        idempotencyKey,
+      this.withCurrentSession(holderId, (sessionId) =>
+        this.gameSessionsService.submitDoctorProtection(
+          sessionId,
+          holderId,
+          body.targetParticipantId,
+          idempotencyKey,
+        ),
       ),
     );
   }
 
-  @Post(':sessionId/actions/police-investigation')
+  @Post('mafia/actions/police-investigation')
   @ApiOperation({ summary: 'Submit the Human Player private Police investigation' })
-  @ApiCookieAuth('withai_guest')
+  @ApiHeader({ name: holderTokenHeader, required: true })
   @ApiBody({ type: CreateNominationDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ApiCreatedResponse({ type: MafiaGameSessionProjectionEntity })
   async submitPoliceInvestigation(
-    @Param('sessionId') sessionId: string,
     @Body() body: CreateNominationDto,
     @Req() request: Request,
     @RequiredIdempotencyKey() idempotencyKey: string,
   ) {
+    const holderId = this.requiredHolderId(request);
     return this.resolveGameSessionResult(
-      this.gameSessionsService.submitPoliceInvestigation(
-        sessionId,
-        this.holderId(request.headers.cookie),
-        body.targetParticipantId,
-        idempotencyKey,
+      this.withCurrentSession(holderId, (sessionId) =>
+        this.gameSessionsService.submitPoliceInvestigation(
+          sessionId,
+          holderId,
+          body.targetParticipantId,
+          idempotencyKey,
+        ),
       ),
     );
   }
 
-  @Post(':sessionId/actions/discussion-time-adjustment')
+  @Post('mafia/actions/discussion-time-adjustment')
   @ApiOperation({ summary: 'Adjust the Discussion deadline for the Human Player' })
-  @ApiCookieAuth('withai_guest')
+  @ApiHeader({ name: holderTokenHeader, required: true })
   @ApiBody({ type: CreateDiscussionTimeAdjustmentDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ApiCreatedResponse({ type: MafiaGameSessionProjectionEntity })
@@ -395,27 +399,29 @@ export class GameSessionsController {
     description: 'The Game Session does not exist or is unavailable to this guest.',
   })
   async adjustDiscussionTime(
-    @Param('sessionId') sessionId: string,
     @Body() body: CreateDiscussionTimeAdjustmentDto,
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
     @RequiredIdempotencyKey() idempotencyKey: string,
   ) {
+    const holderId = this.requiredHolderId(request);
     return this.resolveGameSessionResult(
-      this.gameSessionsService.adjustDiscussionTime(
-        sessionId,
-        this.holderId(request.headers.cookie),
-        body.adjustmentSeconds,
-        body.expectedDeadline,
-        idempotencyKey,
+      this.withCurrentSession(holderId, (sessionId) =>
+        this.gameSessionsService.adjustDiscussionTime(
+          sessionId,
+          holderId,
+          body.adjustmentSeconds,
+          body.expectedDeadline,
+          idempotencyKey,
+        ),
       ),
       response,
     );
   }
 
-  @Get(':sessionId/events')
+  @Get('mafia/events')
   @ApiOperation({ summary: 'Subscribe to ordered Game Session SSE events' })
-  @ApiCookieAuth('withai_guest')
+  @ApiHeader({ name: holderTokenHeader, required: true })
   @ApiResponse({
     status: 200,
     description:
@@ -425,11 +431,8 @@ export class GameSessionsController {
   @ApiForbiddenResponse({
     description: 'The Game Session does not exist or is unavailable to this guest.',
   })
-  async events(
-    @Param('sessionId') sessionId: string,
-    @Req() request: Request,
-    @Res() response: Response,
-  ): Promise<void> {
+  async events(@Req() request: Request, @Res() response: Response): Promise<void> {
+    const holderId = this.requiredHolderId(request);
     let subscription: Subscription | undefined;
     let closed = request.destroyed;
     const close = () => {
@@ -437,10 +440,11 @@ export class GameSessionsController {
       subscription?.unsubscribe();
     };
     request.once('close', close);
+    const currentSession = await this.latestSessionId(holderId);
     const events = this.resolveGameSessionResult(
       await this.gameSessionsService.eventsFor(
-        sessionId,
-        this.holderId(request.headers.cookie),
+        currentSession,
+        holderId,
         this.lastEventId(request.headers['last-event-id']),
       ),
     );
@@ -467,10 +471,39 @@ export class GameSessionsController {
     });
   }
 
-  private async projectionFor(sessionId: string, cookie: string | undefined) {
-    return this.resolveGameSessionResult(
-      await this.gameSessionsService.getProjection(sessionId, cookie),
-    );
+  private async currentProjection(holderId: string | undefined) {
+    const requiredHolderId = this.requireHolderId(holderId);
+    const sessionId = await this.latestSessionId(requiredHolderId);
+    return this.gameSessionsService.getProjection(sessionId, requiredHolderId);
+  }
+
+  private async withCurrentSession<Value>(
+    holderId: string,
+    operation: (
+      sessionId: string,
+    ) => Result<Value, GameSessionError> | Promise<Result<Value, GameSessionError>>,
+  ) {
+    return operation(await this.currentSessionId(holderId));
+  }
+
+  private async currentSessionId(holderId: string): Promise<string> {
+    const active = await this.gameSessionsService.activeMafiaSession(holderId);
+    if (active.isErr()) {
+      throw this.toHttpException(active.error);
+    }
+    if (!active.value)
+      throw new ForbiddenException('This Game Session is not available to this guest.');
+    return active.value.projection.sessionId;
+  }
+
+  private async latestSessionId(holderId: string): Promise<string> {
+    const latestSessionId = await this.gameSessionsService.latestSessionIdForHolder(holderId);
+    if (latestSessionId.isErr()) {
+      throw this.toHttpException(latestSessionId.error);
+    }
+    if (!latestSessionId.value)
+      throw new ForbiddenException('This Game Session is not available to this guest.');
+    return latestSessionId.value;
   }
 
   private resolveGameSessionResult<Value>(
@@ -656,8 +689,37 @@ export class GameSessionsController {
     return Number.isSafeInteger(eventId) && eventId >= 0 ? eventId : undefined;
   }
 
-  private holderId(cookie: string | undefined) {
-    return this.guestCookies.read(cookie);
+  private holderId(request: Request, mint = false) {
+    const header = request.headers[holderTokenHeader.toLowerCase()];
+    const token = typeof header === 'string' ? header : undefined;
+    if (!token) {
+      return mint ? this.holderTokens.createHolderId() : undefined;
+    }
+
+    const holderId = this.holderTokens.read(token);
+    if (!holderId) {
+      throw new UnauthorizedException({
+        code: 'invalid-holder-token',
+        message: 'The holder token is missing or invalid.',
+      });
+    }
+    return holderId;
+  }
+
+  private requiredHolderId(request: Request) {
+    return this.requireHolderId(this.holderId(request));
+  }
+
+  private requireHolderId(holderId: string | undefined) {
+    if (holderId) return holderId;
+    throw new UnauthorizedException({
+      code: 'invalid-holder-token',
+      message: 'The holder token is missing or invalid.',
+    });
+  }
+
+  private setHolderToken(response: Response, holderId: string) {
+    response.setHeader(holderTokenHeader, this.holderTokens.sign(holderId));
   }
 
   private allowanceHolderId(request: Request) {

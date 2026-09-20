@@ -6,16 +6,12 @@ import { MafiaGameSessionClient } from '../../api/client';
 import { updateGameSessionSnapshot } from '../options/game-session-mutation-options';
 import { gameSessionSnapshotOptions } from '../options/game-session-snapshot-options';
 
-export function useGameSessionSubscription(sessionId: string | undefined) {
+export function useGameSessionSubscription() {
   const queryClient = useQueryClient();
   const [isReconnecting, setIsReconnecting] = useState(false);
 
   useEffect(() => {
-    if (!sessionId) {
-      return undefined;
-    }
-
-    const client = new MafiaGameSessionClient(sessionId);
+    const client = new MafiaGameSessionClient();
     const abortController = new AbortController();
     let lastEventId: string | undefined;
     let highestProjectionEventId = -1;
@@ -30,14 +26,14 @@ export function useGameSessionSubscription(sessionId: string | undefined) {
           onConnected: () => {
             retryCount = 0;
             setIsReconnecting(false);
-            void queryClient.invalidateQueries(gameSessionSnapshotOptions(sessionId));
+            void queryClient.invalidateQueries(gameSessionSnapshotOptions());
           },
           onProjection: (projection, eventId) => {
             if (projection.eventId <= highestProjectionEventId) return;
             highestProjectionEventId = projection.eventId;
             lastEventId = eventId || String(projection.eventId);
             receivedCompletedProjection ||= projection.public.phase === 'completed';
-            updateGameSessionSnapshot(queryClient, sessionId, projection);
+            updateGameSessionSnapshot(queryClient, projection);
           },
           signal: abortController.signal,
         });
@@ -47,8 +43,9 @@ export function useGameSessionSubscription(sessionId: string | undefined) {
           (error) =>
             match(error)
               .with({ type: 'aborted' }, () => false)
+              .with({ type: 'holder-token-invalid' }, () => false)
               .with({ type: 'unavailable' }, () => {
-                void queryClient.invalidateQueries(gameSessionSnapshotOptions(sessionId));
+                void queryClient.invalidateQueries(gameSessionSnapshotOptions());
                 return false;
               })
               .with({ type: 'action-rejected' }, () => false)
@@ -76,7 +73,7 @@ export function useGameSessionSubscription(sessionId: string | undefined) {
     return () => {
       abortController.abort();
     };
-  }, [queryClient, sessionId]);
+  }, [queryClient]);
 
   return { isReconnecting };
 }

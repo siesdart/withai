@@ -13,10 +13,10 @@ import { ParticipantList } from '../game-information/participant-list';
 import { PublicDiscussionPanel } from '../public-table/public-discussion-panel';
 import { createPhaseInteraction } from './phase-interaction';
 
-export function ControlRoom({ sessionId }: { sessionId: string }) {
-  const { snapshot } = useGameSessionSnapshot(sessionId);
-  const { isReconnecting } = useGameSessionSubscription(sessionId);
-  const gameAction = useGameAction(sessionId);
+export function ControlRoom() {
+  const { snapshot } = useGameSessionSnapshot();
+  const { isReconnecting } = useGameSessionSubscription();
+  const gameAction = useGameAction();
   const deadline = useDeadlineCountdown(snapshot.public.phaseDeadline);
 
   const aliveParticipantCounts = getAliveParticipantCounts(

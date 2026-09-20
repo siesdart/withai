@@ -7,6 +7,7 @@ import { MafiaGameSessionClient } from '@/features/mafia-session/api/client';
 import { isUnavailableGameSession } from '@/features/mafia-session/api/error';
 import { useGameSessionStore } from '@/features/mafia-session/store/game-session';
 
+import { gameSessionSnapshotQueryKey } from '../../mafia-session/hooks/options/game-session-snapshot-options';
 import { guestPlayAllowanceOptions } from './guest-play-allowance-options';
 
 const defaultNameFor = (outputLanguage: MafiaOutputLanguage) =>
@@ -38,8 +39,9 @@ export function useMafiaGameCreation() {
           await MafiaGameSessionClient.createSession(state.ensureCreationKey(), settings))
         : firstResult;
     await result.match(
-      async (projection) => {
-        useGameSessionStore.getState().setSessionId(projection.sessionId, outputLanguage);
+      async () => {
+        queryClient.removeQueries({ queryKey: gameSessionSnapshotQueryKey, exact: true });
+        useGameSessionStore.getState().setGameSession(outputLanguage);
         await navigate({ to: '/mafia' });
       },
       () => {

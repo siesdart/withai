@@ -894,7 +894,16 @@ describe('RedisGameSessionAuthority', () => {
       1,
     );
     if (projection.isErr()) throw new Error('Expected a Human Player projection.');
-    await authority.save(initial, { eventId: 1, projection: projection.value });
+    await expect(
+      authority.create(
+        initial,
+        { eventId: 1, projection: projection.value },
+        initial.holderId,
+        '2026-09-05',
+        3,
+        undefined,
+      ),
+    ).resolves.toEqual({ value: { type: 'created' } });
 
     await expect(
       authority.resolveExpiredPhase(
@@ -907,6 +916,69 @@ describe('RedisGameSessionAuthority', () => {
     await expect(authority.activeSnapshots()).resolves.toEqual({ value: [] });
     await expect(authority.load('completed-recovery-session')).resolves.toMatchObject({
       value: { status: 'completed' },
+    });
+    await expect(authority.latestSessionIdForHolder(initial.holderId)).resolves.toEqual({
+      value: initial.sessionId,
+    });
+  });
+
+  it('retains the latest holder session after completion and replaces it on creation', async () => {
+    const redis = new RedisMock();
+    redisClients.push(redis);
+    const authority = new RedisGameSessionAuthority(redis, 'withai:latest-session-test');
+    const initial = createSnapshot('latest-session-1');
+    const projection = createMafiaSession(initial.sessionId).projectionFor(
+      initial.humanParticipantId,
+      1,
+    );
+    if (projection.isErr()) throw new Error('Expected a Human Player projection.');
+
+    await expect(
+      authority.create(
+        initial,
+        { eventId: 1, projection: projection.value },
+        initial.holderId,
+        '2026-09-05',
+        3,
+        undefined,
+      ),
+    ).resolves.toEqual({ value: { type: 'created' } });
+    await expect(authority.latestSessionIdForHolder(initial.holderId)).resolves.toEqual({
+      value: initial.sessionId,
+    });
+
+    await expect(
+      authority.save(
+        { ...initial, nextEventId: 2, status: 'completed' },
+        { eventId: 2, projection: projection.value },
+      ),
+    ).resolves.toEqual({ value: true });
+    await expect(authority.activeSessionIdForHolder(initial.holderId)).resolves.toEqual({
+      value: undefined,
+    });
+    await expect(authority.latestSessionIdForHolder(initial.holderId)).resolves.toEqual({
+      value: initial.sessionId,
+    });
+
+    const replacement = createSnapshot('latest-session-2');
+    const replacementProjection = createMafiaSession(replacement.sessionId).projectionFor(
+      replacement.humanParticipantId,
+      1,
+    );
+    if (replacementProjection.isErr()) throw new Error('Expected a Human Player projection.');
+
+    await expect(
+      authority.create(
+        replacement,
+        { eventId: 1, projection: replacementProjection.value },
+        replacement.holderId,
+        '2026-09-05',
+        3,
+        undefined,
+      ),
+    ).resolves.toEqual({ value: { type: 'created' } });
+    await expect(authority.latestSessionIdForHolder(replacement.holderId)).resolves.toEqual({
+      value: replacement.sessionId,
     });
   });
 

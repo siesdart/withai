@@ -88,6 +88,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
   private readonly sessions = new Map<string, StoredGameSessionEntity>();
   private readonly guestSessionCounts = new Map<string, number>();
   private readonly activeSessionIdsByHolder = new Map<string, string>();
+  private readonly latestSessionIdsByHolder = new Map<string, string>();
   private readonly idempotencyKeys = new Map<string, IdempotencyRecord<string>>();
   private readonly sessionMutationTails = new Map<string, Promise<void>>();
   private readonly agentActionRetries: KeyedRetryScheduler;
@@ -359,6 +360,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     }
     this.sessions.set(sessionId, session);
     this.activeSessionIdsByHolder.set(resolvedHolderId, sessionId);
+    this.latestSessionIdsByHolder.set(resolvedHolderId, sessionId);
     this.lifecycle.schedulePhaseTransition(session);
     if (awaitInitialAgentActions) {
       const actions = await this.submitAndCommitAgentActions(session);
@@ -399,6 +401,38 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       projection,
       outputLanguage: session.outputLanguage ?? 'ko',
     }));
+  }
+
+  async latestSessionIdForHolder(
+    holderId: string | undefined,
+  ): Promise<Result<string | undefined, GameSessionError>> {
+    if (!holderId) return ok(undefined);
+
+    if (!this.authority) {
+      const sessionId = this.latestSessionIdsByHolder.get(holderId);
+      const session = sessionId ? this.sessions.get(sessionId) : undefined;
+      if (!session || session.status === 'abandoned') {
+        if (sessionId) this.latestSessionIdsByHolder.delete(holderId);
+        return ok(undefined);
+      }
+      return ok(sessionId);
+    }
+
+    const latestSessionId = await this.authority.latestSessionIdForHolder(holderId);
+    if (latestSessionId.isErr()) return err({ type: 'durability-unavailable' });
+    if (!latestSessionId.value) return ok(undefined);
+
+    const hydrated = await this.hydrateAuthoritativeSession(latestSessionId.value, false, false);
+    if (hydrated.isErr()) {
+      await this.authority.clearLatestSessionForHolder(holderId, latestSessionId.value);
+      return ok(undefined);
+    }
+    const session = this.sessions.get(latestSessionId.value);
+    if (!session || session.status === 'abandoned') {
+      await this.authority.clearLatestSessionForHolder(holderId, latestSessionId.value);
+      return ok(undefined);
+    }
+    return ok(latestSessionId.value);
   }
 
   async guestPlayAllowance(
@@ -1207,6 +1241,9 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     this.agentActions.clearTimers(session);
 
     const sessionId = session.gameSession.snapshot().sessionId;
+    if (this.latestSessionIdsByHolder.get(session.holderId) === sessionId) {
+      this.latestSessionIdsByHolder.delete(session.holderId);
+    }
     this.agentActionRetries.clear(sessionId);
     this.phaseTransitionRetries.clear(sessionId);
     this.scheduledAgentRetries.clear(sessionId);

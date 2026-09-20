@@ -24,15 +24,14 @@ export type UseGameActionResult = {
   submitDraft: (actionType: GameAction['type']) => void;
 };
 
-export function useGameAction(sessionId: string): UseGameActionResult {
+export function useGameAction(): UseGameActionResult {
   const drafts = useGameSessionStore((state) => state.gameActionDrafts);
   const setGameActionDraft = useGameSessionStore((state) => state.setGameActionDraft);
   const clearGameActionDraft = useGameSessionStore((state) => state.clearGameActionDraft);
   const cooldown = useCooldown();
-  const client = new MafiaGameSessionClient(sessionId);
+  const client = new MafiaGameSessionClient();
   const { error, isError, isPending, mutate } = useMutation(
     gameSessionMutationOptions({
-      sessionId,
       mutationFn: (action: GameActionDraft) => submitGameAction(client, action),
       onRateLimited: cooldown.startCooldown,
     }),
@@ -126,6 +125,10 @@ function gameActionErrorMessage(error: unknown) {
     .with(
       { type: 'action-rejected' },
       () => 'This action is no longer permitted; the current Phase may have expired.',
+    )
+    .with(
+      { type: 'holder-token-invalid' },
+      () => 'Your action was not accepted. The server state is authoritative.',
     )
     .with(
       { type: 'unavailable' },

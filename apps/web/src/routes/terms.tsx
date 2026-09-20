@@ -23,13 +23,13 @@ function TermsPage() {
         <section className="py-8 sm:py-12">
           <Link
             to="/"
-            className="mb-6 inline-flex items-center gap-1.5 border border-[#22221e] bg-[#f4efe7] px-3 py-1.5 text-xs font-semibold text-[#22221e] shadow-xs hover:bg-[#e9e3d6] transition-colors"
+            className="mb-6 inline-flex items-center gap-1.5 border border-[#22221e] bg-[#f4efe7] px-3 py-1.5 text-xs font-semibold text-[#22221e] shadow-xs transition-colors hover:bg-[#e9e3d6]"
           >
             <ArrowLeft className="h-4 w-4" />
             메인으로 돌아가기
           </Link>
 
-          <div className="border-2 border-[#22221e] bg-[#f4efe7] p-6 sm:p-10 shadow-sm">
+          <div className="border-2 border-[#22221e] bg-[#f4efe7] p-6 shadow-sm sm:p-10">
             <TermsOfServiceContent />
           </div>
         </section>

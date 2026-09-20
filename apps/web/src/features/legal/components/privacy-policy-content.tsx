@@ -7,7 +7,8 @@ export function PrivacyPolicyContent() {
         </span>
         <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">개인정보 처리방침</h1>
         <p className="mt-3 text-sm text-[#625e55]">
-          시행일자: 2026년 9월 20일 | WithAI는 이용자의 프라이버시를 존중하며, 관계 법령에 따른 안전한 데이터 처리를 보장합니다.
+          시행일자: 2026년 9월 20일 | WithAI는 이용자의 프라이버시를 존중하며, 관계 법령에 따른
+          안전한 데이터 처리를 보장합니다.
         </p>
       </header>
 

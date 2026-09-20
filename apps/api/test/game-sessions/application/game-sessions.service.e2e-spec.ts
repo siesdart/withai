@@ -309,9 +309,11 @@ describe('GameSessionsService', () => {
     const deferredSpeech = createDeferred<{ type: 'speak'; content: string }>();
     const decisionStarted = createDeferred<void>();
     let decisions = 0;
+    let abortController: AbortController | undefined;
     const service = new GameSessionsService({
-      decidePublicSpeech: () => {
+      decidePublicSpeech: (_context, options) => {
         decisions += 1;
+        abortController = options?.abortController;
         if (decisions > 1) return { type: 'remain-silent' as const };
         decisionStarted.resolve(undefined);
         return deferredSpeech.promise;
@@ -362,6 +364,9 @@ describe('GameSessionsService', () => {
     await expect(adjustment).resolves.toMatchObject({
       value: { public: { phaseDeadline: expect.not.stringMatching(expectedDeadline) } },
     });
+    await flushMicrotasks();
+    expect(decisions).toBe(1);
+    expect(abortController?.signal.aborted).toBe(false);
 
     deferredSpeech.resolve({
       type: 'speak',

@@ -799,11 +799,16 @@ export class GameSessionAgentOrchestrator {
   private publicSpeechSnapshotKey(
     snapshot: ReturnType<StoredGameSessionEntity['gameSession']['snapshot']>,
   ) {
+    const publicSpeechTimelineLength = filter(
+      snapshot.timeline,
+      (timelineItem) =>
+        timelineItem.type !== 'record' || timelineItem.outcome.type !== 'discussion-time-adjusted',
+    ).length;
     return JSON.stringify([
       snapshot.sessionId,
       snapshot.dayNumber,
       snapshot.phase,
-      snapshot.timeline.length,
+      publicSpeechTimelineLength,
     ]);
   }
 

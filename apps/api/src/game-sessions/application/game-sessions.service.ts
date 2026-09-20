@@ -80,6 +80,8 @@ type IdempotentProjectionAction = {
   submit: (session: StoredGameSessionEntity) => Result<MafiaGameProjection, GameSessionError>;
   beforeSave?: (session: StoredGameSessionEntity) => void | Promise<void>;
   afterCommit?: (session: StoredGameSessionEntity) => void;
+  runConcurrently?: boolean;
+  skipHydration?: boolean;
 };
 
 @Injectable()
@@ -830,15 +832,14 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     expectedDeadline: string,
     idempotencyKey: string,
   ): Promise<Result<MafiaGameProjection, GameSessionError>> {
-    const current = this.sessions.get(sessionId);
-    if (current && current.holderId === holderId)
-      this.agentActions.cancelPublicSpeechReply(current);
     const fingerprint = `${adjustmentSeconds}:${expectedDeadline}`;
     return this.runIdempotentProjectionAction(sessionId, holderId, {
       idempotencyKey,
       fingerprint,
       conflict: { type: 'discussion-time-adjustment-idempotency-conflict' },
       records: (session) => session.discussionTimeAdjustmentIdempotencyKeys,
+      runConcurrently: true,
+      skipHydration: true,
       submit: (session) => {
         const currentProjection = session.gameSession.projectionFor(
           session.humanParticipantId,
@@ -1015,6 +1016,8 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     holderId: string | undefined,
     action: IdempotentProjectionAction,
   ): Promise<Result<MafiaGameProjection, GameSessionError>> {
+    if (action.runConcurrently)
+      return this.runIdempotentProjectionActionUnlocked(sessionId, holderId, action);
     return this.withSessionMutation(sessionId, () =>
       this.runIdempotentProjectionActionUnlocked(sessionId, holderId, action),
     );
@@ -1031,10 +1034,12 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       submit,
       beforeSave,
       afterCommit,
+      runConcurrently = false,
+      skipHydration = false,
     }: IdempotentProjectionAction,
     attempt = 0,
   ): Promise<Result<MafiaGameProjection, GameSessionError>> {
-    if (this.authority) {
+    if (this.authority && !skipHydration) {
       const recovered = await this.getProjection(sessionId, holderId, true);
       if (recovered.isErr()) return err<MafiaGameProjection, GameSessionError>(recovered.error);
     }
@@ -1075,7 +1080,17 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       return this.runIdempotentProjectionActionUnlocked(
         sessionId,
         holderId,
-        { idempotencyKey, fingerprint, conflict, records, submit, beforeSave, afterCommit },
+        {
+          idempotencyKey,
+          fingerprint,
+          conflict,
+          records,
+          submit,
+          beforeSave,
+          afterCommit,
+          runConcurrently,
+          skipHydration,
+        },
         attempt + 1,
       );
     }
@@ -1281,7 +1296,6 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
   }
 
   private queuePublicSpeechReplies(session: StoredGameSessionEntity) {
-    this.agentActions.cancelPublicSpeechReply(session);
     const sessionId = session.gameSession.snapshot().sessionId;
     void Promise.resolve().then(() => this.preparePublicSpeechReplies(sessionId));
   }

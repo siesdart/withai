@@ -1,9 +1,12 @@
 import type { MafiaGameProjection } from '@repo/mafia/client';
 import { Marker, MarkerContent, MarkerIcon } from '@repo/ui/components/marker';
 import { cn } from 'cn';
+import type { TFunction } from 'i18next';
 import { ScrollTextIcon } from 'lucide-react';
 import { filter, map, sort, unique } from 'remeda';
 import { match } from 'ts-pattern';
+
+import { useGameTranslation } from '../../i18n/use-game-translation';
 
 type GameRecordMarkerProps = {
   outcome: Extract<
@@ -18,109 +21,117 @@ type GameRecordMarkerProps = {
 const outcomeCopy = (
   outcome: GameRecordMarkerProps['outcome'],
   participantNames: GameRecordMarkerProps['participantNames'],
+  t: TFunction,
 ) =>
   match(outcome)
-    .with(
-      { type: 'nomination-resolved', result: 'nominated' },
-      (value) =>
-        `Day ${value.dayNumber}: ${participantNames.get(value.nominatedParticipantId ?? '') ?? 'A participant'} was nominated with ${value.leadingVoteCount} vote${value.leadingVoteCount === 1 ? '' : 's'}.`,
+    .with({ type: 'nomination-resolved', result: 'nominated' }, (value) =>
+      t('records.nominated', {
+        dayNumber: value.dayNumber,
+        participantName:
+          participantNames.get(value.nominatedParticipantId ?? '') ?? t('records.fallback'),
+        count: value.leadingVoteCount,
+        pluralSuffix: value.leadingVoteCount === 1 ? '' : 's',
+      }),
     )
-    .with(
-      { type: 'nomination-resolved', result: 'nomination-tie' },
-      (value) =>
-        `Day ${value.dayNumber}: nomination ended in a tie at ${value.leadingVoteCount} vote${value.leadingVoteCount === 1 ? '' : 's'}.`,
+    .with({ type: 'nomination-resolved', result: 'nomination-tie' }, (value) =>
+      t('records.nominationTie', {
+        dayNumber: value.dayNumber,
+        count: value.leadingVoteCount,
+        pluralSuffix: value.leadingVoteCount === 1 ? '' : 's',
+      }),
     )
-    .with(
-      { type: 'nomination-resolved', result: 'no-nomination' },
-      (value) => `Day ${value.dayNumber}: no nomination was submitted.`,
+    .with({ type: 'nomination-resolved', result: 'no-nomination' }, (value) =>
+      t('records.noNomination', { dayNumber: value.dayNumber }),
     )
     .with({ type: 'verdict-resolved' }, (value) => {
-      const name = participantNames.get(value.participantId) ?? 'The nominated participant';
-      const result = match(value)
-        .with({ result: 'eliminate' }, () => 'was eliminated')
-        .with({ result: 'verdict-tie' }, () => 'was spared after a tied verdict')
-        .with(
-          { result: 'no-majority' },
-          () => 'was spared because elimination did not reach a majority',
-        )
+      const participantName = participantNames.get(value.participantId) ?? t('records.fallback');
+      const key = match(value.result)
+        .with('eliminate', () => 'records.verdictEliminated' as const)
+        .with('verdict-tie', () => 'records.verdictTied' as const)
+        .with('no-majority', () => 'records.verdictNoMajority' as const)
         .exhaustive();
-      return `Day ${value.dayNumber}: ${name} ${result}.`;
+      return t(key, { dayNumber: value.dayNumber, participantName });
     })
-    .with({ type: 'day-changed' }, (value) => `Day ${value.dayNumber}: day has begun.`)
-    .with(
-      { type: 'discussion-time-adjusted' },
-      (value) =>
-        `Day ${value.dayNumber}: ${value.adjustmentSeconds > 0 ? 'added' : 'removed'} 10 seconds from the timer.`,
+    .with({ type: 'day-changed' }, (value) =>
+      t('records.dayStarted', { dayNumber: value.dayNumber }),
     )
-    .with(
-      { type: 'phase-changed', phase: 'discussion' },
-      (value) => `Day ${value.dayNumber}: discussion phase started.`,
+    .with({ type: 'discussion-time-adjusted' }, (value) =>
+      t(
+        value.adjustmentSeconds > 0
+          ? 'records.discussionTimeAdded'
+          : 'records.discussionTimeRemoved',
+        { dayNumber: value.dayNumber },
+      ),
     )
-    .with(
-      { type: 'phase-changed', phase: 'nomination' },
-      (value) => `Day ${value.dayNumber}: nomination phase started.`,
+    .with({ type: 'phase-changed', phase: 'discussion' }, (value) =>
+      t('records.phaseStarted', { dayNumber: value.dayNumber, phase: t('phases.discussion') }),
     )
-    .with(
-      { type: 'phase-changed', phase: 'final-defence' },
-      (value) => `Day ${value.dayNumber}: final defence phase started.`,
+    .with({ type: 'phase-changed', phase: 'nomination' }, (value) =>
+      t('records.phaseStarted', { dayNumber: value.dayNumber, phase: t('phases.nomination') }),
     )
-    .with(
-      { type: 'phase-changed', phase: 'verdict' },
-      (value) => `Day ${value.dayNumber}: verdict phase started.`,
+    .with({ type: 'phase-changed', phase: 'final-defence' }, (value) =>
+      t('records.phaseStarted', { dayNumber: value.dayNumber, phase: t('phases.final-defence') }),
     )
-    .with(
-      { type: 'phase-changed', phase: 'night' },
-      (value) => `Day ${value.dayNumber}: night has begun.`,
+    .with({ type: 'phase-changed', phase: 'verdict' }, (value) =>
+      t('records.phaseStarted', { dayNumber: value.dayNumber, phase: t('phases.verdict') }),
     )
-    .with({ type: 'phase-changed', phase: 'completed' }, () => 'The game is complete.')
-    .with(
-      { type: 'allegiance-reveal' },
-      (value) =>
-        `${participantNames.get(value.participantId) ?? 'Participant'} was ${value.allegiance}.`,
+    .with({ type: 'phase-changed', phase: 'night' }, (value) =>
+      t('records.phaseStarted', { dayNumber: value.dayNumber, phase: t('phases.night') }),
     )
-    .with({ type: 'victory' }, (value) => `${value.allegiance} team wins.`)
-    .with(
-      { type: 'night-resolved', result: 'protected' },
-      (value) => `Day ${value.dayNumber}: Doctor saved the targeted Participant overnight.`,
+    .with({ type: 'phase-changed', phase: 'completed' }, () => t('records.gameCompleted'))
+    .with({ type: 'allegiance-reveal' }, (value) =>
+      t('records.allegianceReveal', {
+        participantName: participantNames.get(value.participantId) ?? t('records.fallback'),
+        allegiance: t(`allegiances.${value.allegiance}`),
+      }),
     )
-    .with(
-      { type: 'night-resolved', result: 'no-death' },
-      (value) => `Day ${value.dayNumber}: no Participant was eliminated overnight.`,
+    .with({ type: 'victory' }, (value) =>
+      t('records.victory', { allegiance: t(`allegiances.${value.allegiance}`) }),
     )
-    .with(
-      { type: 'night-resolved', result: 'participant-eliminated' },
-      (value) =>
-        `Day ${value.dayNumber}: ${participantNames.get(value.participantId ?? '') ?? 'A participant'} was eliminated overnight.`,
+    .with({ type: 'night-resolved', result: 'protected' }, (value) =>
+      t('records.nightProtected', { dayNumber: value.dayNumber }),
     )
-    .with(
-      { type: 'autonomous-public-speech-limit-reached' },
-      (value) =>
-        `Day ${value.dayNumber}: Agents have reached their discussion turn limit. Move to the next phase when you are ready.`,
+    .with({ type: 'night-resolved', result: 'no-death' }, (value) =>
+      t('records.nightNoDeath', { dayNumber: value.dayNumber }),
     )
-    .with(
-      { type: 'police-investigation-result' },
-      (value) =>
-        `Day ${value.dayNumber}: Police investigation — ${participantNames.get(value.participantId) ?? 'Participant'} has ${value.allegiance} Allegiance.`,
+    .with({ type: 'night-resolved', result: 'participant-eliminated' }, (value) =>
+      t('records.nightParticipantEliminated', {
+        dayNumber: value.dayNumber,
+        participantName: participantNames.get(value.participantId ?? '') ?? t('records.fallback'),
+      }),
+    )
+    .with({ type: 'autonomous-public-speech-limit-reached' }, (value) =>
+      t('records.discussionLimitReached', { dayNumber: value.dayNumber }),
+    )
+    .with({ type: 'police-investigation-result' }, (value) =>
+      t('records.policeInvestigation', {
+        dayNumber: value.dayNumber,
+        participantName: participantNames.get(value.participantId) ?? t('records.fallback'),
+        allegiance: t(`allegiances.${value.allegiance}`),
+      }),
     )
     .exhaustive();
 
 const nominationVoteTotals = (
   outcome: Extract<GameRecordMarkerProps['outcome'], { type: 'nomination-resolved' }>,
   participantNames: GameRecordMarkerProps['participantNames'],
+  t: TFunction,
 ) =>
-  map(
-    outcome.voteCounts,
-    ({ participantId, voteCount }) =>
-      `${participantNames.get(participantId) ?? 'Participant'} ${voteCount}`,
+  map(outcome.voteCounts, ({ participantId, voteCount }) =>
+    t('records.voteTotal', {
+      participantName: participantNames.get(participantId) ?? t('records.fallback'),
+      voteCount,
+    }),
   ).join(', ');
 
 const actionTargetCopy = (
-  action: MafiaGameProjection['public']['completedRecords']['nightActionRecords'][number]['doctorActions'][number],
+  targetParticipantId: string | undefined,
   participantNames: GameRecordMarkerProps['participantNames'],
+  t: TFunction,
 ) =>
-  action.targetParticipantId
-    ? (participantNames.get(action.targetParticipantId) ?? 'Participant')
-    : 'no action';
+  targetParticipantId
+    ? (participantNames.get(targetParticipantId) ?? t('records.fallback'))
+    : t('records.noAction');
 
 export const completedRecordDays = (
   completedRecords: MafiaGameProjection['public']['completedRecords'],
@@ -139,6 +150,8 @@ export function GameRecordMarker({
   participantNames,
   isNight = false,
 }: GameRecordMarkerProps) {
+  const { t } = useGameTranslation();
+
   return (
     <div
       className={cn(
@@ -152,15 +165,20 @@ export function GameRecordMarker({
           <ScrollTextIcon />
         </MarkerIcon>
         <MarkerContent className="max-w-[calc(100%-3rem)]">
-          {outcomeCopy(outcome, participantNames)}
+          {outcomeCopy(outcome, participantNames, t)}
           {outcome.type === 'nomination-resolved' && outcome.voteCounts.length > 0 ? (
             <span className="block">
-              Vote totals: {nominationVoteTotals(outcome, participantNames)}
+              {t('records.voteTotals', {
+                totals: nominationVoteTotals(outcome, participantNames, t),
+              })}
             </span>
           ) : null}
           {outcome.type === 'verdict-resolved' ? (
             <span className="block">
-              Eliminate {outcome.eliminateVotes}, spare {outcome.spareVotes}.
+              {t('records.verdictTotals', {
+                eliminateVotes: outcome.eliminateVotes,
+                spareVotes: outcome.spareVotes,
+              })}
             </span>
           ) : null}
         </MarkerContent>
@@ -169,11 +187,11 @@ export function GameRecordMarker({
       (completedRecords.voteRecords.length > 0 ||
         completedRecords.nightActionRecords.length > 0) ? (
         <details className={cn('mt-2 text-xs', isNight ? 'text-[#c9cad5]' : 'text-[#625e55]')}>
-          <summary className="cursor-pointer font-medium">View the full game record</summary>
+          <summary className="cursor-pointer font-medium">{t('records.fullRecord')}</summary>
           <div className="mt-2 flex flex-col gap-3">
             {map(completedRecordDays(completedRecords), (dayNumber) => (
               <section key={dayNumber} className="border border-[#22221e]/25 p-2">
-                <p className="font-medium">Day {dayNumber}</p>
+                <p className="font-medium">{t('records.day', { dayNumber })}</p>
                 <div className="mt-1 flex flex-col gap-2">
                   {map(
                     filter(
@@ -182,25 +200,44 @@ export function GameRecordMarker({
                     ),
                     (record) => (
                       <div key={record.id}>
-                        <p>Night actions</p>
+                        <p>{t('records.nightActions')}</p>
                         <ul className="mt-1 flex flex-col gap-1">
                           <li>
-                            Mafia target:{' '}
-                            {record.mafiaTargetParticipantId
-                              ? (participantNames.get(record.mafiaTargetParticipantId) ??
-                                'Participant')
-                              : 'no target'}
+                            {t('records.mafiaTarget', {
+                              targetName: record.mafiaTargetParticipantId
+                                ? (participantNames.get(record.mafiaTargetParticipantId) ??
+                                  t('records.fallback'))
+                                : t('records.noTarget'),
+                            })}
                           </li>
                           {map(record.doctorActions, (action) => (
                             <li key={`doctor-${action.participantId}`}>
-                              Doctor {participantNames.get(action.participantId) ?? 'Participant'}:{' '}
-                              {actionTargetCopy(action, participantNames)}
+                              {t('records.actionRecord', {
+                                role: t('roles.Doctor'),
+                                participantName:
+                                  participantNames.get(action.participantId) ??
+                                  t('records.fallback'),
+                                targetName: actionTargetCopy(
+                                  action.targetParticipantId,
+                                  participantNames,
+                                  t,
+                                ),
+                              })}
                             </li>
                           ))}
                           {map(record.policeActions, (action) => (
                             <li key={`police-${action.participantId}`}>
-                              Police {participantNames.get(action.participantId) ?? 'Participant'}:{' '}
-                              {actionTargetCopy(action, participantNames)}
+                              {t('records.actionRecord', {
+                                role: t('roles.Police'),
+                                participantName:
+                                  participantNames.get(action.participantId) ??
+                                  t('records.fallback'),
+                                targetName: actionTargetCopy(
+                                  action.targetParticipantId,
+                                  participantNames,
+                                  t,
+                                ),
+                              })}
                             </li>
                           ))}
                         </ul>
@@ -214,14 +251,35 @@ export function GameRecordMarker({
                     ),
                     (record) => (
                       <div key={record.id}>
-                        <p>{record.phase === 'nomination' ? 'Nomination' : 'Verdict'}</p>
+                        <p>
+                          {t(
+                            record.phase === 'nomination'
+                              ? 'records.nomination'
+                              : 'records.verdict',
+                          )}
+                        </p>
                         <ul className="mt-1 flex flex-col gap-1">
                           {map(record.votes, (vote) => (
                             <li key={vote.participantId}>
-                              {participantNames.get(vote.participantId) ?? 'Participant'}:{' '}
                               {'targetParticipantId' in vote
-                                ? `nominated ${participantNames.get(vote.targetParticipantId) ?? 'Participant'}`
-                                : vote.vote}
+                                ? t('records.nominatedVote', {
+                                    participantName:
+                                      participantNames.get(vote.participantId) ??
+                                      t('records.fallback'),
+                                    targetName:
+                                      participantNames.get(vote.targetParticipantId) ??
+                                      t('records.fallback'),
+                                  })
+                                : t('records.vote', {
+                                    participantName:
+                                      participantNames.get(vote.participantId) ??
+                                      t('records.fallback'),
+                                    choice: t(
+                                      vote.vote === 'eliminate'
+                                        ? 'records.eliminateVote'
+                                        : 'records.spareVote',
+                                    ),
+                                  })}
                             </li>
                           ))}
                         </ul>

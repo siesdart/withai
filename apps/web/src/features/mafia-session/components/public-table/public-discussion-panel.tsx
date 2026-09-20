@@ -17,6 +17,7 @@ import { map, reduce } from 'remeda';
 
 import type { UseDeadlineCountdownResult } from '../../hooks/ui/use-deadline-countdown';
 import { useResumeAutoScrollAtEnd } from '../../hooks/ui/use-public-discussion-scroll';
+import { useGameTranslation } from '../../i18n/use-game-translation';
 import { useGameSessionStore } from '../../store/game-session';
 import type { PhasePanel } from '../control-room/phase-interaction';
 import { PhaseActionPanel } from '../phase-actions/phase-action-panel';
@@ -110,6 +111,7 @@ export function PublicDiscussionPanel({
   phasePanel,
   timeline,
 }: PublicDiscussionPanelProps) {
+  const { t } = useGameTranslation();
   const participantMap = new Map(
     map(publicInformation.participants, (participant) => [participant.id, participant.name]),
   );
@@ -132,7 +134,7 @@ export function PublicDiscussionPanel({
     >
       {isReconnecting ? (
         <span aria-live="polite" className="sr-only">
-          Reconnecting live updates…
+          {t('table.reconnecting')}
         </span>
       ) : null}
       <div
@@ -145,7 +147,9 @@ export function PublicDiscussionPanel({
       >
         <CurrentPeriodIcon aria-hidden="true" className="size-3.5" />
         <span className="py-2 whitespace-nowrap">
-          Day {publicInformation.dayNumber} / {currentPeriod}
+          {t(currentPeriod === 'night' ? 'table.nightPeriod' : 'table.dayPeriod', {
+            dayNumber: publicInformation.dayNumber,
+          })}
         </span>
         <GamePhaseTimer phase={publicInformation.phase} deadline={deadline} />
         {publicInformation.phase === 'completed' ? (
@@ -154,7 +158,7 @@ export function PublicDiscussionPanel({
             className="ml-auto inline-flex h-8 items-center border border-[#22221e] px-2.5 text-xs font-medium hover:bg-[#22221e] hover:text-[#f4efe7]"
             onClick={() => useGameSessionStore.getState().clearSession()}
           >
-            게임 목록으로
+            {t('table.backToGameList')}
           </a>
         ) : null}
       </div>
@@ -167,7 +171,10 @@ export function PublicDiscussionPanel({
                 return (
                   <section
                     key={segment.id}
-                    aria-label={`Day ${segment.dayNumber} ${segment.period} records`}
+                    aria-label={t(
+                      segment.period === 'night' ? 'table.nightSegment' : 'table.daySegment',
+                      { dayNumber: segment.dayNumber },
+                    )}
                     className={cn(
                       '-mx-3 border-y px-3 py-4 sm:-mx-5 sm:px-5',
                       isNight
@@ -202,7 +209,8 @@ export function PublicDiscussionPanel({
                                       isNight,
                                     )}
                                   >
-                                    {participantMap.get(item.message.participantId) ?? 'Mafia'}
+                                    {participantMap.get(item.message.participantId) ??
+                                      t('roles.Mafia')}
                                   </MessageHeader>
                                   <Bubble
                                     align={isCurrentParticipant ? 'end' : 'start'}
@@ -229,7 +237,8 @@ export function PublicDiscussionPanel({
                                     isNight,
                                   )}
                                 >
-                                  {participantMap.get(item.message.participantId) ?? 'Participant'}
+                                  {participantMap.get(item.message.participantId) ??
+                                    t('participants.fallback')}
                                 </MessageHeader>
                                 <Bubble
                                   align={isCurrentParticipant ? 'end' : 'start'}
@@ -260,7 +269,7 @@ export function PublicDiscussionPanel({
             size="sm"
             variant="outline"
           >
-            <span>Scroll to latest messages</span>
+            <span>{t('table.scrollToLatest')}</span>
           </MessageScrollerButton>
         </MessageScroller>
       </MessageScrollerProvider>

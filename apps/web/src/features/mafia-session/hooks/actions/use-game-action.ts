@@ -1,9 +1,11 @@
 import { useMutation } from '@tanstack/react-query';
+import type { TFunction } from 'i18next';
 import { useCallback } from 'react';
 import { match } from 'ts-pattern';
 
 import { MafiaGameSessionClient } from '../../api/client';
 import { isGameSessionApiError } from '../../api/error';
+import { useGameTranslation } from '../../i18n/use-game-translation';
 import {
   nextGameActionDraft,
   type GameAction,
@@ -25,6 +27,7 @@ export type UseGameActionResult = {
 };
 
 export function useGameAction(): UseGameActionResult {
+  const { t } = useGameTranslation();
   const drafts = useGameSessionStore((state) => state.gameActionDrafts);
   const setGameActionDraft = useGameSessionStore((state) => state.setGameActionDraft);
   const clearGameActionDraft = useGameSessionStore((state) => state.clearGameActionDraft);
@@ -75,7 +78,7 @@ export function useGameAction(): UseGameActionResult {
 
   return {
     drafts,
-    error: isError ? gameActionErrorMessage(error) : undefined,
+    error: isError ? gameActionErrorMessage(error, t) : undefined,
     isSubmissionBlocked,
     retryAfterSeconds: cooldown.retryAfterSeconds,
     setDraft: setGameActionDraft,
@@ -111,31 +114,22 @@ function submitGameAction(client: MafiaGameSessionClient, action: GameActionDraf
     .exhaustive();
 }
 
-function gameActionErrorMessage(error: unknown) {
+function gameActionErrorMessage(error: unknown, t: TFunction) {
   if (!isGameSessionApiError(error)) {
-    return 'Your action was not accepted. The server state is authoritative.';
+    return t('errors.actionNotAccepted');
   }
 
   return match(error)
-    .with({ type: 'rate-limited' }, () => 'Please wait before submitting another action.')
-    .with(
-      { type: 'action-rejected', status: 409 },
-      () => 'This action was already submitted with a different request.',
-    )
-    .with(
-      { type: 'action-rejected' },
-      () => 'This action is no longer permitted; the current Phase may have expired.',
-    )
-    .with(
-      { type: 'holder-token-invalid' },
-      () => 'Your action was not accepted. The server state is authoritative.',
-    )
+    .with({ type: 'rate-limited' }, () => t('errors.rateLimited'))
+    .with({ type: 'action-rejected', status: 409 }, () => t('errors.duplicateRequest'))
+    .with({ type: 'action-rejected' }, () => t('errors.phaseExpired'))
+    .with({ type: 'holder-token-invalid' }, () => t('errors.actionNotAccepted'))
     .with(
       { type: 'unavailable' },
       { type: 'aborted' },
       { type: 'invalid-event' },
       { type: 'request-failed' },
-      () => 'Your action was not accepted. The server state is authoritative.',
+      () => t('errors.actionNotAccepted'),
     )
     .exhaustive();
 }

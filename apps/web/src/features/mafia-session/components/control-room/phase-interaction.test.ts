@@ -69,7 +69,7 @@ describe('createPhaseInteraction', () => {
     const interaction = interactionFor(snapshot, action);
 
     expect(interaction.panel).toMatchObject({ type: 'nomination' });
-    expect(interaction.participantSelection?.actionLabel).toBe('Nominate');
+    expect(interaction.participantSelection?.actionLabel).toBe('nominate');
     interaction.participantSelection?.onSelect(targetParticipantId);
     expect(action.submit).toHaveBeenCalledWith({ type: 'nomination', targetParticipantId });
   });
@@ -90,9 +90,9 @@ describe('createPhaseInteraction', () => {
 
   it('connects each actionable night role to its semantic target action', () => {
     const roles = [
-      ['Mafia', 'Target', 'mafia-target'],
-      ['Doctor', 'Protect', 'doctor-protection'],
-      ['Police', 'Investigate', 'police-investigation'],
+      ['Mafia', 'target', 'mafia-target'],
+      ['Doctor', 'protect', 'doctor-protection'],
+      ['Police', 'investigate', 'police-investigation'],
     ] as const;
 
     for (const [role, actionLabel, type] of roles) {

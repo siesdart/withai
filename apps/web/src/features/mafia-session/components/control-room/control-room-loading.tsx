@@ -1,13 +1,17 @@
 import { Skeleton } from '@repo/ui/components/skeleton';
 import { map } from 'remeda';
 
+import { useGameTranslation } from '../../i18n/use-game-translation';
+
 const participantSkeletons = Array.from({ length: 8 });
 
 function DiscussionPanelLoading() {
+  const { t } = useGameTranslation();
+
   return (
     <section
       className="flex min-h-0 flex-1 flex-col border border-[#22221e]/45 bg-[#f4efe7]"
-      aria-label="Loading public discussion"
+      aria-label={t('loading.publicDiscussion')}
     >
       <div className="flex shrink-0 items-center gap-2 border-b border-[#ded7c9] bg-[#f8f4eb] px-3 py-4 sm:px-5">
         <Skeleton className="size-3.5 rounded-full bg-[#ded6c8]" />
@@ -53,10 +57,12 @@ function DiscussionPanelLoading() {
 }
 
 function ParticipantsLoading() {
+  const { t } = useGameTranslation();
+
   return (
     <aside
       className="border border-[#22221e]/45 bg-[#f4efe7] p-4 lg:min-h-0 lg:overflow-y-auto"
-      aria-label="Loading participants"
+      aria-label={t('loading.participants')}
     >
       <div className="flex shrink-0 items-center gap-2">
         <Skeleton className="size-4 rounded-full bg-[#ded6c8]" />
@@ -75,10 +81,13 @@ function ParticipantsLoading() {
 }
 
 export function ControlRoomLoading() {
+  const { t, language } = useGameTranslation();
+
   return (
     <main
+      lang={language}
       className="flex h-dvh flex-col overflow-hidden bg-[#e9e3d6] px-4 py-3 text-[#22221e] sm:px-8 sm:py-5"
-      aria-label="Starting Game Session"
+      aria-label={t('loading.gameSession')}
     >
       <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col gap-3 py-3 lg:grid lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-5 lg:py-6">
         <DiscussionPanelLoading />

@@ -3,6 +3,8 @@ import { Button } from '@repo/ui/components/button';
 import { Input } from '@repo/ui/components/input';
 import { SendIcon } from 'lucide-react';
 
+import { useGameTranslation } from '../../i18n/use-game-translation';
+
 type MessageFormProps = {
   disabled: boolean;
   error?: string;
@@ -12,6 +14,8 @@ type MessageFormProps = {
 };
 
 export function MessageForm({ disabled, error, onSubmit, onValueChange, value }: MessageFormProps) {
+  const { t } = useGameTranslation();
+
   return (
     <form
       className="shrink-0 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-5"
@@ -26,19 +30,19 @@ export function MessageForm({ disabled, error, onSubmit, onValueChange, value }:
         <Input
           type="text"
           aria-invalid={Boolean(error)}
-          aria-label="Message"
+          aria-label={t('message.label')}
           className="flex-1"
           disabled={disabled}
           maxLength={500}
           onChange={(event) => onValueChange(event.target.value)}
-          placeholder="Write a message…"
+          placeholder={t('message.placeholder')}
           value={value}
         />
         <Button
-          aria-label="Send message"
+          aria-label={t('message.send')}
           disabled={disabled || !value.trim()}
           size="icon"
-          title="Send message"
+          title={t('message.send')}
           type="submit"
         >
           <SendIcon data-icon="inline-end" />

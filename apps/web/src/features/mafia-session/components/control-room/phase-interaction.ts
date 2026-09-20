@@ -36,7 +36,7 @@ export type PhasePanel =
     };
 
 export type ParticipantSelection = {
-  actionLabel: string;
+  actionLabel: 'nominate' | 'target' | 'protect' | 'investigate';
   disabled: boolean;
   onSelect: (participantId: string) => void;
   selectedParticipantId: string | undefined;
@@ -92,7 +92,7 @@ export function createPhaseInteraction({
     .with({ phase: 'nomination' }, () => ({
       panel: { type: 'nomination' as const },
       participantSelection: {
-        actionLabel: 'Nominate',
+        actionLabel: 'nominate' as const,
         disabled,
         onSelect: (targetParticipantId: string) =>
           gameAction.submit({ type: 'nomination', targetParticipantId }),
@@ -166,9 +166,9 @@ function nightActionLabel(
   role: Extract<MafiaGameProjection['personal']['role'], 'Mafia' | 'Doctor' | 'Police'>,
 ) {
   return match(role)
-    .with('Mafia', () => 'Target' as const)
-    .with('Doctor', () => 'Protect' as const)
-    .with('Police', () => 'Investigate' as const)
+    .with('Mafia', () => 'target' as const)
+    .with('Doctor', () => 'protect' as const)
+    .with('Police', () => 'investigate' as const)
     .exhaustive();
 }
 

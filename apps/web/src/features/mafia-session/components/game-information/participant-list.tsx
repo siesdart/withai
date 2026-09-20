@@ -4,6 +4,7 @@ import { Button } from '@repo/ui/components/button';
 import { cn } from 'cn';
 import { map } from 'remeda';
 
+import { useGameTranslation } from '../../i18n/use-game-translation';
 import type { ParticipantSelection } from '../control-room/phase-interaction';
 import { ParticipantItem } from './participant-item';
 import { ParticipantRoleSelect } from './participant-role-select';
@@ -21,6 +22,7 @@ export function ParticipantList({
   selection: ParticipantSelection | undefined;
   isCompleted: boolean;
 }) {
+  const { t } = useGameTranslation();
   const knownRolesMap = new Map(
     map(knownRoles, ({ participantId, role }) => [participantId, role] as const),
   );
@@ -39,7 +41,10 @@ export function ParticipantList({
           >
             {canSelect ? (
               <Button
-                aria-label={`${selection.actionLabel}: ${participant.name}`}
+                aria-label={t('participants.choose', {
+                  actionLabel: t(`actionLabels.${selection.actionLabel}`),
+                  participantName: participant.name,
+                })}
                 aria-pressed={isSelected}
                 className={cn(
                   'h-5 w-full flex-1 border-0 px-0 text-[#22221e] hover:bg-[#d1c8b8] active:translate-y-px lg:-mx-2 lg:px-2',

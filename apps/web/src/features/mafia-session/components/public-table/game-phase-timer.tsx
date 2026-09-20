@@ -3,6 +3,7 @@ import { cn } from 'cn';
 import { TimerIcon } from 'lucide-react';
 
 import type { UseDeadlineCountdownResult } from '../../hooks/ui/use-deadline-countdown';
+import { useGameTranslation } from '../../i18n/use-game-translation';
 
 type GamePhaseTimerProps = {
   phase: MafiaGameProjection['public']['phase'];
@@ -10,6 +11,7 @@ type GamePhaseTimerProps = {
 };
 
 export function GamePhaseTimer({ phase, deadline }: GamePhaseTimerProps) {
+  const { t } = useGameTranslation();
   if (phase === 'completed') return null;
 
   return (
@@ -22,7 +24,7 @@ export function GamePhaseTimer({ phase, deadline }: GamePhaseTimerProps) {
         <span
           className={cn('whitespace-nowrap tabular-nums', deadline.isUrgent && 'text-[#a43b31]')}
         >
-          {deadline.isExpired ? 'Resolving result' : deadline.label}
+          {deadline.isExpired ? t('timer.resolving') : deadline.label}
         </span>
       </div>
     </div>

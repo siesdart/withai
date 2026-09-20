@@ -1,6 +1,7 @@
 import { cn } from 'cn';
 import { match } from 'ts-pattern';
 
+import { useGameTranslation } from '../../i18n/use-game-translation';
 import type { PhasePanel } from '../control-room/phase-interaction';
 import { DiscussionTimeControls } from './discussion-time-controls';
 import { FinalDefenceForm } from './final-defence-form';
@@ -9,12 +10,13 @@ import { PublicSpeechForm } from './public-speech-form';
 import { VerdictControls } from './verdict-controls';
 
 export function PhaseActionPanel({ panel, isNight }: { panel: PhasePanel; isNight: boolean }) {
+  const { t } = useGameTranslation();
   const secondaryTextClassName = isNight ? 'text-[#c9cad5]' : 'text-[#625e55]';
 
   return match(panel)
     .with({ type: 'completed' }, () => (
       <div className={cn('shrink-0 p-3 text-sm sm:p-5', secondaryTextClassName)}>
-        You are now observing the completed game. The full vote record is available below.
+        {t('phasePanel.completedObserver')}
       </div>
     ))
     .with({ type: 'observer' }, () => (
@@ -25,7 +27,7 @@ export function PhaseActionPanel({ panel, isNight }: { panel: PhasePanel; isNigh
           secondaryTextClassName,
         )}
       >
-        You are out of the game. You can continue to observe each phase and its results.
+        {t('phasePanel.eliminatedObserver')}
       </div>
     ))
     .with({ type: 'discussion' }, (p) => (
@@ -36,20 +38,20 @@ export function PhaseActionPanel({ panel, isNight }: { panel: PhasePanel; isNigh
     ))
     .with({ type: 'nomination' }, () => (
       <div className="shrink-0 p-3 sm:p-5">
-        <h3 className="text-base font-medium">Choose a nominee</h3>
+        <h3 className="text-base font-medium">{t('phasePanel.chooseNominee')}</h3>
         <p className={cn('mt-1 text-sm', secondaryTextClassName)}>
-          Select an alive participant from the participant list.
+          {t('phasePanel.selectAliveParticipant')}
         </p>
       </div>
     ))
     .with({ type: 'final-defence' }, (p) => (
       <div className="shrink-0">
         <div className={cn('p-3 sm:p-5', p.isCurrentParticipantNominated && 'pb-0 sm:pb-0')}>
-          <h3 className="text-base font-medium">Final defence</h3>
+          <h3 className="text-base font-medium">{t('phasePanel.finalDefence')}</h3>
           <p className={cn('mt-1 text-sm', secondaryTextClassName)}>
             {p.nominatedParticipantName
-              ? `${p.nominatedParticipantName} is nominated and has the floor.`
-              : 'The nominated participant is preparing a final defence.'}
+              ? t('phasePanel.nomineeHasFloor', { participantName: p.nominatedParticipantName })
+              : t('phasePanel.nomineePreparingDefence')}
           </p>
         </div>
         {p.isCurrentParticipantNominated ? (
@@ -74,10 +76,10 @@ export function PhaseActionPanel({ panel, isNight }: { panel: PhasePanel; isNigh
       >
         <h3 className="text-base font-medium">
           {match(p.role)
-            .with('Mafia', () => 'Choose a target')
-            .with('Doctor', () => 'Choose someone to protect')
-            .with('Police', () => 'Choose someone to investigate')
-            .with('Citizen', () => 'Night actions are private')
+            .with('Mafia', () => t('phasePanel.nightPrompt.Mafia'))
+            .with('Doctor', () => t('phasePanel.nightPrompt.Doctor'))
+            .with('Police', () => t('phasePanel.nightPrompt.Police'))
+            .with('Citizen', () => t('phasePanel.nightPrompt.Citizen'))
             .exhaustive()}
         </h3>
         <p
@@ -87,8 +89,8 @@ export function PhaseActionPanel({ panel, isNight }: { panel: PhasePanel; isNigh
           )}
         >
           {p.role === 'Citizen'
-            ? 'Wait for dawn.'
-            : 'Select an alive participant from the participant list.'}
+            ? t('phasePanel.waitForDawn')
+            : t('phasePanel.selectAliveParticipant')}
         </p>
         {p.role === 'Mafia' ? (
           <MafiaChatForm disabled={p.disabled} gameAction={p.gameAction} />

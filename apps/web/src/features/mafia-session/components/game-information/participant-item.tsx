@@ -1,6 +1,8 @@
 import type { MafiaGameProjection } from '@repo/mafia/client';
 import { cn } from 'cn';
 
+import { useGameTranslation } from '../../i18n/use-game-translation';
+
 export function ParticipantItem({
   currentParticipantId,
   participant,
@@ -10,6 +12,8 @@ export function ParticipantItem({
   participant: MafiaGameProjection['public']['participants'][number];
   role: MafiaGameProjection['personal']['knownRoles'][number]['role'] | undefined;
 }) {
+  const { t } = useGameTranslation();
+
   return (
     <div className="flex h-5 w-full min-w-0 items-center">
       <span
@@ -23,7 +27,7 @@ export function ParticipantItem({
         {participant.name}
       </span>
       {participant.id === currentParticipantId ? (
-        <span className="ml-1 text-xs text-[#625e55]">(you)</span>
+        <span className="ml-1 text-xs text-[#625e55]">{t('participants.you')}</span>
       ) : null}
     </div>
   );

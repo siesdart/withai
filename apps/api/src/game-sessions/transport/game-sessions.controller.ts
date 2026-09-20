@@ -487,13 +487,13 @@ export class GameSessionsController {
   }
 
   private async currentSessionId(holderId: string): Promise<string> {
-    const active = await this.gameSessionsService.activeMafiaSession(holderId);
-    if (active.isErr()) {
-      throw this.toHttpException(active.error);
+    const activeSessionId = await this.gameSessionsService.activeSessionIdForHolder(holderId);
+    if (activeSessionId.isErr()) {
+      throw this.toHttpException(activeSessionId.error);
     }
-    if (!active.value)
+    if (!activeSessionId.value)
       throw new ForbiddenException('This Game Session is not available to this guest.');
-    return active.value.projection.sessionId;
+    return activeSessionId.value;
   }
 
   private async latestSessionId(holderId: string): Promise<string> {

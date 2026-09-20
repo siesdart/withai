@@ -421,6 +421,20 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     }));
   }
 
+  async activeSessionIdForHolder(
+    holderId: string | undefined,
+  ): Promise<Result<string | undefined, GameSessionError>> {
+    if (!holderId) return ok(undefined);
+    if (!this.authority) {
+      const sessionId = this.activeSessionIdsByHolder.get(holderId);
+      const session = sessionId ? this.sessions.get(sessionId) : undefined;
+      return ok(session?.status === 'in-progress' ? sessionId : undefined);
+    }
+
+    const activeSessionId = await this.authority.activeSessionIdForHolder(holderId);
+    return activeSessionId.mapErr((): GameSessionError => ({ type: 'durability-unavailable' }));
+  }
+
   async latestSessionIdForHolder(
     holderId: string | undefined,
   ): Promise<Result<string | undefined, GameSessionError>> {

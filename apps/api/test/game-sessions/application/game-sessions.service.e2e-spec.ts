@@ -376,6 +376,160 @@ describe('GameSessionsService', () => {
     service.onModuleDestroy();
   });
 
+  it('returns a durable Discussion Time Adjustment before an Agent public-speech decision completes', async () => {
+    vi.useFakeTimers({ now: new Date('2026-09-20T00:00:00.000Z') });
+    const deferredSpeech = createDeferred<{ type: 'speak'; content: string }>();
+    let publicSpeechDecisions = 0;
+    const redis = new RedisMock();
+    const authority = new RedisGameSessionAuthority(redis, 'withai:immediate-human-action');
+    const service = new GameSessionsService({
+      decidePublicSpeech: () => {
+        publicSpeechDecisions += 1;
+        return publicSpeechDecisions <= 4
+          ? { type: 'remain-silent' as const }
+          : deferredSpeech.promise;
+      },
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
+    });
+    Object.assign(service, { authority });
+    const created = await service.createMafiaSession(
+      undefined,
+      5,
+      'immediate-human-action-session-key',
+    );
+    if (created.isErr()) throw new Error('Expected a durable session.');
+
+    await vi.advanceTimersByTimeAsync(mafiaGameConfig.nightDurationMs + 1);
+    await flushMicrotasks();
+    await service.submitPublicSpeech(
+      created.value.projection.sessionId,
+      created.value.holderId,
+      'I want to compare the evidence.',
+      'speech-before-immediate-adjustment-key',
+    );
+    await flushMicrotasks();
+    expect(publicSpeechDecisions).toBe(5);
+
+    const state = service as unknown as {
+      sessions: Map<string, { gameSession: MafiaGameSession }>;
+    };
+    const session = state.sessions.get(created.value.projection.sessionId);
+    if (!session) throw new Error('Expected a stored session.');
+    const expectedDeadline = session.gameSession.snapshot().phaseDeadline;
+    const controller = new GameSessionsController(service);
+    const request = {
+      headers: {
+        'x-holder-token': createHolderTokenSigner('local-development-secret').sign(
+          created.value.holderId,
+        ),
+      },
+    } as unknown as Request;
+    const response = { setHeader: vi.fn() } as unknown as Response;
+
+    let settled = false;
+    const adjustment = controller
+      .adjustDiscussionTime(
+        { adjustmentSeconds: 10, expectedDeadline },
+        request,
+        response,
+        'immediate-adjustment-key',
+      )
+      .then((projection) => {
+        settled = true;
+        return projection;
+      });
+
+    await vi.advanceTimersByTimeAsync(10);
+    expect(settled).toBe(true);
+    await expect(adjustment).resolves.toMatchObject({
+      public: { phaseDeadline: expect.not.stringMatching(expectedDeadline) },
+    });
+
+    deferredSpeech.resolve({
+      type: 'speak',
+      content: 'This response must not delay the Human Player.',
+    });
+    await flushMicrotasks();
+    service.onModuleDestroy();
+    redis.disconnect();
+  });
+
+  it('returns a durable Human public speech before an Agent public-speech decision completes', async () => {
+    vi.useFakeTimers({ now: new Date('2026-09-20T00:00:00.000Z') });
+    const deferredSpeech = createDeferred<{ type: 'speak'; content: string }>();
+    let publicSpeechDecisions = 0;
+    const redis = new RedisMock();
+    const authority = new RedisGameSessionAuthority(redis, 'withai:immediate-human-speech');
+    const service = new GameSessionsService({
+      decidePublicSpeech: () => {
+        publicSpeechDecisions += 1;
+        return publicSpeechDecisions === 1
+          ? deferredSpeech.promise
+          : { type: 'remain-silent' as const };
+      },
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => undefined,
+    });
+    Object.assign(service, { authority });
+    const created = await service.createMafiaSession(
+      undefined,
+      5,
+      'immediate-human-speech-session-key',
+    );
+    if (created.isErr()) throw new Error('Expected a durable session.');
+
+    await vi.advanceTimersByTimeAsync(mafiaGameConfig.nightDurationMs + 1);
+    await flushMicrotasks();
+    expect(publicSpeechDecisions).toBe(1);
+
+    const controller = new GameSessionsController(service);
+    const request = {
+      headers: {
+        'x-holder-token': createHolderTokenSigner('local-development-secret').sign(
+          created.value.holderId,
+        ),
+      },
+    } as unknown as Request;
+    const response = { setHeader: vi.fn() } as unknown as Response;
+
+    let settled = false;
+    const submission = controller
+      .submitPublicSpeech(
+        { content: 'I need to add this immediately.' },
+        request,
+        response,
+        'immediate-human-speech-key',
+      )
+      .then((projection) => {
+        settled = true;
+        return projection;
+      });
+
+    await vi.advanceTimersByTimeAsync(10);
+    expect(settled).toBe(true);
+    await expect(submission).resolves.toMatchObject({
+      timeline: expect.arrayContaining([
+        expect.objectContaining({
+          type: 'chat',
+          message: expect.objectContaining({ content: 'I need to add this immediately.' }),
+        }),
+      ]),
+    });
+
+    deferredSpeech.resolve({
+      type: 'speak',
+      content: 'This stale response must not delay the Human Player.',
+    });
+    await flushMicrotasks();
+    service.onModuleDestroy();
+    redis.disconnect();
+  });
+
   it('commits an Agent public speech when a snapshot read hydrates during its decision', async () => {
     vi.useFakeTimers({ now: new Date('2026-09-13T00:00:00.000Z') });
     const deferredSpeech = createDeferred<{ type: 'speak'; content: string }>();

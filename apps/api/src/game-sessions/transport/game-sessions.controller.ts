@@ -535,7 +535,7 @@ export class GameSessionsController {
 
     const retryAfterMs = match(error)
       .with(
-        { type: 'public-speech-rate-limited' },
+        { type: 'speech-rate-limited' },
         { type: 'day-action-rate-limited' },
         { type: 'discussion-time-adjustment-rate-limited' },
         (rateLimitError) => rateLimitError.retryAfterMs,
@@ -591,14 +591,9 @@ export class GameSessionsController {
       )
       .with(
         { type: 'public-speech-idempotency-conflict' },
-        () =>
-          new HttpException(
-            'The Idempotency-Key was already used with a different action.',
-            HttpStatus.CONFLICT,
-          ),
-      )
-      .with(
         { type: 'mafia-chat-idempotency-conflict' },
+        { type: 'day-action-idempotency-conflict' },
+        { type: 'discussion-time-adjustment-idempotency-conflict' },
         () =>
           new HttpException(
             'The Idempotency-Key was already used with a different action.',
@@ -606,10 +601,10 @@ export class GameSessionsController {
           ),
       )
       .with(
-        { type: 'public-speech-rate-limited' },
+        { type: 'speech-rate-limited' },
         () =>
           new HttpException(
-            'Please wait before submitting another public speech.',
+            'Please wait before submitting another message.',
             HttpStatus.TOO_MANY_REQUESTS,
           ),
       )
@@ -626,27 +621,11 @@ export class GameSessionsController {
         () => new BadRequestException('This Day action is not permitted in the current Phase.'),
       )
       .with(
-        { type: 'day-action-idempotency-conflict' },
-        () =>
-          new HttpException(
-            'The Idempotency-Key was already used with a different action.',
-            HttpStatus.CONFLICT,
-          ),
-      )
-      .with(
         { type: 'day-action-rate-limited' },
         () =>
           new HttpException(
             'Please wait before submitting another Final Defence statement.',
             HttpStatus.TOO_MANY_REQUESTS,
-          ),
-      )
-      .with(
-        { type: 'discussion-time-adjustment-idempotency-conflict' },
-        () =>
-          new HttpException(
-            'The Idempotency-Key was already used with a different action.',
-            HttpStatus.CONFLICT,
           ),
       )
       .with(

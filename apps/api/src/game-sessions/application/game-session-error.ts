@@ -9,7 +9,7 @@ export type GameSessionError =
   | { type: 'invalid-mafia-session-input'; cause: MafiaSessionInputError }
   | { type: 'invalid-mafia-projection'; cause: MafiaProjectionError }
   | { type: 'public-speech-idempotency-conflict' }
-  | { type: 'public-speech-rate-limited'; retryAfterMs: number }
+  | { type: 'speech-rate-limited'; retryAfterMs: number }
   | { type: 'invalid-public-speech' }
   | { type: 'mafia-chat-idempotency-conflict' }
   | { type: 'invalid-mafia-chat' }

@@ -665,7 +665,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         const retryAfterMs = cooldownRetryAfterMs(session.nextPublicSpeechAt, now);
         if (retryAfterMs) {
           return err<MafiaGameProjection, GameSessionError>({
-            type: 'public-speech-rate-limited',
+            type: 'speech-rate-limited',
             retryAfterMs,
           });
         }
@@ -731,7 +731,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       submit: (session) => {
         const now = this.now();
         const retryAfterMs = cooldownRetryAfterMs(session.nextPublicSpeechAt, now);
-        if (retryAfterMs) return err({ type: 'public-speech-rate-limited', retryAfterMs });
+        if (retryAfterMs) return err({ type: 'speech-rate-limited', retryAfterMs });
         return session.gameSession
           .submitMafiaChat(session.humanParticipantId, content)
           .mapErr((): GameSessionError => ({ type: 'invalid-mafia-chat' }))

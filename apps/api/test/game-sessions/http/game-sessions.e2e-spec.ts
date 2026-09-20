@@ -31,6 +31,7 @@ import {
   gameSessionClock,
   type GameSessionClock,
 } from '../../../src/game-sessions/application/game-session-clock.js';
+import { gameSessionsConfig } from '../../../src/game-sessions/application/game-sessions.config.js';
 import { GameSessionsService } from '../../../src/game-sessions/application/game-sessions.service.js';
 import { RedisGameSessionAuthority } from '../../../src/game-sessions/durability/redis-game-session-authority.js';
 
@@ -278,8 +279,8 @@ describe('Mafia Game Session API', () => {
     const initialHolderToken = holderToken(initial.headers);
 
     expect(initial.body).toEqual({
-      remaining: 10,
-      limit: 10,
+      remaining: gameSessionsConfig.guestAllowance,
+      limit: gameSessionsConfig.guestAllowance,
       resetsAt: '2026-09-07T00:00:00.000Z',
     });
 
@@ -293,8 +294,8 @@ describe('Mafia Game Session API', () => {
       .get('/game-sessions/mafia/allowance')
       .set(holderTokenHeader, initialHolderToken)
       .expect({
-        remaining: 9,
-        limit: 10,
+        remaining: gameSessionsConfig.guestAllowance - 1,
+        limit: gameSessionsConfig.guestAllowance,
         resetsAt: '2026-09-07T00:00:00.000Z',
       });
   });
@@ -302,7 +303,7 @@ describe('Mafia Game Session API', () => {
   it('does not restore Guest Play Allowance when the guest cookie is removed', async () => {
     const clientIp = '203.0.113.42';
 
-    for (let index = 0; index < 10; index += 1) {
+    for (let index = 0; index < gameSessionsConfig.guestAllowance; index += 1) {
       // oxlint-disable-next-line no-await-in-loop -- each creation must debit the same IP allowance.
       await request(app.getHttpServer())
         .post('/game-sessions/mafia')
@@ -322,7 +323,7 @@ describe('Mafia Game Session API', () => {
       .set('X-Forwarded-For', clientIp)
       .expect({
         remaining: 0,
-        limit: 10,
+        limit: gameSessionsConfig.guestAllowance,
         resetsAt: '2026-09-07T00:00:00.000Z',
       });
   });
@@ -613,7 +614,7 @@ describe('Mafia Game Session API', () => {
       .send({ participantCount: 5 });
     const holderTokenValue = holderToken(first.headers);
 
-    for (let index = 0; index < 9; index += 1) {
+    for (let index = 0; index < gameSessionsConfig.guestAllowance - 1; index += 1) {
       // oxlint-disable-next-line no-await-in-loop -- each request must observe the previous allowance count.
       const repeated = await request(app.getHttpServer())
         .post('/game-sessions/mafia')
@@ -701,7 +702,7 @@ describe('Mafia Game Session API', () => {
       .send({ participantCount: 5.5 })
       .expect(400);
 
-    for (let index = 0; index < 9; index += 1) {
+    for (let index = 0; index < gameSessionsConfig.guestAllowance - 1; index += 1) {
       // oxlint-disable-next-line no-await-in-loop -- each request must observe the previous allowance count.
       await request(app.getHttpServer())
         .post('/game-sessions/mafia')

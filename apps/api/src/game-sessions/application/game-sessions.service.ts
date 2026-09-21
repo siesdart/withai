@@ -321,6 +321,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
       agentMinds: createAgentMinds(gameSession, 'participant-1'),
       events: new ReplaySubject<MafiaGameProjection>(gameSessionsConfig.eventReplayBufferSize),
       nextEventId: 0,
+      snapshotRevision: 0,
       nextPublicSpeechAt: undefined,
       nextFinalDefenceAt: undefined,
       nextDiscussionTimeAdjustmentAt: undefined,
@@ -419,6 +420,7 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
         }));
       }
     }
+    if (this.authority) session.snapshotRevision = projection.value.eventId;
     this.sessions.set(sessionId, session);
     this.activeSessionIdsByHolder.set(resolvedHolderId, sessionId);
     this.latestSessionIdsByHolder.set(resolvedHolderId, sessionId);
@@ -1340,13 +1342,16 @@ export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
     return err({ type: 'durability-unavailable' });
   }
 
-  private disposeSession(session: StoredGameSessionEntity) {
+  private disposeSession(
+    session: StoredGameSessionEntity,
+    options: { preserveMafiaTargetSelection?: boolean } = {},
+  ) {
     if (session.phaseTimer) this.clock.clearTimeout(session.phaseTimer);
     if (session.reconnectGraceTimer) this.clock.clearTimeout(session.reconnectGraceTimer);
     session.phaseTimer = undefined;
     session.reconnectGraceTimer = undefined;
     session.reconnectGraceDeadline = undefined;
-    this.agentActions.clearTimers(session);
+    this.agentActions.clearTimers(session, options);
 
     const sessionId = session.gameSession.snapshot().sessionId;
     if (this.latestSessionIdsByHolder.get(session.holderId) === sessionId) {

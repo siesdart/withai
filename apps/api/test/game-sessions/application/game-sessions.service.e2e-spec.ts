@@ -182,6 +182,101 @@ describe('GameSessionsService', () => {
     redis.disconnect();
   });
 
+  it('commits an in-flight Mafia target across real session hydration and replacement', async () => {
+    const selectionStarted = createDeferred<void>();
+    const selection = createDeferred<string | undefined>();
+    const redis = new RedisMock();
+    const authority = new RedisGameSessionAuthority(redis);
+    const agentDecisions: AgentDecisionGateway = {
+      decidePublicSpeech: () => ({ type: 'remain-silent' }),
+      decideFinalDefence: () => ({ opening: 'I will defend myself.', followUp: 'Please listen.' }),
+      decidePhaseAction: () => ({}),
+      decideMafiaChatOpening: () => 'I propose a target.',
+      decideMafiaChatReply: () => 'I will commit my action.',
+      selectMafiaTarget: () => {
+        selectionStarted.resolve();
+        return selection.promise;
+      },
+    };
+    const service = new GameSessionsService(agentDecisions);
+    Object.assign(service, {
+      authority,
+      mafiaModule: new MafiaGameModule(() => 0),
+      queuePendingAgentActions: () => undefined,
+    });
+
+    try {
+      const created = await service.createMafiaSession(
+        undefined,
+        5,
+        'mafia-target-hydration-key',
+        undefined,
+        'ko',
+        false,
+      );
+      if (created.isErr()) throw new Error('Expected a durable Game Session.');
+      const state = service as unknown as {
+        sessions: Map<
+          string,
+          {
+            gameSession: MafiaGameSession;
+            nextEventId: number;
+            snapshotRevision: number;
+            agentActionsPending: boolean;
+          }
+        >;
+        durability: {
+          saveSnapshot(session: unknown): Promise<Result<boolean, GameSessionError>>;
+        };
+        agentActions: {
+          submitMafiaAgentTarget(session: unknown, phaseKey: string): Promise<unknown>;
+        };
+      };
+      const session = state.sessions.get(created.value.projection.sessionId);
+      if (!session) throw new Error('Expected the created session in the service.');
+      while (session.gameSession.snapshot().phase !== 'night') {
+        const deadline = Date.parse(session.gameSession.snapshot().phaseDeadline);
+        const advanced = session.gameSession.advanceDayPhase(new Date(deadline + 1));
+        if (advanced.isErr()) throw new Error('Expected the session to advance to Night.');
+      }
+      const [coordinatorParticipantId] =
+        session.gameSession.livingMafiaAgentParticipantIds('participant-1');
+      if (!coordinatorParticipantId) throw new Error('Expected a living Mafia Agent.');
+      session.agentActionsPending = false;
+      const revisionBeforeNight = session.snapshotRevision;
+      const saved = await state.durability.saveSnapshot(session);
+      if (saved.isErr() || !saved.value) throw new Error('Expected Night to persist.');
+
+      const phaseKey = JSON.stringify([
+        created.value.projection.sessionId,
+        session.gameSession.snapshot().dayNumber,
+        'night',
+      ]);
+      const targetCommit = state.agentActions.submitMafiaAgentTarget(session, phaseKey);
+      await selectionStarted.promise;
+      selection.resolve('participant-4');
+
+      await expect(targetCommit).resolves.toEqual({
+        participantId: coordinatorParticipantId,
+        targetParticipantId: 'participant-4',
+      });
+
+      const replaced = state.sessions.get(created.value.projection.sessionId);
+      expect(replaced).not.toBe(session);
+      expect(replaced?.gameSession.snapshot().mafiaTargetParticipantId).toBe('participant-4');
+      await expect(authority.load(created.value.projection.sessionId)).resolves.toMatchObject({
+        value: {
+          nextEventId: 1,
+          snapshotRevision: revisionBeforeNight + 2,
+          gameSession: { mafiaTargetParticipantId: 'participant-4' },
+        },
+      });
+    } finally {
+      service.onModuleDestroy();
+      redis.disconnect();
+    }
+  });
+
   it('returns a Mafia Chat projection before Agent LLM replies complete', async () => {
     const deferredReply = createDeferred<string>();
     const service = new GameSessionsService({

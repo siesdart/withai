@@ -11,6 +11,8 @@ export type ScheduledAgentPublicSpeech = {
   participantId: string;
   content: string;
   dueAt: string;
+  /** Public conversation snapshot this draft was generated from. Missing only on legacy records. */
+  sourceSnapshotKey?: string;
   nextSpeakerParticipantId?: string;
 };
 
@@ -18,9 +20,16 @@ export const scheduledAgentPublicSpeechKey = ({
   participantId,
   content,
   dueAt,
+  sourceSnapshotKey,
   nextSpeakerParticipantId,
 }: ScheduledAgentPublicSpeech) =>
-  JSON.stringify([participantId, content, dueAt, nextSpeakerParticipantId ?? null]);
+  JSON.stringify([
+    participantId,
+    content,
+    dueAt,
+    sourceSnapshotKey ?? null,
+    nextSpeakerParticipantId ?? null,
+  ]);
 
 export const sameScheduledAgentFinalDefence = (
   left: ScheduledAgentFinalDefence,
@@ -58,6 +67,7 @@ export type StoredGameSessionEntity = {
   agentMinds: Record<string, AgentMind>;
   events: ReplaySubject<MafiaGameProjection>;
   nextEventId: number;
+  snapshotRevision: number;
   nextPublicSpeechAt: Dayjs | undefined;
   nextFinalDefenceAt: Dayjs | undefined;
   nextDiscussionTimeAdjustmentAt: Dayjs | undefined;

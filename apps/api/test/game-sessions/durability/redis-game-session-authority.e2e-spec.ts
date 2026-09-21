@@ -59,6 +59,26 @@ describe('RedisGameSessionAuthority', () => {
     });
   });
 
+  it('derives a CAS revision from a legacy snapshot and upgrades it on the next write', async () => {
+    const redis = new RedisMock();
+    redisClients.push(redis);
+    const prefix = 'withai:legacy-snapshot-revision-test';
+    const authority = new RedisGameSessionAuthority(redis, prefix);
+    const snapshot = { ...createSnapshot('legacy-session'), nextEventId: 2 };
+    await redis.set(`${prefix}:snapshots:legacy-session`, JSON.stringify(snapshot));
+    await redis.set(`${prefix}:snapshot-versions:legacy-session`, '2');
+
+    const loaded = await authority.load('legacy-session');
+    expect(loaded).toMatchObject({ value: { nextEventId: 2, snapshotRevision: 2 } });
+    if (loaded.isErr() || !loaded.value) throw new Error('Expected a legacy snapshot.');
+
+    await expect(authority.saveSnapshot(loaded.value)).resolves.toEqual({ value: true });
+    await expect(authority.load('legacy-session')).resolves.toMatchObject({
+      value: { nextEventId: 2, snapshotRevision: 3 },
+    });
+    await expect(redis.get(`${prefix}:snapshot-versions:legacy-session`)).resolves.toBe(3);
+  });
+
   it('keeps an authoritative snapshot and ordered public catch-up events', async () => {
     const redis = new RedisMock();
     redisClients.push(redis);
@@ -92,7 +112,7 @@ describe('RedisGameSessionAuthority', () => {
     );
 
     await expect(authority.load('session-1')).resolves.toEqual({
-      value: { ...snapshot, nextEventId: 2 },
+      value: { ...snapshot, nextEventId: 2, snapshotRevision: 2, cooldowns: undefined },
     });
     await expect(authority.eventsAfter('session-1', 0)).resolves.toMatchObject({
       value: [{ eventId: 1 }, { eventId: 2 }],
@@ -350,6 +370,67 @@ describe('RedisGameSessionAuthority', () => {
     await expect(authority.saveSnapshot(first)).resolves.toEqual({ value: false });
     await expect(authority.load('snapshot-race-session')).resolves.toMatchObject({
       value: { nextEventId: 2, lastActivityAt: latest.lastActivityAt },
+    });
+  });
+
+  it('does not let a stale Night transition overwrite a snapshot-only Mafia target', async () => {
+    const redis = new RedisMock();
+    redisClients.push(redis);
+    const authority = new RedisGameSessionAuthority(redis);
+    const gameSession = createMafiaSession('mafia-target-snapshot-race');
+    while (gameSession.snapshot().phase !== 'night') {
+      const deadline = Date.parse(gameSession.snapshot().phaseDeadline);
+      const advanced = gameSession.advanceDayPhase(new Date(deadline + 1));
+      if (advanced.isErr()) throw new Error('Expected the game session to advance to Night.');
+    }
+    const initialProjection = gameSession.projectionFor('participant-1', 1);
+    if (initialProjection.isErr()) throw new Error('Expected a Human Player projection.');
+    const phaseDeadline = gameSession.snapshot().phaseDeadline;
+    const initial = {
+      ...createSnapshot('mafia-target-snapshot-race', '2026-09-05T00:00:00.000Z'),
+      gameSession: gameSession.snapshot(),
+      nextEventId: 1,
+      phaseDeadline,
+    };
+    await expect(
+      authority.save(initial, { eventId: 1, projection: initialProjection.value }),
+    ).resolves.toEqual({ value: true });
+
+    const targetSubmission = gameSession.submitMafiaTarget(
+      'participant-1',
+      'participant-4',
+      new Date('2026-09-05T00:00:10.000Z'),
+    );
+    if (targetSubmission.isErr()) throw new Error('Expected a valid Mafia target.');
+    const targetSnapshot = { ...initial, gameSession: gameSession.snapshot() };
+    await expect(authority.saveSnapshot(targetSnapshot)).resolves.toEqual({ value: true });
+
+    const staleGameSession = MafiaGameSession.restore(initial.gameSession);
+    const staleTransition = staleGameSession.advanceDayPhase(
+      new Date(Date.parse(phaseDeadline) + 1),
+    );
+    if (staleTransition.isErr()) throw new Error('Expected the stale Night to resolve.');
+    const transitionProjection = staleGameSession.projectionFor('participant-1', 2);
+    if (transitionProjection.isErr()) throw new Error('Expected a Human Player projection.');
+    const staleNext = {
+      ...initial,
+      gameSession: staleGameSession.snapshot(),
+      nextEventId: 2,
+      phaseDeadline: staleGameSession.snapshot().phaseDeadline,
+    };
+
+    await expect(
+      authority.resolveExpiredPhase(phaseDeadline, staleNext, {
+        eventId: 2,
+        projection: transitionProjection.value,
+      }),
+    ).resolves.toEqual({ value: false });
+    await expect(authority.load(initial.sessionId)).resolves.toMatchObject({
+      value: {
+        nextEventId: 1,
+        snapshotRevision: 2,
+        gameSession: { phase: 'night', mafiaTargetParticipantId: 'participant-4' },
+      },
     });
   });
 

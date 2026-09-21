@@ -373,9 +373,13 @@ export class GameSessionAgentOrchestrator {
     );
   }
 
-  clearTimers(session: StoredGameSessionEntity) {
+  clearTimers(
+    session: StoredGameSessionEntity,
+    options: { preserveMafiaTargetSelection?: boolean } = {},
+  ) {
     this.cancelPublicSpeechReply(session);
-    this.cancelMafiaTargetSelection(session.gameSession.snapshot().sessionId);
+    if (!options.preserveMafiaTargetSelection)
+      this.cancelMafiaTargetSelection(session.gameSession.snapshot().sessionId);
     if (session.agentFinalDefenceTimer) this.clock.clearTimeout(session.agentFinalDefenceTimer);
     if (session.mafiaTargetFallbackTimer) this.clock.clearTimeout(session.mafiaTargetFallbackTimer);
     for (const timer of session.publicSpeechAgentTimers.values()) this.clock.clearTimeout(timer);
@@ -1117,6 +1121,7 @@ export class GameSessionAgentOrchestrator {
                   content: speechDecision.content,
                   earliestAt: this.clock.now(),
                 }),
+                sourceSnapshotKey: request.snapshotKey,
                 ...(speechDecision.nextSpeakerParticipantId &&
                 nextCandidateParticipantIds.includes(speechDecision.nextSpeakerParticipantId)
                   ? { nextSpeakerParticipantId: speechDecision.nextSpeakerParticipantId }
@@ -1378,6 +1383,22 @@ export class GameSessionAgentOrchestrator {
           current.scheduledAgentPublicSpeeches,
           (candidate) => !this.sameScheduledSpeech(candidate, scheduled),
         );
+        if (
+          scheduled.sourceSnapshotKey &&
+          this.publicSpeechSnapshotKey(current.gameSession.snapshot()) !==
+            scheduled.sourceSnapshotKey
+        ) {
+          this.logger.debug(
+            {
+              sessionId: current.gameSession.snapshot().sessionId,
+              participantId: scheduled.participantId,
+              action: 'discard-stale-public-speech',
+              reason: 'public-conversation-changed',
+            },
+            'Discarding an Agent public speech generated from an obsolete conversation snapshot',
+          );
+          return true;
+        }
         const submitted = current.gameSession.submitPublicSpeech(
           scheduled.participantId,
           scheduled.content,

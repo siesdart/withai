@@ -78,6 +78,21 @@ class CountingPublicSpeechGateway extends SequencedMafiaTargetGateway {
   }
 }
 
+class ChangingPublicSpeechGateway extends SequencedMafiaTargetGateway {
+  private decisionCount = 0;
+
+  override decidePublicSpeech(_context: MafiaAgentContext): AgentPublicSpeechDecision {
+    this.decisionCount += 1;
+    return {
+      type: 'speak',
+      content:
+        this.decisionCount === 1
+          ? 'This draft belongs to the old conversation.'
+          : 'This reply addresses the changed conversation.',
+    };
+  }
+}
+
 class CountingVerdictGateway extends SequencedMafiaTargetGateway {
   phaseActionDecisionCount = 0;
 
@@ -296,6 +311,7 @@ const createSession = (): StoredGameSessionEntity => ({
   agentMinds: {},
   events: new ReplaySubject<MafiaGameSessionProjectionEntity>(10),
   nextEventId: 0,
+  snapshotRevision: 0,
   nextPublicSpeechAt: undefined,
   nextFinalDefenceAt: undefined,
   nextDiscussionTimeAdjustmentAt: undefined,
@@ -1130,6 +1146,70 @@ describe('GameSessionAgentOrchestrator', () => {
     expect(session.publicSpeechAgentTimers.size).toBe(1);
     expect(session.scheduledAgentPublicSpeeches[0]).toEqual(
       expect.objectContaining({ content: 'I need more evidence.' }),
+    );
+  });
+
+  it('does not commit a delayed Agent speech after the public conversation changes', async () => {
+    const session = createSession();
+    session.gameSession = new MafiaGameSession(
+      'session-stale-public-speech',
+      [
+        { id: 'participant-1', name: 'You', alive: true, role: 'Mafia' },
+        { id: 'participant-2', name: 'Agent Mafia', alive: true, role: 'Mafia' },
+        { id: 'participant-3', name: 'Sora', alive: true, role: 'Citizen' },
+        { id: 'participant-4', name: 'Hana', alive: true, role: 'Citizen' },
+        { id: 'participant-5', name: 'Iris', alive: true, role: 'Citizen' },
+      ],
+      {
+        discussionDurationMs: 30_000,
+        nominationDurationMs: 1,
+        finalDefenceDurationMs: 1,
+        verdictDurationMs: 1,
+        nightDurationMs: 1_000,
+      },
+    );
+    const orchestrator = new GameSessionAgentOrchestrator(
+      new ChangingPublicSpeechGateway(),
+      async (_stale, mutate) => {
+        mutate(session);
+        return ok(undefined);
+      },
+    );
+    while (session.gameSession.snapshot().phase !== 'discussion') {
+      session.gameSession.advanceDayPhase(
+        new Date(new Date(session.gameSession.snapshot().phaseDeadline).valueOf() + 1),
+      );
+    }
+
+    await orchestrator.publishPublicSpeechReplies(session);
+    session.gameSession.submitPublicSpeech(
+      session.humanParticipantId,
+      'I changed the conversation while the Agent was typing.',
+    );
+    await orchestrator.publishPublicSpeechReplies(session);
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    const projection = session.gameSession.projectionFor(session.humanParticipantId, 1);
+    if (projection.isErr()) throw new Error('Expected a Human Player projection.');
+    expect(projection.value.timeline).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'chat',
+          message: expect.objectContaining({
+            content: 'This draft belongs to the old conversation.',
+          }),
+        }),
+      ]),
+    );
+    expect(projection.value.timeline).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'chat',
+          message: expect.objectContaining({
+            content: 'This reply addresses the changed conversation.',
+          }),
+        }),
+      ]),
     );
   });
 

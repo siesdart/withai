@@ -278,6 +278,7 @@ export class GameSessionLifecycle {
       );
       return hydrated.isErr() ? err(hydrated.error) : ok(undefined);
     }
+    current.snapshotRevision += 1;
     const actions = await this.runtime.phaseOperations.submitAgentActions(current, hydrationLocked);
     if (actions.isErr()) {
       this.runtime.phaseOperations.retryAgentActions(projection.value.sessionId);

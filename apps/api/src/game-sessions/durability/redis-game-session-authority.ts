@@ -33,6 +33,8 @@ export type DurableSessionSnapshot = {
   gameSession: MafiaGameSessionSnapshot;
   agentMinds?: Record<string, AgentMind>;
   nextEventId: number;
+  /** Snapshot CAS revision; legacy records derive this from nextEventId. */
+  snapshotRevision?: number;
   phaseDeadline: string;
   lastActivityAt: string;
   status: GameSessionStatus;
@@ -87,6 +89,7 @@ const ScheduledAgentPublicSpeechSchema = v.object({
   participantId: v.string(),
   content: v.string(),
   dueAt: v.string(),
+  sourceSnapshotKey: v.optional(v.string()),
   nextSpeakerParticipantId: v.optional(v.string()),
 });
 const ScheduledAgentMafiaChatReplySchema = v.object({
@@ -130,6 +133,7 @@ const DurableSessionSnapshotSchema: v.GenericSchema<unknown, DurableSessionSnaps
     gameSession: MafiaGameSessionSnapshotSchema,
     agentMinds: v.optional(v.record(v.string(), AgentMindSchema)),
     nextEventId: v.number(),
+    snapshotRevision: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0))),
     phaseDeadline: v.string(),
     lastActivityAt: v.string(),
     status: GameSessionStatusSchema,
@@ -158,6 +162,7 @@ const DurableSessionSnapshotSchema: v.GenericSchema<unknown, DurableSessionSnaps
   }),
   v.transform((snapshot): DurableSessionSnapshot => ({
     ...snapshot,
+    snapshotRevision: snapshot.snapshotRevision ?? snapshot.nextEventId,
     reconnectGraceDeadline: snapshot.reconnectGraceDeadline,
     cooldowns: snapshot.cooldowns && {
       publicSpeech: snapshot.cooldowns.publicSpeech,
@@ -306,7 +311,7 @@ export class RedisGameSessionAuthority {
            return 0
          end
          redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2])
-         redis.call('SET', KEYS[4], ARGV[3], 'PX', ARGV[2])
+         redis.call('SET', KEYS[4], expectedVersion + 1, 'PX', ARGV[2])
          local previousActivity = redis.call('GET', KEYS[6])
          if not previousActivity or previousActivity < ARGV[9] then
            redis.call('SET', KEYS[6], ARGV[9], 'PX', ARGV[2])
@@ -344,14 +349,16 @@ export class RedisGameSessionAuthority {
         this.holderActiveSessionKey(snapshot.holderId),
         this.reconnectLeasesKey(snapshot.sessionId),
         this.holderLatestSessionKey(snapshot.holderId),
-        JSON.stringify(snapshot),
+        JSON.stringify(
+          this.snapshotForNextRevision(snapshot, snapshot.snapshotRevision ?? event.eventId - 1),
+        ),
         ttlMs,
         event.eventId,
         JSON.stringify(event),
         replayEventTtlMs,
         now,
         snapshot.sessionId,
-        event.eventId - 1,
+        snapshot.snapshotRevision ?? event.eventId - 1,
         snapshot.lastActivityAt,
         snapshot.phaseDeadline,
         snapshot.status,
@@ -388,6 +395,7 @@ export class RedisGameSessionAuthority {
          local currentVersion = redis.call('GET', KEYS[8])
          if not currentVersion or tonumber(currentVersion) ~= tonumber(ARGV[8]) then return 0 end
          redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2])
+         redis.call('SET', KEYS[8], tonumber(ARGV[8]) + 1, 'PX', ARGV[2])
          local previousActivity = redis.call('GET', KEYS[5])
          if not previousActivity or previousActivity < ARGV[3] then
            redis.call('SET', KEYS[5], ARGV[3], 'PX', ARGV[2])
@@ -419,14 +427,16 @@ export class RedisGameSessionAuthority {
         this.lifecycleKey(snapshot.sessionId),
         this.reconnectLeasesKey(snapshot.sessionId),
         this.holderLatestSessionKey(snapshot.holderId),
-        JSON.stringify(snapshot),
+        JSON.stringify(
+          this.snapshotForNextRevision(snapshot, snapshot.snapshotRevision ?? snapshot.nextEventId),
+        ),
         ttlMs,
         snapshot.lastActivityAt,
         snapshot.phaseDeadline,
         snapshot.status,
         snapshot.sessionId,
         this.now().valueOf(),
-        snapshot.nextEventId,
+        snapshot.snapshotRevision ?? snapshot.nextEventId,
         abandonedSessionTtlMs,
       ),
       (cause): DurableSessionError => ({ type: 'authority-unavailable', cause }),
@@ -648,7 +658,7 @@ export class RedisGameSessionAuthority {
         this.statusKey(snapshot.sessionId),
         this.holderActiveSessionKey(holderId),
         this.holderLatestSessionKey(holderId),
-        JSON.stringify(snapshot),
+        JSON.stringify({ ...snapshot, snapshotRevision: event.eventId }),
         sessionTtlMs,
         event.eventId,
         JSON.stringify(event),
@@ -1125,9 +1135,9 @@ export class RedisGameSessionAuthority {
          local deadline = tonumber(string.match(lifecycle or '', '^[^:]+:(%d+)|'))
          if deadline and deadline <= tonumber(ARGV[9]) then return 0 end
          local currentVersion = redis.call('GET', KEYS[4])
-         if not currentVersion or tonumber(currentVersion) ~= tonumber(ARGV[2]) - 1 then return 0 end
+         if not currentVersion or tonumber(currentVersion) ~= tonumber(ARGV[11]) then return 0 end
          redis.call('SET', KEYS[1], ARGV[3], 'PX', ARGV[4])
-         redis.call('SET', KEYS[4], ARGV[2], 'PX', ARGV[4])
+         redis.call('SET', KEYS[4], tonumber(ARGV[11]) + 1, 'PX', ARGV[4])
          local previousActivity = redis.call('GET', KEYS[5])
          if not previousActivity or previousActivity < ARGV[5] then
            redis.call('SET', KEYS[5], ARGV[5], 'PX', ARGV[4])
@@ -1166,7 +1176,9 @@ export class RedisGameSessionAuthority {
         this.holderLatestSessionKey(snapshot.holderId),
         expectedPhaseDeadline,
         event.eventId,
-        JSON.stringify(snapshot),
+        JSON.stringify(
+          this.snapshotForNextRevision(snapshot, snapshot.snapshotRevision ?? event.eventId - 1),
+        ),
         ttlMs,
         snapshot.lastActivityAt,
         snapshot.status,
@@ -1174,6 +1186,7 @@ export class RedisGameSessionAuthority {
         replayEventTtlMs,
         this.now().valueOf(),
         snapshot.sessionId,
+        snapshot.snapshotRevision ?? event.eventId - 1,
       ),
       (cause): DurableSessionError => ({ type: 'authority-unavailable', cause }),
     ).map((resolved) => resolved === 1);
@@ -1299,6 +1312,16 @@ export class RedisGameSessionAuthority {
 
   private snapshotKey(sessionId: string) {
     return `${this.keyPrefix}:snapshots:${sessionId}`;
+  }
+
+  private snapshotForNextRevision(
+    snapshot: DurableSessionSnapshot,
+    currentRevision: number,
+  ): DurableSessionSnapshot {
+    return {
+      ...snapshot,
+      snapshotRevision: currentRevision + 1,
+    };
   }
 
   private eventsKey(sessionId: string) {

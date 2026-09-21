@@ -15,7 +15,10 @@ import type { GameSessionError } from './game-session-error.js';
 import { gameSessionsConfig } from './game-sessions.config.js';
 import type { StoredGameSessionEntity } from './stored-game-session.entity.js';
 
-type SessionDisposer = (session: StoredGameSessionEntity) => void;
+type SessionDisposer = (
+  session: StoredGameSessionEntity,
+  options?: { preserveMafiaTargetSelection?: boolean },
+) => void;
 
 export class GameSessionDurability {
   constructor(
@@ -44,7 +47,10 @@ export class GameSessionDurability {
     return saved
       .mapErr((): GameSessionError => ({ type: 'durability-unavailable' }))
       .map((wasSaved) => {
-        if (wasSaved) session.events.next(projection);
+        if (wasSaved) {
+          session.snapshotRevision += 1;
+          session.events.next(projection);
+        }
         return wasSaved;
       });
   }
@@ -61,7 +67,12 @@ export class GameSessionDurability {
     const saved = await authority.saveSnapshot(this.snapshotFor(session, projection.value));
     if (saved.isErr())
       this.logAuthorityFailure('save-snapshot', projection.value.sessionId, saved.error);
-    return saved.mapErr((): GameSessionError => ({ type: 'durability-unavailable' }));
+    return saved
+      .mapErr((): GameSessionError => ({ type: 'durability-unavailable' }))
+      .map((wasSaved) => {
+        if (wasSaved) session.snapshotRevision += 1;
+        return wasSaved;
+      });
   }
 
   async touch(session: StoredGameSessionEntity): Promise<Result<void, GameSessionError>> {
@@ -124,6 +135,7 @@ export class GameSessionDurability {
       gameSession: session.gameSession.snapshot(),
       agentMinds: session.agentMinds,
       nextEventId: session.nextEventId,
+      snapshotRevision: session.snapshotRevision,
       phaseDeadline: projection.public.phaseDeadline,
       lastActivityAt: session.lastAccessedAt.toISOString(),
       status: projection.public.phase === 'completed' ? 'completed' : session.status,
@@ -162,6 +174,7 @@ export class GameSessionDurability {
       agentMinds: snapshot.agentMinds ?? {},
       events: new ReplaySubject<MafiaGameProjection>(gameSessionsConfig.eventReplayBufferSize),
       nextEventId: snapshot.nextEventId,
+      snapshotRevision: snapshot.snapshotRevision ?? snapshot.nextEventId,
       nextPublicSpeechAt: snapshot.cooldowns?.publicSpeech
         ? dayjs(snapshot.cooldowns.publicSpeech)
         : undefined,
@@ -204,7 +217,7 @@ export class GameSessionDurability {
 
   private replace(sessionId: string, next: StoredGameSessionEntity) {
     const previous = this.sessions.get(sessionId);
-    if (previous) this.disposeSession(previous);
+    if (previous) this.disposeSession(previous, { preserveMafiaTargetSelection: true });
     this.sessions.set(sessionId, next);
   }
 

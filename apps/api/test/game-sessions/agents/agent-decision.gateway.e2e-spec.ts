@@ -326,14 +326,16 @@ describe('LLMAgentDecisionGateway', () => {
   it('bounds a stalled provider attempt and continues with the next attempt', async () => {
     vi.useFakeTimers();
     let calls = 0;
-    const gateway = new LLMAgentDecisionGateway(async (_prompt, _schema, abortController) => {
-      calls += 1;
-      if (calls > 1)
-        return { opening: 'fallback-safe opening', followUp: 'fallback-safe follow-up' };
-      return new Promise((_, reject) => {
-        abortController?.signal.addEventListener('abort', () => reject(new Error('aborted')));
-      });
-    });
+    const gateway = new LLMAgentDecisionGateway(
+      async (_prompt, _schema, _thinkingConfig, abortController) => {
+        calls += 1;
+        if (calls > 1)
+          return { opening: 'fallback-safe opening', followUp: 'fallback-safe follow-up' };
+        return new Promise((_, reject) => {
+          abortController?.signal.addEventListener('abort', () => reject(new Error('aborted')));
+        });
+      },
+    );
     const context = {
       participant: { id: 'participant-2', name: 'Mina' },
       persona: 'Mina is observant and concise.',

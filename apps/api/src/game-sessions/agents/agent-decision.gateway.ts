@@ -1,6 +1,6 @@
 import type { MafiaAgentContext } from '@repo/mafia';
 import { chat } from '@tanstack/ai';
-import { geminiText } from '@tanstack/ai-gemini';
+import { geminiText, GeminiThinkingOptions } from '@tanstack/ai-gemini';
 import { toStandardJsonSchema } from '@valibot/to-json-schema';
 import { filter, findLast } from 'remeda';
 import * as v from 'valibot';
@@ -97,6 +97,7 @@ export const agentDecisionGateway = Symbol('agent-decision-gateway');
 export type AgentDecisionRunner = (
   prompt: AgentDecisionPrompt,
   outputSchema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+  thinkingConfig?: GeminiThinkingOptions['thinkingConfig'],
   abortController?: AbortController,
 ) => Promise<unknown>;
 
@@ -106,6 +107,7 @@ export const agentDecisionAttemptTimeoutMs = 10_000;
 const tanstackRunner: AgentDecisionRunner = async (
   { systemPrompts, userPrompt },
   outputSchema,
+  thinkingConfig,
   abortController,
 ) => {
   return chat({
@@ -115,6 +117,7 @@ const tanstackRunner: AgentDecisionRunner = async (
     systemPrompts,
     messages: [{ role: 'user', content: userPrompt }],
     outputSchema: toStandardJsonSchema(outputSchema),
+    modelOptions: process.env.NODE_ENV === 'production' ? { thinkingConfig } : undefined,
     stream: false,
     abortController,
   });
@@ -159,6 +162,7 @@ export class LLMAgentDecisionGateway implements AgentDecisionGateway {
         content: '',
         reasoningMove: 'none',
       },
+      { thinkingLevel: 'MEDIUM' },
       options?.abortController,
     ).then(toPublicSpeechDecision);
   }
@@ -177,6 +181,7 @@ export class LLMAgentDecisionGateway implements AgentDecisionGateway {
         opening: fallbackText(this.outputLanguage, 'finalDefenceOpening'),
         followUp: fallbackText(this.outputLanguage, 'finalDefenceFollowUp'),
       },
+      { thinkingLevel: 'LOW' },
     );
   }
 
@@ -195,6 +200,7 @@ export class LLMAgentDecisionGateway implements AgentDecisionGateway {
       ),
       participantActionSchema,
       fallbackParticipantAction(context, candidateParticipantIds),
+      { thinkingLevel: 'MEDIUM' },
       undefined,
       (decision) =>
         candidateParticipantIds.length === 0 ||
@@ -214,6 +220,7 @@ export class LLMAgentDecisionGateway implements AgentDecisionGateway {
       ),
       verdictSchema,
       fallbackVerdict(context),
+      { thinkingLevel: 'LOW' },
     ).then(toPhaseActionDecision);
   }
 
@@ -228,6 +235,7 @@ export class LLMAgentDecisionGateway implements AgentDecisionGateway {
       ),
       contentSchema,
       { content: fallbackText(this.outputLanguage, 'mafiaWait') },
+      { thinkingLevel: 'LOW' },
     );
     return decision.content;
   }
@@ -243,6 +251,7 @@ export class LLMAgentDecisionGateway implements AgentDecisionGateway {
       ),
       contentSchema,
       { content: fallbackText(this.outputLanguage, 'mafiaWait') },
+      { thinkingLevel: 'LOW' },
     );
     return decision.content;
   }
@@ -261,6 +270,7 @@ export class LLMAgentDecisionGateway implements AgentDecisionGateway {
       ),
       mafiaTargetSchema,
       { targetParticipantId: undefined },
+      { thinkingLevel: 'MEDIUM' },
       options?.abortController,
     );
     return filter(
@@ -275,6 +285,7 @@ export class LLMAgentDecisionGateway implements AgentDecisionGateway {
     prompt: AgentDecisionPrompt,
     schema: TSchema,
     fallback: v.InferOutput<TSchema>,
+    thinkingConfig?: GeminiThinkingOptions['thinkingConfig'],
     abortController?: AbortController,
     isValidOutput: (output: v.InferOutput<TSchema>) => boolean = () => true,
   ): Promise<v.InferOutput<TSchema>> {
@@ -283,7 +294,12 @@ export class LLMAgentDecisionGateway implements AgentDecisionGateway {
       if (abortController?.signal.aborted) return fallback;
       try {
         // oxlint-disable-next-line no-await-in-loop -- retries are intentionally sequential.
-        const response = await this.runDecisionForAttempt(prompt, schema, abortController);
+        const response = await this.runDecisionForAttempt(
+          prompt,
+          schema,
+          thinkingConfig,
+          abortController,
+        );
         const parsed = v.safeParse(schema, response);
         if (parsed.success && isValidOutput(parsed.output)) {
           if (attempt > 1) {
@@ -325,6 +341,7 @@ export class LLMAgentDecisionGateway implements AgentDecisionGateway {
   private async runDecisionForAttempt(
     prompt: AgentDecisionPrompt,
     schema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+    thinkingConfig: GeminiThinkingOptions['thinkingConfig'],
     abortController: AbortController | undefined,
   ) {
     const attemptAbortController = new AbortController();
@@ -349,7 +366,7 @@ export class LLMAgentDecisionGateway implements AgentDecisionGateway {
     });
     try {
       return await Promise.race([
-        this.runDecision(prompt, schema, attemptAbortController),
+        this.runDecision(prompt, schema, thinkingConfig, attemptAbortController),
         interrupted,
       ]);
     } finally {

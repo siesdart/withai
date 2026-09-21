@@ -13,15 +13,10 @@ import { HealthModule } from './health/health.module.js';
       pinoHttp: {
         level: process.env.NODE_ENV === 'test' ? 'silent' : 'info',
         transport: process.env.NODE_ENV !== 'production' ? { target: 'pino-pretty' } : undefined,
-        genReqId: (request, response) => {
-          const requestId = request.headers['x-request-id'];
-          const resolvedRequestId =
-            typeof requestId === 'string' && /^[\w.:-]{1,128}$/.test(requestId)
-              ? requestId
-              : randomUUID();
-          response.setHeader('X-Request-Id', resolvedRequestId);
-          return resolvedRequestId;
-        },
+        formatters: { level: (label) => ({ level: label }) },
+        messageKey: 'message',
+        genReqId: (req) => req.headers['x-request-id'] ?? randomUUID(),
+        customProps: (req) => ({ requestId: req.id }),
         redact: {
           paths: [
             'req.headers.authorization',

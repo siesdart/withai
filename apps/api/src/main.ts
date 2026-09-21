@@ -26,7 +26,7 @@ async function bootstrap() {
       'X-Holder-Token',
       'X-Request-Id',
     ],
-    exposedHeaders: ['Retry-After', 'X-Holder-Token', 'X-Request-Id'],
+    exposedHeaders: ['Retry-After', 'X-Holder-Token'],
   });
   app.set('trust proxy', true);
 

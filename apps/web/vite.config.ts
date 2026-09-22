@@ -46,6 +46,14 @@ export default defineConfig({
               name: 'base-ui',
             },
             {
+              test: /node_modules\/ky/,
+              name: 'ky',
+            },
+            {
+              test: /node_modules\/(i18next|react-i18next)/,
+              name: 'i18next',
+            },
+            {
               test: /packages\/ui/,
               name: 'ui',
             },

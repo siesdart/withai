@@ -78,6 +78,53 @@ This pairing gives the error protocol and the response decision different jobs:
 neverthrow preserves the fact of failure; ts-pattern decides what each known
 failure means here.
 
+## better-all: dependency-aware effect scheduling
+
+Use `better-all` for an effect graph, not as a general replacement for every
+`Promise.all`. Independent tasks overlap, while a task that awaits
+`this.$.taskName` starts after its dependency. Keep the rejection-to-domain
+error translation at the boundary with `ResultAsync`:
+
+```ts
+import { all } from "better-all";
+import { ResultAsync } from "neverthrow";
+
+type DashboardError = {
+  type: "dashboard-load-failed";
+  userId: string;
+  cause: unknown;
+};
+
+const loadDashboard = (
+  userId: string,
+): ResultAsync<Dashboard, DashboardError> =>
+  ResultAsync.fromPromise(
+    all({
+      async user() {
+        return fetchUser(userId, { signal: this.$signal });
+      },
+      async permissions() {
+        return fetchPermissions(userId, { signal: this.$signal });
+      },
+      async posts() {
+        const user = await this.$.user;
+        return fetchPosts(user.id, { signal: this.$signal });
+      },
+    }),
+    (cause): DashboardError => ({
+      type: "dashboard-load-failed",
+      userId,
+      cause,
+    }),
+  );
+```
+
+`user` and `permissions` can run together; `posts` waits for `user`. Passing
+`this.$signal` lets cancellable operations clean up after a sibling failure.
+The scheduler controls timing, neverthrow owns the failure vocabulary, and
+Remeda or ts-pattern can handle the successful value or domain decision after
+the boundary.
+
 ## ts-pattern: closed decisions, not conditional decoration
 
 ```ts

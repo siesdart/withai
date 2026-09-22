@@ -11,7 +11,7 @@
       "source": "TanStack/ai",
       "sourceType": "github",
       "skillPath": "packages/ai/skills/ai-core/SKILL.md",
-      "computedHash": "8373c82c8b92fadb2384ea01604eb3415e229594e94d999f8fd60cb47505d617"
+      "computedHash": "f7f56a7839e202087fe8d622464d76aa4b678ab3da70ca355cdd4b41d2c2bc50"
     },
     "best-practices": {
       "source": "addyosmani/web-quality-skills",
@@ -174,7 +174,7 @@
       "source": "siesdart/skills",
       "sourceType": "github",
       "skillPath": "skills/typescript-functional-patterns/SKILL.md",
-      "computedHash": "24223b6f456d5e82233550957a83c1cf67008aa147b0fdf3eeba7b1824184898"
+      "computedHash": "81d734e3ecd689bc02046651d08492104b64c45b625a6d5f98822d46bbc5df06"
     },
     "valibot": {
       "source": "open-circle/agent-skills",

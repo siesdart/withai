@@ -1,6 +1,6 @@
 ---
 name: typescript-functional-patterns
-description: Apply Transform, Result, and Match TypeScript patterns with Remeda, neverthrow, and ts-pattern; add each dependency only where code or a public type API uses it.
+description: Apply Transform, Result, Match, and dependency-aware async effect patterns in TypeScript with Remeda, neverthrow, ts-pattern, and better-all; add each dependency only where code or a public type API uses it.
 ---
 
 # TypeScript Functional Patterns
@@ -8,8 +8,10 @@ description: Apply Transform, Result, and Match TypeScript patterns with Remeda,
 Write TypeScript around three complementary ideas: **transform**, **result**, and
 **match**. Remeda makes data flow readable and inference-friendly; neverthrow
 makes expected failure explicit in a function's type; ts-pattern makes finite
-state and union decisions exhaustive. Use the idea that solves the local problem,
-then compose the ideas at boundaries. The goal is a small, honest API surface—not
+state and union decisions exhaustive. Use better-all as an optional effect-layer
+tool when named asynchronous tasks form a dependency graph and independent work
+should overlap. Use the idea that solves the local problem, then compose the
+ideas at boundaries. The goal is a small, honest API surface—not
 functional-looking syntax everywhere.
 
 Read [PATTERNS.md](references/PATTERNS.md) when implementing or reviewing a
@@ -23,10 +25,11 @@ Inspect `package.json`, lockfiles, TypeScript configuration, scripts, and nearby
 code before editing. This skill establishes a project-wide behavioral baseline,
 not a package-wide dependency baseline.
 
-- Add `remeda`, `neverthrow`, or `ts-pattern` with the project's package manager
-  only to a package whose source imports it or whose exported type declarations
-  reference it. In a workspace, inspect each package independently and keep
-  dependencies in the package that owns the import or public type.
+- Add `remeda`, `neverthrow`, `ts-pattern`, or `better-all` with the project's
+  package manager only to a package whose source imports it or whose exported
+  type declarations reference it. In a workspace, inspect each package
+  independently and keep dependencies in the package that owns the import or
+  public type.
 - Remove a direct dependency after confirming that the package has no source or
   public declaration reference to it. Respect the existing package manager,
   lockfile, workspace layout, version policy, and dependency section; do not
@@ -55,13 +58,19 @@ Classify each meaningful piece of logic:
 - **Match**: a finite union, state machine, protocol message, or nested tagged
   structure determines behavior. Prefer ts-pattern and finish with
   `.exhaustive()` when the type is intended to enumerate all cases.
+- **Concurrency**: named asynchronous effects form a dependency graph and
+  independent work should overlap. Use better-all's `all()` to express task
+  dependencies through `this.$.taskName`; keep the task graph at the effect
+  boundary and return a typed `ResultAsync` to the domain caller.
 - **Effect**: I/O, mutation, logging, time, or framework integration. Keep it at
   the edge; make the transformation, result composition, and decision logic
   pure where practical.
 
-The three libraries are project defaults, not a demand to wrap unrelated
-expressions in library calls. A local omission is valid only when the
-corresponding construct does not exist. When a Remeda equivalent exists, native
+The three functional libraries are project defaults; better-all is an optional
+effect-layer tool, not a demand to wrap unrelated expressions in library calls.
+A local omission is valid only when the corresponding construct does not exist.
+Use better-all for a meaningful dependency graph, not for a simple independent
+`Promise.all` that is already clear. When a Remeda equivalent exists, native
 collection methods are not an omission: use Remeda instead. When omitting one in
 a substantial TypeScript area, state the reason in the change summary or
 code-level design note.
@@ -163,7 +172,34 @@ Completion criterion: every expected failure has a typed owner, each error is
 translated exactly once at the appropriate boundary, and callers can observe or
 recover without inspecting exception strings.
 
-### 5. Make domain decisions exhaustive
+### 5. Schedule dependent async effects
+
+Use better-all's `all()` when several named async effects have dependencies and
+the independent branches should run concurrently. A task reads another task's
+result by awaiting `this.$.taskName`; better-all infers both the task result
+types and the final result object.
+
+- Define one task per meaningful external effect or effect-level composition
+  step. Keep pure normalization and projection outside the task graph where
+  possible.
+- Express dependencies by awaiting `this.$.taskName` instead of manually
+  staging `await` and `Promise.all` blocks. This makes the graph visible and
+  lets the scheduler overlap independent branches.
+- Pass `this.$signal` to cancellable operations such as `fetch` or database
+  clients. A failed task aborts the shared signal; cleanup only happens when
+  each operation honors that signal.
+- Treat task rejection as a foreign effect failure. Wrap the `all()` promise in
+  `ResultAsync.fromPromise` at the owning boundary and translate the rejection
+  into the domain error union exactly once.
+- Keep a simple `Promise.all` when there is no dependency graph and its
+  concurrency policy is already obvious. Do not add better-all merely to make
+  every async operation use the same library.
+
+Completion criterion: the task graph names its dependencies, independent work
+can overlap, cancellable effects receive the shared signal, and callers see a
+typed result rather than an unowned rejected promise.
+
+### 6. Make domain decisions exhaustive
 
 Represent finite states and variants as discriminated unions with stable literal
 tags. Use ts-pattern when a decision has multiple structural cases, nested
@@ -190,20 +226,22 @@ Completion criterion: adding a new union variant would produce a useful compile
 failure at every closed decision, and every branch returns the same intentional
 output type.
 
-### 6. Compose the three layers at boundaries
+### 7. Compose the layers at boundaries
 
 Use this default flow when it fits the use case:
 
 1. Convert an external input into a typed domain value, returning a `Result` on
    validation or parsing failure.
 2. Transform valid collections and records with Remeda pipelines.
-3. Chain fallible operations with `map` and `andThen`; normalize errors with
+3. Schedule independent, dependency-aware effects with better-all at the effect
+   boundary when the operation has a meaningful task graph.
+4. Chain fallible operations with `map` and `andThen`; normalize errors with
    `mapErr` at ownership boundaries.
-4. Use ts-pattern to turn the resulting state or domain union into a response,
+5. Use ts-pattern to turn the resulting state or domain union into a response,
    command, view model, or effect.
-5. Terminally `match` the `Result` at the caller/effect boundary.
+6. Terminally `match` the `Result` at the caller/effect boundary.
 
-Do not force all five stages into one expression. Split at a meaningful domain
+Do not force all six stages into one expression. Split at a meaningful domain
 boundary when names, tests, or ownership become clearer.
 
 Completion criterion: data transformations, fallible effects, domain decisions,

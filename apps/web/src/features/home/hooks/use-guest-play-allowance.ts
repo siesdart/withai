@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration';
 
-import { guestPlayAllowanceOptions } from './guest-play-allowance-options';
+import { guestPlayAllowanceOptions } from './options/guest-play-allowance-options';
 
 dayjs.extend(duration);
 
@@ -13,7 +13,7 @@ function formatResetCountdown(resetsAt: string, now: dayjs.Dayjs) {
 
 export function useGuestPlayAllowance(open: boolean) {
   const { data: allowance, isLoading } = useQuery({
-    ...guestPlayAllowanceOptions,
+    ...guestPlayAllowanceOptions(),
     enabled: open,
   });
   const resetsAt = allowance?.resetsAt;

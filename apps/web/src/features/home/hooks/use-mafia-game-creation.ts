@@ -8,7 +8,7 @@ import { isUnavailableGameSession } from '@/features/mafia-session/api/error';
 import { useGameSessionStore } from '@/features/mafia-session/store/game-session';
 
 import { gameSessionSnapshotQueryKey } from '../../mafia-session/hooks/options/game-session-snapshot-options';
-import { guestPlayAllowanceOptions } from './guest-play-allowance-options';
+import { guestPlayAllowanceOptions } from './options/guest-play-allowance-options';
 
 const defaultNameFor = (outputLanguage: MafiaOutputLanguage) =>
   outputLanguage === 'ko' ? '플레이어' : 'Player';
@@ -47,7 +47,7 @@ export function useMafiaGameCreation() {
         await navigate({ to: '/mafia' });
       },
       () => {
-        void queryClient.invalidateQueries(guestPlayAllowanceOptions);
+        void queryClient.invalidateQueries(guestPlayAllowanceOptions());
         setCreationError('게임을 준비하지 못했어요. 잠시 후 다시 시도해 주세요.');
         setIsCreating(false);
       },

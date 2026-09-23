@@ -1,19 +1,13 @@
 /* oxlint-disable react-perf/jsx-no-jsx-as-prop, react-perf/jsx-no-new-function-as-prop -- Base UI's render contract composes the typed route link and the card owns its dialog-opening intent. */
 
 import { Button } from '@repo/ui/components/button';
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import { ChevronRight, LockKeyhole } from 'lucide-react';
-import { lazy, Suspense, useState } from 'react';
+import { createFileRoute, Link } from '@tanstack/react-router';
+import { LockKeyhole } from 'lucide-react';
 
-import { activeMafiaSessionOptions } from '@/features/mafia-session/hooks/options/active-mafia-session-options';
-import { useActiveMafiaSession } from '@/features/mafia-session/hooks/use-active-mafia-session';
+import { GameArticle } from '@/features/home/components/game-article';
+import { MafiaArticle } from '@/features/home/components/mafia/mafia-article';
+import { activeMafiaSessionOptions } from '@/features/home/hooks/options/active-mafia-session-options';
 import { Head } from '@/head';
-
-const MafiaStartDialog = lazy(() =>
-  import('@/features/game-start/components/mafia-start-dialog').then(
-    ({ MafiaStartDialog: LoadedMafiaStartDialog }) => ({ default: LoadedMafiaStartDialog }),
-  ),
-);
 
 export const Route = createFileRoute('/')({
   component: Index,
@@ -25,10 +19,6 @@ export const Route = createFileRoute('/')({
 });
 
 function Index() {
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const navigate = useNavigate({ from: '/' });
-  const { isChecking, session } = useActiveMafiaSession();
-
   return (
     <>
       <Head
@@ -70,46 +60,18 @@ function Index() {
               </h2>
             </div>
             <div className="grid grid-flow-dense gap-4 md:grid-cols-2">
-              <article className="flex min-h-72 flex-col justify-between border-2 border-[#22221e] bg-[#f4efe7] p-5 transition-transform duration-500 hover:-translate-y-1 sm:p-7">
-                <div>
-                  <span className="text-sm text-[#a43b31]">01</span>
-                  <h3 className="mt-8 text-3xl font-bold tracking-tighter">마피아 게임</h3>
-                  <p className="mt-3 max-w-sm text-sm leading-6 text-[#625e55]">
-                    대화 속 단서를 모아, 숨은 마피아를 찾아내세요.
-                  </p>
-                </div>
-                <div className="mt-8 flex flex-wrap items-start gap-2">
-                  {session ? (
-                    <Button onClick={() => navigate({ to: '/mafia' })}>
-                      <ChevronRight data-icon="inline-end" />
-                      게임 계속하기
-                    </Button>
-                  ) : (
-                    <Button disabled={isChecking} onClick={() => setIsDialogOpen(true)}>
-                      <ChevronRight data-icon="inline-end" />
-                      {isChecking ? '진행 중인 게임 확인 중…' : '게임 시작'}
-                    </Button>
-                  )}
-                  {session ? (
-                    <Button variant="outline" disabled>
-                      진행 중인 게임을 마친 뒤 새 게임을 시작할 수 있어요.
-                    </Button>
-                  ) : null}
-                </div>
-              </article>
-              <article className="flex min-h-72 flex-col justify-between border border-dashed border-[#22221e]/45 bg-[#e9e3d6] p-5 text-[#625e55] sm:p-7">
-                <div>
-                  <span className="text-sm">02</span>
-                  <h3 className="mt-8 text-3xl font-bold tracking-tighter">예정</h3>
-                  <p className="mt-3 max-w-sm text-sm leading-6">
-                    다음 추리 테이블을 준비하고 있어요.
-                  </p>
-                </div>
+              <MafiaArticle />
+              <GameArticle
+                number="02"
+                title="예정"
+                description="다음 추리 테이블을 준비하고 있어요."
+                variant="upcoming"
+              >
                 <Button variant="outline" disabled>
                   <LockKeyhole data-icon="inline-start" />
                   준비 중입니다
                 </Button>
-              </article>
+              </GameArticle>
             </div>
           </section>
 
@@ -151,11 +113,6 @@ function Index() {
             </p>
           </footer>
         </div>
-        <Suspense>
-          {isDialogOpen ? (
-            <MafiaStartDialog open={isDialogOpen} onOpenChange={setIsDialogOpen} />
-          ) : null}
-        </Suspense>
       </main>
     </>
   );

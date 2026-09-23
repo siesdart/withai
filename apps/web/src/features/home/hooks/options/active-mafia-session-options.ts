@@ -1,6 +1,6 @@
 import { queryOptions } from '@tanstack/react-query';
 
-import { MafiaGameSessionClient } from '../../api/client';
+import { MafiaGameSessionClient } from '../../../mafia-session/api/client';
 
 export const activeMafiaSessionOptions = () =>
   queryOptions({

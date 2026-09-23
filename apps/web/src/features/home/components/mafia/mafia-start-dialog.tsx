@@ -20,8 +20,8 @@ import {
 import { Link } from '@tanstack/react-router';
 import { cn } from 'cn';
 
-import { useGuestPlayAllowance } from '../hooks/use-guest-play-allowance';
-import { useMafiaGameCreation } from '../hooks/use-mafia-game-creation';
+import { useGuestPlayAllowance } from '../../hooks/use-guest-play-allowance';
+import { useMafiaGameCreation } from '../../hooks/use-mafia-game-creation';
 
 type MafiaStartDialogProps = {
   open: boolean;
@@ -132,7 +132,7 @@ export function MafiaStartDialog({ open, onOpenChange }: MafiaStartDialogProps) 
                 target="_blank"
                 className="font-medium text-[#22221e] underline underline-offset-2 hover:text-[#a43b31]"
               >
-                개인정보·AI 이용약관
+                개인정보 처리방침
               </Link>
               에 동의하는 것으로 간주됩니다.
             </p>

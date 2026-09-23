@@ -22,7 +22,7 @@ export const Route = createFileRoute('/mafia')({
       ...gameSessionSnapshotOptions(),
       staleTime: 'static',
     }),
-  component: ControlRoom,
+  component: Mafia,
   errorComponent: ({ error }) => {
     const router = useRouter();
     const queryClient = useQueryClient();
@@ -40,3 +40,12 @@ export const Route = createFileRoute('/mafia')({
   },
   pendingComponent: ControlRoomLoading,
 });
+
+function Mafia() {
+  return (
+    <>
+      <meta name="robots" content="noindex, follow" />
+      <ControlRoom />
+    </>
+  );
+}

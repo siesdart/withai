@@ -34,40 +34,8 @@ export default defineConfig({
         codeSplitting: {
           groups: [
             {
-              test: /node_modules\/react/,
-              name: 'react',
-            },
-            {
-              test: /node_modules\/react-dom/,
-              name: 'react-dom',
-            },
-            {
-              test: /node_modules\/@base-ui/,
-              name: 'base-ui',
-            },
-            {
-              test: /node_modules\/ky/,
-              name: 'ky',
-            },
-            {
-              test: /node_modules\/(i18next|react-i18next)/,
-              name: 'i18next',
-            },
-            {
-              test: /packages\/ui/,
-              name: 'ui',
-            },
-            {
-              test: /packages\/mafia/,
-              name: 'mafia',
-            },
-            {
-              test: /node_modules\/@tanstack\/(react-router|react-router-devtools|router-plugin)/,
-              name: 'tanstack-router',
-            },
-            {
-              test: /node_modules\/@tanstack\/(react-query|react-query-devtools)/,
-              name: 'tanstack-query',
+              test: /node_modules\/(react|react-dom)/,
+              name: 'vendor',
             },
           ],
         },

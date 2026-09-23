@@ -10,6 +10,6 @@
     "access": "public"
   },
   "dependencies": {
-    "oxlint-plugin-query": "^0.1.1"
+    "@tanstack/eslint-plugin-query": "^5.103.2"
   }
 }

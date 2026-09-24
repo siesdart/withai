@@ -1,4 +1,4 @@
-import type { MafiaOutputLanguage } from '@repo/mafia/client';
+import type { MafiaOutputLanguage } from '@repo/api/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { useCallback, useState } from 'react';

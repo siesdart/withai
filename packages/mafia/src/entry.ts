@@ -1,12 +1,12 @@
-export * from './config';
-export { mafiaAgentRulesBriefing } from './mafia-agent-rules';
-export { mafiaAgentSnapshotGuide } from './mafia-agent-snapshot-guide';
-export { MafiaGameSession } from './mafia-game-session';
-export * from './mafia-game-module';
+export * from './config.js';
+export { mafiaAgentRulesBriefing } from './mafia-agent-rules.js';
+export { mafiaAgentSnapshotGuide } from './mafia-agent-snapshot-guide.js';
+export { MafiaGameSession } from './mafia-game-session.js';
+export * from './mafia-game-module.js';
 export {
   MafiaGameProjectionSchema,
   MafiaGameSessionSnapshotSchema,
-} from './mafia-projection.schema';
+} from './mafia-projection.schema.js';
 export type {
   MafiaActionError,
   MafiaAgentContext,
@@ -23,7 +23,7 @@ export type {
   MafiaCompletedNightActionRecord,
   MafiaCompletedRecords,
   MafiaCompletedVoteRecord,
-} from './mafia-game-session';
+} from './mafia-game-session.js';
 export type {
   MafiaAllegiance,
   MafiaOutputLanguage,
@@ -31,6 +31,10 @@ export type {
   MafiaPersonalInformation,
   MafiaRole,
   RandomInt,
-} from './participants';
-export { mafiaRoleCountsFor, mafiaRoles, getAliveParticipantCounts } from './participants';
-export type { MafiaChatMessage, MafiaPersonalRecord, MafiaPersonalTimelineItem } from './timeline';
+} from './participants.js';
+export { mafiaRoleCountsFor, mafiaRoles, getAliveParticipantCounts } from './participants.js';
+export type {
+  MafiaChatMessage,
+  MafiaPersonalRecord,
+  MafiaPersonalTimelineItem,
+} from './timeline.js';

@@ -1,7 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsDateString, IsIn } from 'class-validator';
 
-export class CreateDiscussionTimeAdjustmentDto {
+import type { CreateDiscussionTimeAdjustmentRequest } from '../contracts.js';
+
+export class CreateDiscussionTimeAdjustmentDto implements CreateDiscussionTimeAdjustmentRequest {
   @ApiProperty({
     description: 'Seconds to add to or remove from the Discussion deadline.',
     enum: [10, -10],

@@ -3,7 +3,9 @@ import { mafiaGameConfig } from '@repo/mafia/config';
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
-export class CreateMafiaSessionDto {
+import type { CreateMafiaGameSessionRequest } from '../contracts.js';
+
+export class CreateMafiaSessionDto implements CreateMafiaGameSessionRequest {
   @ApiPropertyOptional({
     minimum: mafiaGameConfig.minParticipantCount,
     maximum: mafiaGameConfig.maxParticipantCount,

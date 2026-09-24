@@ -1,11 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
 import type {
-  MafiaGameProjection,
   MafiaPersonalInformation,
   MafiaPublicInformation,
   MafiaCompletedRecords,
   MafiaPersonalTimelineItem,
 } from '@repo/mafia';
+
+import type { MafiaGameProjection } from './contracts.js';
 
 export class MafiaParticipantEntity {
   @ApiProperty({ example: 'participant-1' })

@@ -1,4 +1,4 @@
-import type { MafiaOutputLanguage } from '@repo/mafia/client';
+import type { MafiaOutputLanguage } from '@repo/api/client';
 import type { StateCreator } from 'zustand';
 
 import type { GameAction, GameActionDrafts } from './drafts/game-action-draft';

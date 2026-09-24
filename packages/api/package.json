@@ -6,16 +6,17 @@
   "files": [
     "./dist/**"
   ],
+  "type": "module",
   "main": "./dist/entry.js",
   "types": "./dist/entry.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/entry.js",
-      "require": "./dist/entry.js"
+      "types": "./dist/entry.d.ts",
+      "default": "./dist/entry.js"
     },
-    "./*": {
-      "import": "./dist/*.js",
-      "require": "./dist/*.js"
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "default": "./dist/client.js"
     }
   },
   "publishConfig": {
@@ -26,7 +27,12 @@
     "dev": "pnpm build --watch"
   },
   "dependencies": {
-    "@nestjs/mapped-types": "^2.1.1"
+    "@nestjs/mapped-types": "^2.1.1",
+    "@nestjs/swagger": "^12.0.0",
+    "@repo/mafia": "workspace:*",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
+    "valibot": "^1.4.2"
   },
   "devDependencies": {
     "@repo/oxlint-config": "workspace:*",

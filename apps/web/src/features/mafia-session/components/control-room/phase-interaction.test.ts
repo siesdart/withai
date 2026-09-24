@@ -1,4 +1,4 @@
-import type { MafiaGameProjection } from '@repo/mafia/client';
+import type { MafiaGameProjection } from '@repo/api/client';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { UseGameActionResult } from '../../hooks/actions/use-game-action';

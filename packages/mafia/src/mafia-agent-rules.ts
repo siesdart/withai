@@ -1,5 +1,5 @@
-import { mafiaGameConfig } from './config';
-import { mafiaRoleCountsFor, mafiaRoles } from './participants';
+import { mafiaGameConfig } from './config.js';
+import { mafiaRoleCountsFor, mafiaRoles } from './participants.js';
 
 const secondsFor = (durationMs: number) => `${durationMs / 1000} seconds`;
 

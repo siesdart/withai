@@ -1,6 +1,7 @@
 /* oxlint-disable typescript/no-unsafe-type-assertion -- The controller is exercised with the narrow HTTP surface it uses. */
 import { EventEmitter } from 'node:events';
 
+import { MafiaGameSessionProjectionEntity } from '@repo/api';
 import { MafiaGameModule, MafiaGameSession, mafiaGameConfig } from '@repo/mafia';
 import type { Request, Response } from 'express';
 import RedisMock from 'ioredis-mock';
@@ -14,7 +15,6 @@ import { GameSessionsService } from '../../../src/game-sessions/application/game
 import { RedisGameSessionAuthority } from '../../../src/game-sessions/durability/redis-game-session-authority.js';
 import { GameSessionsController } from '../../../src/game-sessions/transport/game-sessions.controller.js';
 import { createHolderTokenSigner } from '../../../src/game-sessions/transport/holder-token.js';
-import { MafiaGameSessionProjectionEntity } from '../../../src/game-sessions/transport/mafia-game-session-projection.entity.js';
 
 const createDeferred = <Value>() => {
   let resolve: (value: Value) => void;

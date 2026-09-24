@@ -1,4 +1,4 @@
-import type { MafiaGameProjection } from '@repo/mafia/client';
+import type { MafiaGameProjection } from '@repo/api/client';
 import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, it } from 'vitest';
 

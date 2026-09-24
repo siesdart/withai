@@ -1,4 +1,4 @@
-import type { MafiaGameProjection } from '@repo/mafia/client';
+import type { MafiaGameProjection } from '@repo/api/client';
 /* oxlint-disable react-perf/jsx-no-new-function-as-prop -- each selectable participant needs a bound game action. */
 import { Button } from '@repo/ui/components/button';
 import { cn } from 'cn';

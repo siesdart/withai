@@ -1,8 +1,10 @@
-import { MafiaGameProjectionSchema, type MafiaGameProjection } from '@repo/mafia/client';
+import {
+  MafiaGameProjectionSchema,
+  type GameSessionApiError,
+  type MafiaGameProjection,
+} from '@repo/api/client';
 import { err, ok, Result } from 'neverthrow';
 import * as v from 'valibot';
-
-import type { GameSessionApiError } from './error';
 
 export function validateMafiaGameProjection(
   value: unknown,

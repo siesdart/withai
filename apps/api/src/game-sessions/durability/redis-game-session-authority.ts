@@ -1,9 +1,10 @@
 import {
   MafiaGameProjectionSchema,
+  type MafiaGameProjection,
   MafiaGameSessionSnapshotSchema,
   type MafiaGameSessionSnapshot,
+  type MafiaOutputLanguage,
 } from '@repo/mafia';
-import type { MafiaGameProjection, MafiaOutputLanguage } from '@repo/mafia';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc.js';
 import { Redis } from 'ioredis';

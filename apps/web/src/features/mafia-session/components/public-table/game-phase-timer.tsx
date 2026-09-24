@@ -1,4 +1,4 @@
-import type { MafiaGameProjection } from '@repo/mafia/client';
+import type { MafiaGameProjection } from '@repo/api/client';
 import { cn } from 'cn';
 import { TimerIcon } from 'lucide-react';
 

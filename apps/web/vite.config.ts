@@ -45,7 +45,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, './src'),
-      '@repo/mafia/client': path.resolve(import.meta.dirname, '../../packages/mafia/src/client.ts'),
     },
   },
   server: {

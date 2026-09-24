@@ -1,6 +1,6 @@
 /* oxlint-disable react-perf/jsx-no-new-function-as-prop -- the completed-game link clears transient session storage at the click boundary. */
 
-import type { MafiaGameProjection } from '@repo/mafia/client';
+import type { MafiaGameProjection } from '@repo/api/client';
 import { Bubble, BubbleContent } from '@repo/ui/components/bubble';
 import { Message, MessageContent, MessageGroup, MessageHeader } from '@repo/ui/components/message';
 import {

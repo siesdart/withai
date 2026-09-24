@@ -3,19 +3,19 @@ import { randomInt } from 'node:crypto';
 import type { GameModule } from '@repo/game-contract';
 import { err, ok, type Result } from 'neverthrow';
 
-import { mafiaGameConfig } from './config';
-import type { MafiaDayDurations } from './config';
+import { mafiaGameConfig } from './config.js';
+import type { MafiaDayDurations } from './config.js';
 import {
   MafiaGameSession,
   type MafiaProjectionError,
   type MafiaPublicInformation,
-} from './mafia-game-session';
+} from './mafia-game-session.js';
 import {
   createParticipants,
   type MafiaOutputLanguage,
   type MafiaPersonalInformation,
   type RandomInt,
-} from './participants';
+} from './participants.js';
 
 export type MafiaSessionInput = {
   sessionId: string;

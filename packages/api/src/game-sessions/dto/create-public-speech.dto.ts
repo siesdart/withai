@@ -1,7 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsString, MaxLength, MinLength } from 'class-validator';
 
-export class CreatePublicSpeechDto {
+import type { CreatePublicSpeechRequest } from '../contracts.js';
+
+export class CreatePublicSpeechDto implements CreatePublicSpeechRequest {
   @ApiProperty({
     description: 'The statement a Human Player shares with every living Participant.',
     example: 'I think we should hear from everyone before voting.',

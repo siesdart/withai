@@ -1,8 +1,7 @@
-import type { MafiaGameProjection } from '@repo/mafia/client';
+import type { MafiaGameProjection, GameSessionApiError } from '@repo/api/client';
 import { mutationOptions, type QueryClient } from '@tanstack/react-query';
 import type { ResultAsync } from 'neverthrow';
 
-import type { GameSessionApiError } from '../../api/error';
 import { isGameSessionApiError } from '../../api/error';
 import { gameSessionSnapshotOptions } from './game-session-snapshot-options';
 

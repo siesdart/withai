@@ -1,7 +1,7 @@
 import { filter, map } from 'remeda';
 
-import { mafiaGameConfig } from './config';
-import type { MafiaPublicInformation } from './mafia-game-session';
+import { mafiaGameConfig } from './config.js';
+import type { MafiaPublicInformation } from './mafia-game-session.js';
 
 export const mafiaRoles = ['Mafia', 'Police', 'Doctor', 'Citizen'] as const;
 export type MafiaRole = (typeof mafiaRoles)[number];

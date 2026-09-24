@@ -1,5 +1,5 @@
-import type { NominationVoteCount } from './day-resolution';
-import type { MafiaAllegiance } from './participants';
+import type { NominationVoteCount } from './day-resolution.js';
+import type { MafiaAllegiance } from './participants.js';
 
 export type MafiaPhase =
   | 'discussion'

@@ -1,7 +1,7 @@
 import { map } from 'remeda';
 import * as v from 'valibot';
 
-import type { MafiaGameProjection, MafiaGameSessionSnapshot } from './mafia-game-session';
+import type { MafiaGameProjection, MafiaGameSessionSnapshot } from './mafia-game-session.js';
 
 const MafiaPhaseSchema = v.picklist([
   'discussion',

@@ -1,4 +1,4 @@
-import type { MafiaGameProjection } from '@repo/mafia/client';
+import type { MafiaGameProjection } from '@repo/api/client';
 import { Marker, MarkerContent, MarkerIcon } from '@repo/ui/components/marker';
 import { cn } from 'cn';
 import type { TFunction } from 'i18next';

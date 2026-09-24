@@ -1,3 +1,4 @@
+import { MafiaGameSessionProjectionEntity } from '@repo/api';
 import { MafiaGameSession, type MafiaAgentContext } from '@repo/mafia';
 import dayjs from 'dayjs';
 import RedisMock from 'ioredis-mock';
@@ -23,7 +24,6 @@ import {
   scheduledAgentPublicSpeechKey,
 } from '../../../src/game-sessions/application/stored-game-session.entity.js';
 import { RedisGameSessionAuthority } from '../../../src/game-sessions/durability/redis-game-session-authority.js';
-import { MafiaGameSessionProjectionEntity } from '../../../src/game-sessions/transport/mafia-game-session-projection.entity.js';
 
 class SequencedMafiaTargetGateway implements AgentDecisionGateway {
   private readonly targets = ['participant-3', 'participant-4', 'participant-5'];

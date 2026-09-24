@@ -1,18 +1,7 @@
+import { GameSessionApiErrorSchema, type GameSessionApiError } from '@repo/api/client';
 import { HTTPError } from 'ky';
 import { match } from 'ts-pattern';
 import * as v from 'valibot';
-
-export const GameSessionApiErrorSchema = v.variant('type', [
-  v.object({ type: v.literal('holder-token-invalid') }),
-  v.object({ type: v.literal('unavailable'), status: v.picklist([403, 404] as const) }),
-  v.object({ type: v.literal('action-rejected'), status: v.picklist([400, 409] as const) }),
-  v.object({ type: v.literal('rate-limited'), retryAfterMs: v.number() }),
-  v.object({ type: v.literal('aborted') }),
-  v.object({ type: v.literal('invalid-event'), cause: v.unknown() }),
-  v.object({ type: v.literal('request-failed'), cause: v.unknown() }),
-]);
-
-export type GameSessionApiError = v.InferOutput<typeof GameSessionApiErrorSchema>;
 
 export function isGameSessionApiError(error: unknown): error is GameSessionApiError {
   return v.safeParse(GameSessionApiErrorSchema, error).success;

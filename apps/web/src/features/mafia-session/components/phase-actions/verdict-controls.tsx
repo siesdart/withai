@@ -1,4 +1,4 @@
-import type { MafiaGameProjection } from '@repo/mafia/client';
+import type { MafiaGameProjection } from '@repo/api/client';
 import { Button } from '@repo/ui/components/button';
 import { useCallback } from 'react';
 

@@ -27,6 +27,16 @@ import {
   ApiTooManyRequestsResponse,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import {
+  CreateDiscussionTimeAdjustmentDto,
+  CreateMafiaChatDto,
+  CreateMafiaSessionDto,
+  CreateNominationDto,
+  CreatePublicSpeechDto,
+  CreateVerdictDto,
+  GuestPlayAllowanceEntity,
+  MafiaGameSessionProjectionEntity,
+} from '@repo/api';
 import type { Request, Response } from 'express';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { Result } from 'neverthrow';
@@ -39,16 +49,8 @@ import {
   type GameSessionError,
   GameSessionsService,
 } from '../application/game-sessions.service.js';
-import { CreateDiscussionTimeAdjustmentDto } from './dto/create-discussion-time-adjustment.dto.js';
-import { CreateMafiaChatDto } from './dto/create-mafia-chat.dto.js';
-import { CreateMafiaSessionDto } from './dto/create-mafia-session.dto.js';
-import { CreateNominationDto } from './dto/create-nomination.dto.js';
-import { CreatePublicSpeechDto } from './dto/create-public-speech.dto.js';
-import { CreateVerdictDto } from './dto/create-verdict.dto.js';
-import { GuestPlayAllowanceEntity } from './guest-play-allowance.entity.js';
 import { createHolderTokenSigner, holderTokenHeader, holderTokenSecret } from './holder-token.js';
 import { OptionalIdempotencyKey, RequiredIdempotencyKey } from './idempotency-key.decorator.js';
-import { MafiaGameSessionProjectionEntity } from './mafia-game-session-projection.entity.js';
 
 @ApiTags('Game Sessions')
 @ApiServiceUnavailableResponse({

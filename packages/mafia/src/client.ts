@@ -1,4 +1,4 @@
-export { MafiaGameProjectionSchema } from './mafia-projection.schema';
-export type { MafiaGameProjection } from './mafia-game-session';
-export type { MafiaAllegiance, MafiaOutputLanguage } from './participants';
-export { mafiaRoleCountsFor, mafiaRoles, getAliveParticipantCounts } from './participants';
+export { MafiaGameProjectionSchema } from './mafia-projection.schema.js';
+export type { MafiaGameProjection } from './mafia-game-session.js';
+export type { MafiaAllegiance, MafiaOutputLanguage } from './participants.js';
+export { mafiaRoleCountsFor, mafiaRoles, getAliveParticipantCounts } from './participants.js';

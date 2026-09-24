@@ -4,18 +4,18 @@ import { err, ok, type Result } from 'neverthrow';
 import { filter, find, flatMap, map, pipe } from 'remeda';
 import { match } from 'ts-pattern';
 
-import { mafiaGameConfig, type MafiaDayDurations } from './config';
-import { resolveNomination, resolveVerdict } from './day-resolution';
+import { mafiaGameConfig, type MafiaDayDurations } from './config.js';
+import { resolveNomination, resolveVerdict } from './day-resolution.js';
 import {
   allegianceFor,
   toPersonalInformation,
   type MafiaAllegiance,
   type MafiaParticipant,
   type MafiaPersonalInformation,
-} from './participants';
-import type { MafiaPersonalTimelineItem, MafiaPhase, MafiaPublicOutcome } from './timeline';
+} from './participants.js';
+import type { MafiaPersonalTimelineItem, MafiaPhase, MafiaPublicOutcome } from './timeline.js';
 
-export { mafiaGameConfig } from './config';
+export { mafiaGameConfig } from './config.js';
 
 export type MafiaCompletedVoteRecord = {
   id: string;
@@ -46,7 +46,7 @@ export type {
   MafiaPublicChatMessage,
   MafiaPublicOutcome,
   MafiaPublicTimelineItem,
-} from './timeline';
+} from './timeline.js';
 export type MafiaPublicInformation = {
   dayNumber: number;
   phase: MafiaPhase;

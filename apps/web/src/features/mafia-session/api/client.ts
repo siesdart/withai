@@ -1,11 +1,24 @@
-import type { MafiaGameProjection, MafiaOutputLanguage } from '@repo/mafia/client';
+import {
+  ActiveMafiaGameSessionSchema,
+  GuestPlayAllowanceSchema,
+  type ActiveMafiaGameSession,
+  type CreateDiscussionTimeAdjustmentRequest,
+  type CreateMafiaChatRequest,
+  type CreateMafiaGameSessionRequest,
+  type CreateNominationRequest,
+  type CreatePublicSpeechRequest,
+  type CreateVerdictRequest,
+  type GameSessionApiError,
+  type GuestPlayAllowance,
+  type MafiaGameProjection,
+} from '@repo/api/client';
 import ky from 'ky';
 import { err, ok, ResultAsync } from 'neverthrow';
 import { parseServerSentEvents } from 'parse-sse';
 import * as v from 'valibot';
 
 import { parseMafiaGameProjection, validateMafiaGameProjection } from './entity';
-import { type GameSessionApiError, toGameSessionApiError } from './error';
+import { toGameSessionApiError } from './error';
 import { addHolderTokenHeader, captureHolderToken, clearHolderToken } from './holder-token';
 
 const gameSessionsApi = ky.create({
@@ -24,11 +37,6 @@ const gameSessionsApi = ky.create({
     ],
   },
 });
-const ActiveMafiaGameSessionSchema = v.object({
-  projection: v.unknown(),
-  outputLanguage: v.picklist(['ko', 'en']),
-});
-
 export type MafiaGameSessionSubscriptionOptions = {
   lastEventId: string | undefined;
   onConnected: () => void;
@@ -36,26 +44,10 @@ export type MafiaGameSessionSubscriptionOptions = {
   signal: AbortSignal;
 };
 
-export type ActiveMafiaGameSession = {
-  projection: MafiaGameProjection;
-  outputLanguage: MafiaOutputLanguage;
-};
-export type GuestPlayAllowance = {
-  remaining: number;
-  limit: number;
-  resetsAt: string;
-};
-
-const GuestPlayAllowanceSchema = v.object({
-  remaining: v.pipe(v.number(), v.integer(), v.minValue(0)),
-  limit: v.pipe(v.number(), v.integer(), v.minValue(1)),
-  resetsAt: v.pipe(v.string(), v.isoTimestamp()),
-});
-
 export class MafiaGameSessionClient {
   static createSession(
     idempotencyKey: string,
-    settings: { humanName: string; outputLanguage: MafiaOutputLanguage },
+    settings: Pick<CreateMafiaGameSessionRequest, 'humanName' | 'outputLanguage'>,
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
     return MafiaGameSessionClient.#postProjection(
       'mafia',
@@ -73,11 +65,9 @@ export class MafiaGameSessionClient {
     ).andThen((value) => {
       if (value === null) return ok(undefined);
       const parsed = v.safeParse(ActiveMafiaGameSessionSchema, value);
-      if (!parsed.success) return err({ type: 'invalid-event', cause: value } as const);
-      return validateMafiaGameProjection(parsed.output.projection).map((projection) => ({
-        projection,
-        outputLanguage: parsed.output.outputLanguage,
-      }));
+      return parsed.success
+        ? ok(parsed.output)
+        : err({ type: 'invalid-event', cause: value } as const);
     });
   }
 
@@ -100,7 +90,7 @@ export class MafiaGameSessionClient {
   }
 
   submitPublicSpeech(
-    content: string,
+    content: CreatePublicSpeechRequest['content'],
     idempotencyKey: string,
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
     return MafiaGameSessionClient.#postProjection(
@@ -111,7 +101,7 @@ export class MafiaGameSessionClient {
   }
 
   submitMafiaChat(
-    content: string,
+    content: CreateMafiaChatRequest['content'],
     idempotencyKey: string,
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
     return MafiaGameSessionClient.#postProjection(
@@ -122,7 +112,7 @@ export class MafiaGameSessionClient {
   }
 
   submitNomination(
-    targetParticipantId: string,
+    targetParticipantId: CreateNominationRequest['targetParticipantId'],
     idempotencyKey: string,
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
     return MafiaGameSessionClient.#postProjection(
@@ -133,7 +123,7 @@ export class MafiaGameSessionClient {
   }
 
   submitVerdict(
-    vote: 'eliminate' | 'spare',
+    vote: CreateVerdictRequest['vote'],
     idempotencyKey: string,
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
     return MafiaGameSessionClient.#postProjection(
@@ -144,7 +134,7 @@ export class MafiaGameSessionClient {
   }
 
   submitFinalDefence(
-    content: string,
+    content: CreatePublicSpeechRequest['content'],
     idempotencyKey: string,
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
     return MafiaGameSessionClient.#postProjection(
@@ -154,21 +144,30 @@ export class MafiaGameSessionClient {
     );
   }
 
-  submitMafiaTarget(targetParticipantId: string, idempotencyKey: string) {
+  submitMafiaTarget(
+    targetParticipantId: CreateNominationRequest['targetParticipantId'],
+    idempotencyKey: string,
+  ) {
     return MafiaGameSessionClient.#postProjection(
       'mafia/actions/mafia-target',
       { targetParticipantId },
       idempotencyKey,
     );
   }
-  submitDoctorProtection(targetParticipantId: string, idempotencyKey: string) {
+  submitDoctorProtection(
+    targetParticipantId: CreateNominationRequest['targetParticipantId'],
+    idempotencyKey: string,
+  ) {
     return MafiaGameSessionClient.#postProjection(
       'mafia/actions/doctor-protection',
       { targetParticipantId },
       idempotencyKey,
     );
   }
-  submitPoliceInvestigation(targetParticipantId: string, idempotencyKey: string) {
+  submitPoliceInvestigation(
+    targetParticipantId: CreateNominationRequest['targetParticipantId'],
+    idempotencyKey: string,
+  ) {
     return MafiaGameSessionClient.#postProjection(
       'mafia/actions/police-investigation',
       { targetParticipantId },
@@ -177,8 +176,8 @@ export class MafiaGameSessionClient {
   }
 
   adjustDiscussionTime(
-    adjustmentSeconds: 10 | -10,
-    expectedDeadline: string,
+    adjustmentSeconds: CreateDiscussionTimeAdjustmentRequest['adjustmentSeconds'],
+    expectedDeadline: CreateDiscussionTimeAdjustmentRequest['expectedDeadline'],
     idempotencyKey: string,
   ): ResultAsync<MafiaGameProjection, GameSessionApiError> {
     return MafiaGameSessionClient.#postProjection(

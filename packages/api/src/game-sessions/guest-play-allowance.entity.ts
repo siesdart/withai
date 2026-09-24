@@ -1,6 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-export class GuestPlayAllowanceEntity {
+import type { GuestPlayAllowance } from './contracts.js';
+
+export class GuestPlayAllowanceEntity implements GuestPlayAllowance {
   @ApiProperty({ example: 9, minimum: 0 })
   remaining!: number;
 

@@ -1,4 +1,5 @@
-import { mafiaRoles, type MafiaGameProjection } from '@repo/mafia/client';
+import { type MafiaGameProjection } from '@repo/api/client';
+import { mafiaRoles } from '@repo/mafia/client';
 /* oxlint-disable react-perf/jsx-no-new-function-as-prop -- Base UI select requires an event adapter for role-note validation. */
 import {
   Select,

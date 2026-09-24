@@ -1,7 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsString, MaxLength, MinLength } from 'class-validator';
 
-export class CreateMafiaChatDto {
+import type { CreateMafiaChatRequest } from '../contracts.js';
+
+export class CreateMafiaChatDto implements CreateMafiaChatRequest {
   @ApiProperty({
     description: 'A statement shared with Mafia Participants during Night.',
     example: 'Let us focus on the quietest participant.',

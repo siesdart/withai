@@ -323,6 +323,9 @@ importers:
       '@fontsource-variable/ibm-plex-sans':
         specifier: ^5.3.0
         version: 5.3.0
+      '@foresightjs/react':
+        specifier: ^1.0.0
+        version: 1.0.0(js.foresight@4.2.1)(react@19.3.0)
       '@repo/mafia':
         specifier: workspace:*
         version: link:../../packages/mafia
@@ -1057,6 +1060,12 @@ packages:
 
   '@fontsource-variable/ibm-plex-sans@5.3.0':
     resolution: {integrity: sha512-agG8tXFEo0hD9+J7npa4vbbWult52eMLVaQ6WQRlhs/iCAojrMAoejru85W9HTVXHfyUj96KM7gp/KGAS87XaQ==}
+
+  '@foresightjs/react@1.0.0':
+    resolution: {integrity: sha512-soIq9dSYA9bf5NSkl+NiIMcidTZqW6sEHPcy2WkY2Mllj9BtbTRFL6eVFHvmD4vd2FZLUYMGCRcKRhdB2GxpRg==}
+    peerDependencies:
+      js.foresight: ^4.2.0
+      react: ^18.0.0 || ^19.0.0
 
   '@google/genai@2.22.0':
     resolution: {integrity: sha512-NE90Nl0AP75YZ2tGxXjQQs6Gkunma7a1JmPCx5g5CxvjHXshmuI2aNoPJ1xLrRixjkNxog898oylM+MyNudUQw==}
@@ -3754,6 +3763,9 @@ packages:
     resolution: {integrity: sha512-28R/k+NAjeuf7+CKlTxWZVExJGwVVLwY06DgEnOMz2gEpfNkDcD7QvyiVPT0xy0XXhU8vHsd4Ot42OOPdJG7dQ==}
     hasBin: true
 
+  js.foresight@4.2.1:
+    resolution: {integrity: sha512-0IMLIEhYmUobu3I6YNFeSpuK2OYOep3kRhue0DX7qqbUFzuX+Cb0ujkDK3RE97ahysnza7Q63ROWqP1dxAXVuw==}
+
   jsesc@3.1.0:
     resolution: {integrity: sha512-/sM3dO2FOzXjKQhJuo0Q173wf2KOo8t4I8vHy6lF9poUp7bKT0/NHE8fPX23PwfhnykfqnC2xRxOnVw5XuGIaA==}
     engines: {node: '>=6'}
@@ -4377,6 +4389,9 @@ packages:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
     engines: {node: '>=4'}
 
+  position-observer@1.0.3:
+    resolution: {integrity: sha512-iqzsYcYB7wo9kd3Juw4XaVPhlLCfKhZLv6TrH096reU6tIcXuftPkA41+nqQgnPGzVo5zTC4tJ7GnIRTxrnZbQ==}
+
   postcss-selector-parser@7.1.6:
     resolution: {integrity: sha512-7qASPzhKF2l2KLboRZux8CCTRMdGiV08vWmyKzPz22qZ7ZjQBOeY7rNzNoCLSUiftJ7HUq0GERHmxw/t0dCdMw==}
     engines: {node: '>=4'}
@@ -4818,6 +4833,9 @@ packages:
     engines: {node: '>=10.0.0'}
     os: [darwin, linux, win32, freebsd, openbsd, netbsd, sunos, android]
     hasBin: true
+
+  tabbable@6.5.0:
+    resolution: {integrity: sha512-wieBHXygIm7OyQOu5hQlkk62/WyCFYGlWg7L6/ZCUZwx0o398Zkn4pVmMyfYhfMG8kGrj/Krt8eIk6UKC6VzwA==}
 
   tagged-tag@1.0.0:
     resolution: {integrity: sha512-yEFYrVhod+hdNyx7g5Bnkkb0G6si8HJurOoOEgC8B/O0uXLHlaey/65KRv6cuWBNhBgHKAROVpc7QyYqE5gFng==}
@@ -5809,6 +5827,11 @@ snapshots:
   '@floating-ui/utils@0.2.12': {}
 
   '@fontsource-variable/ibm-plex-sans@5.3.0': {}
+
+  '@foresightjs/react@1.0.0(js.foresight@4.2.1)(react@19.3.0)':
+    dependencies:
+      js.foresight: 4.2.1
+      react: 19.3.0
 
   '@google/genai@2.22.0(@modelcontextprotocol/sdk@1.30.0(supports-color@8.1.1)(zod@4.6.2))(supports-color@8.1.1)':
     dependencies:
@@ -8279,6 +8302,11 @@ snapshots:
     dependencies:
       argparse: 2.0.1
 
+  js.foresight@4.2.1:
+    dependencies:
+      position-observer: 1.0.3
+      tabbable: 6.5.0
+
   jsesc@3.1.0: {}
 
   json-bigint@1.0.0:
@@ -8859,6 +8887,10 @@ snapshots:
 
   pluralize@8.0.0: {}
 
+  position-observer@1.0.3:
+    optionalDependencies:
+      '@rollup/rollup-linux-x64-gnu': 4.63.1
+
   postcss-selector-parser@7.1.6:
     dependencies:
       cssesc: 3.0.0
@@ -9362,6 +9394,8 @@ snapshots:
       '@scarf/scarf': 1.4.0
 
   systeminformation@5.33.10: {}
+
+  tabbable@6.5.0: {}
 
   tagged-tag@1.0.0: {}
 

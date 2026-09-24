@@ -1,3 +1,4 @@
+import { useForesight } from '@foresightjs/react';
 import { Button } from '@repo/ui/components/button';
 import { noop, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
@@ -7,12 +8,14 @@ import { lazy, Suspense, useCallback, useState } from 'react';
 import { guestPlayAllowanceOptions } from '../../hooks/options/guest-play-allowance-options';
 import { useActiveMafiaSession } from '../../hooks/use-active-mafia-session';
 import { GameArticle } from '../game-article';
+import { MafiaStartDialogSkeleton } from './mafia-start-dialog-skeleton';
 
 const MafiaStartDialog = lazy(() =>
   import('./mafia-start-dialog').then(({ MafiaStartDialog: LoadedMafiaStartDialog }) => ({
     default: LoadedMafiaStartDialog,
   })),
 );
+const mafiaStartDialogFallback = <MafiaStartDialogSkeleton />;
 
 export function MafiaArticle() {
   const queryClient = useQueryClient();
@@ -26,6 +29,8 @@ export function MafiaArticle() {
     void import('./mafia-start-dialog');
     void queryClient.query(guestPlayAllowanceOptions()).catch(noop);
   }, [queryClient]);
+
+  const { elementRef } = useForesight({ callback: prefetch });
 
   return (
     <GameArticle
@@ -41,7 +46,7 @@ export function MafiaArticle() {
             게임 계속하기
           </Button>
         ) : (
-          <Button disabled={isChecking} onClick={start} onMouseEnter={prefetch}>
+          <Button disabled={isChecking} onClick={start} ref={elementRef}>
             <ChevronRight data-icon="inline-end" />
             {isChecking ? '진행 중인 게임 확인 중…' : '게임 시작'}
           </Button>
@@ -53,7 +58,7 @@ export function MafiaArticle() {
         ) : null}
       </div>
 
-      <Suspense>
+      <Suspense fallback={mafiaStartDialogFallback}>
         {isDialogOpen ? (
           <MafiaStartDialog open={isDialogOpen} onOpenChange={setIsDialogOpen} />
         ) : null}

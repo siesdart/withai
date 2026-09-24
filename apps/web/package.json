@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@fontsource-variable/ibm-plex-sans": "^5.3.0",
+    "@foresightjs/react": "^1.0.0",
     "@repo/mafia": "workspace:*",
     "@repo/ui": "workspace:*",
     "@tanstack/react-query": "^5.102.0",

@@ -28,6 +28,14 @@ export const openSourceLicenses: readonly OpenSourceLicenseItem[] = [
     "author": "Google Inc."
   },
   {
+    "name": "@foresightjs/react",
+    "version": "1.0.0",
+    "license": "MIT",
+    "description": "React bindings for ForesightJS - hooks and helpers to register elements with the ForesightManager from React components.",
+    "homepage": "https://foresightjs.com/",
+    "author": "Bart Spaans"
+  },
+  {
     "name": "@google/genai",
     "version": "latest",
     "license": "MIT",

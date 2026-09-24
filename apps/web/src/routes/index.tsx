@@ -1,5 +1,3 @@
-/* oxlint-disable react-perf/jsx-no-jsx-as-prop, react-perf/jsx-no-new-function-as-prop -- Base UI's render contract composes the typed route link and the card owns its dialog-opening intent. */
-
 import { Button } from '@repo/ui/components/button';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { LockKeyhole } from 'lucide-react';

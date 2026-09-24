@@ -10,11 +10,11 @@ import { useActiveMafiaSession } from '../../hooks/use-active-mafia-session';
 import { GameArticle } from '../game-article';
 import { MafiaStartDialogSkeleton } from './mafia-start-dialog-skeleton';
 
-const MafiaStartDialog = lazy(() =>
+const MafiaStartDialogFactory = () =>
   import('./mafia-start-dialog').then(({ MafiaStartDialog: LoadedMafiaStartDialog }) => ({
     default: LoadedMafiaStartDialog,
-  })),
-);
+  }));
+const MafiaStartDialog = lazy(MafiaStartDialogFactory);
 const mafiaStartDialogFallback = <MafiaStartDialogSkeleton />;
 
 export function MafiaArticle() {
@@ -26,7 +26,7 @@ export function MafiaArticle() {
   const resume = useCallback(() => navigate({ to: '/mafia' }), [navigate]);
   const start = useCallback(() => setIsDialogOpen(true), [setIsDialogOpen]);
   const prefetch = useCallback(() => {
-    void import('./mafia-start-dialog');
+    void MafiaStartDialogFactory();
     void queryClient.query(guestPlayAllowanceOptions()).catch(noop);
   }, [queryClient]);
 

@@ -1,6 +1,6 @@
 import { queryOptions } from '@tanstack/react-query';
 
-import { MafiaGameSessionClient } from '@/features/mafia-session/api/client';
+import { MafiaGameSessionClient } from '../../api/client';
 
 export const guestPlayAllowanceOptions = () =>
   queryOptions({

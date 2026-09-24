@@ -1,20 +1,17 @@
 import type { MafiaOutputLanguage } from '@repo/api/client';
 import { useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from '@tanstack/react-router';
 import { useCallback, useState } from 'react';
 
-import { MafiaGameSessionClient } from '@/features/mafia-session/api/client';
-import { isUnavailableGameSession } from '@/features/mafia-session/api/error';
-import { useGameSessionStore } from '@/features/mafia-session/store/game-session';
-
-import { gameSessionSnapshotQueryKey } from '../../mafia-session/hooks/options/game-session-snapshot-options';
-import { guestPlayAllowanceOptions } from './options/guest-play-allowance-options';
+import { MafiaGameSessionClient } from '../../api/client';
+import { isUnavailableGameSession } from '../../api/error';
+import { useGameSessionStore } from '../../store/game-session';
+import { gameSessionSnapshotQueryKey } from '../options/game-session-snapshot-options';
+import { guestPlayAllowanceOptions } from '../options/guest-play-allowance-options';
 
 const defaultNameFor = (outputLanguage: MafiaOutputLanguage) =>
   outputLanguage === 'ko' ? '플레이어' : 'Player';
 
-export function useMafiaGameCreation() {
-  const navigate = useNavigate({ from: '/' });
+export function useMafiaGameCreation(onCreated: () => void) {
   const queryClient = useQueryClient();
   const humanName = useGameSessionStore((state) => state.playerName);
   const setHumanName = useGameSessionStore((state) => state.setPlayerName);
@@ -44,7 +41,7 @@ export function useMafiaGameCreation() {
       async () => {
         queryClient.removeQueries({ queryKey: gameSessionSnapshotQueryKey, exact: true });
         useGameSessionStore.getState().setGameSession(outputLanguage);
-        await navigate({ to: '/mafia' });
+        onCreated();
       },
       () => {
         void queryClient.invalidateQueries(guestPlayAllowanceOptions());
@@ -52,7 +49,7 @@ export function useMafiaGameCreation() {
         setIsCreating(false);
       },
     );
-  }, [humanName, navigate, outputLanguage, queryClient]);
+  }, [humanName, onCreated, outputLanguage, queryClient]);
 
   return {
     humanName,

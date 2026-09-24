@@ -2,10 +2,11 @@ import { Button } from '@repo/ui/components/button';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { LockKeyhole } from 'lucide-react';
 
-import { GameArticle } from '@/features/home/components/game-article';
-import { MafiaArticle } from '@/features/home/components/mafia/mafia-article';
-import { activeMafiaSessionOptions } from '@/features/home/hooks/options/active-mafia-session-options';
+import { activeMafiaSessionOptions } from '@/features/mafia-session/hooks/options/active-mafia-session-options';
 import { Head } from '@/head';
+
+import { GameArticle } from './-components/game-article';
+import { MafiaArticle } from './-components/mafia-article';
 
 export const Route = createFileRoute('/')({
   component: Index,

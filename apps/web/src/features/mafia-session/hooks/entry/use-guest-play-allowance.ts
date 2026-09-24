@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration';
 
-import { guestPlayAllowanceOptions } from './options/guest-play-allowance-options';
+import { guestPlayAllowanceOptions } from '../options/guest-play-allowance-options';
 
 dayjs.extend(duration);
 

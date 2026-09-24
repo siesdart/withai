@@ -20,16 +20,17 @@ import {
 import { Link } from '@tanstack/react-router';
 import { cn } from 'cn';
 
-import { useGuestPlayAllowance } from '../../hooks/use-guest-play-allowance';
-import { useMafiaGameCreation } from '../../hooks/use-mafia-game-creation';
+import { useGuestPlayAllowance } from '../../hooks/entry/use-guest-play-allowance';
+import { useMafiaGameCreation } from '../../hooks/entry/use-mafia-game-creation';
 
 type MafiaStartDialogProps = {
   open: boolean;
+  onCreated: () => void;
   onOpenChange: (open: boolean) => void;
 };
 
-export function MafiaStartDialog({ open, onOpenChange }: MafiaStartDialogProps) {
-  const creation = useMafiaGameCreation();
+export function MafiaStartDialog({ open, onCreated, onOpenChange }: MafiaStartDialogProps) {
+  const creation = useMafiaGameCreation(onCreated);
   const guestPlayAllowance = useGuestPlayAllowance(open);
   const defaultName = creation.outputLanguage === 'ko' ? '플레이어' : 'Player';
 

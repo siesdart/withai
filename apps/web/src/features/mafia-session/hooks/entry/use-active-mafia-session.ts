@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
 
-import { useGameSessionStore } from '../../mafia-session/store/game-session';
-import { activeMafiaSessionOptions } from './options/active-mafia-session-options';
+import { useGameSessionStore } from '../../store/game-session';
+import { activeMafiaSessionOptions } from '../options/active-mafia-session-options';
 
 export function useActiveMafiaSession() {
   const { data: session, isPending } = useQuery(activeMafiaSessionOptions());

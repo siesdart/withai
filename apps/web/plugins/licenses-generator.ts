@@ -22,6 +22,7 @@ export function generateLicensesPlugin(workspaceRoot: string): Plugin {
     const packagePaths = [
       path.resolve(workspaceRoot, 'apps/web/package.json'),
       path.resolve(workspaceRoot, 'apps/api/package.json'),
+      path.resolve(workspaceRoot, 'packages/api/package.json'),
       path.resolve(workspaceRoot, 'packages/ui/package.json'),
       path.resolve(workspaceRoot, 'packages/mafia/package.json'),
       path.resolve(workspaceRoot, 'package.json'),

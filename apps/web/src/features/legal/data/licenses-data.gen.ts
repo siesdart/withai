@@ -68,6 +68,14 @@ export const openSourceLicenses: readonly OpenSourceLicenseItem[] = [
     "author": "Kamil Mysliwiec"
   },
   {
+    "name": "@nestjs/mapped-types",
+    "version": "latest",
+    "license": "MIT",
+    "description": "",
+    "homepage": "",
+    "author": ""
+  },
+  {
     "name": "@nestjs/platform-express",
     "version": "12.0.1",
     "license": "MIT",

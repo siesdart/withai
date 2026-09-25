@@ -1,11 +1,10 @@
-import ibmPlexSansWoff2 from '@fontsource-variable/ibm-plex-sans/files/ibm-plex-sans-latin-wght-normal.woff2?url';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { RouterProvider, createRouter } from '@tanstack/react-router';
 import { StrictMode } from 'react';
+import ReactDOM from 'react-dom/client';
 // oxlint-disable-next-line import/no-unassigned-import
 import '@fontsource-variable/ibm-plex-sans';
-import ReactDOM from 'react-dom/client';
 
 import '@repo/ui/globals.css';
 
@@ -40,13 +39,6 @@ if (!rootElement.innerHTML) {
   const root = ReactDOM.createRoot(rootElement);
   root.render(
     <StrictMode>
-      <link
-        rel="preload"
-        as="font"
-        type="font/woff2"
-        href={ibmPlexSansWoff2}
-        crossOrigin="anonymous"
-      />
       <RouterProvider router={router} />
     </StrictMode>,
   );

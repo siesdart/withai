@@ -5,7 +5,9 @@ import babel from '@rolldown/plugin-babel';
 import tailwindcss from '@tailwindcss/vite';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import react, { reactCompilerPreset } from '@vitejs/plugin-react';
+import { FontaineTransform } from 'fontaine';
 import { visualizer } from 'rollup-plugin-visualizer';
+import UnpluginInjectPreload from 'unplugin-inject-preload/vite';
 import { defineConfig } from 'vite';
 
 import { generateLicensesPlugin } from './plugins/licenses-generator.ts';
@@ -15,6 +17,19 @@ const workspaceRoot = path.resolve(import.meta.dirname, '../../');
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
+    UnpluginInjectPreload({
+      files: [
+        {
+          entryMatch: /ibm-plex-sans-latin-wght-normal.woff2/,
+          attributes: {
+            type: 'font/woff2',
+            as: 'font',
+            crossorigin: 'anonymous',
+          },
+        },
+      ],
+    }),
+    FontaineTransform.vite({ fallbacks: ['Arial'] }),
     generateLicensesPlugin(workspaceRoot),
     tanstackRouter({
       target: 'react',
